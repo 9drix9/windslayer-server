@@ -1,0 +1,420 @@
+"""
+CEncMsg - WindSlayer 2 packet encryption/decryption (Fireway.dll)
+
+Reverse engineered from Fireway.dll's CEncMsg class.
+Uses Mersenne Twister (MT19937) to generate XOR key bytes.
+
+Object layout (offsets from 'this'):
+  +0x000: vtable ptr
+  +0x004: Send MT state (624 uint32 + index + endian flag = 0x9C8 bytes)
+  +0x9CC: Recv MT state (624 uint32 + index + endian flag = 0x9C8 bytes)
+  +0x1394: Send key (int32, low byte used for XOR)
+  +0x1398: Recv key (int32, low byte used for XOR)
+"""
+
+import struct
+
+
+class MersenneTwister:
+    """Standard MT19937 implementation matching Fireway.dll exactly."""
+
+    N = 624
+    M = 397
+    MATRIX_A = 0x9908B0DF
+    UPPER_MASK = 0x80000000
+    LOWER_MASK = 0x7FFFFFFF
+    MASK32 = 0xFFFFFFFF
+
+    def __init__(self):
+        self.mt = [0] * self.N
+        self.mti = self.N  # will trigger twist on first extract
+
+    def init_genrand(self, seed):
+        """Initialize MT state from a single 32-bit seed.
+
+        Matches Fireway.dll function at VA 0x10006C90:
+          mt[0] = seed
+          for i = 1..623:
+              mt[i] = (0x6C078965 * (mt[i-1] ^ (mt[i-1] >> 30)) + i) & 0xFFFFFFFF
+          mti = 624 (triggers twist on first extract)
+        """
+        self.mt[0] = seed & self.MASK32
+        for i in range(1, self.N):
+            self.mt[i] = (0x6C078965 * (self.mt[i - 1] ^ (self.mt[i - 1] >> 30)) + i) & self.MASK32
+        self.mti = self.N
+
+    def _twist(self):
+        """Generate the next N values in the state array.
+
+        Matches Fireway.dll function at VA 0x10006DF0.
+        Standard MT19937 twist operation.
+        """
+        mag01 = [0, self.MATRIX_A]
+
+        for i in range(self.N - self.M):  # i = 0..226
+            y = (self.mt[i] & self.UPPER_MASK) | (self.mt[i + 1] & self.LOWER_MASK)
+            self.mt[i] = self.mt[i + self.M] ^ (y >> 1) ^ mag01[y & 1]
+
+        for i in range(self.N - self.M, self.N - 1):  # i = 227..622
+            y = (self.mt[i] & self.UPPER_MASK) | (self.mt[i + 1] & self.LOWER_MASK)
+            self.mt[i] = self.mt[i + self.M - self.N] ^ (y >> 1) ^ mag01[y & 1]
+
+        # i = 623 (last element)
+        y = (self.mt[self.N - 1] & self.UPPER_MASK) | (self.mt[0] & self.LOWER_MASK)
+        self.mt[self.N - 1] = self.mt[self.M - 1] ^ (y >> 1) ^ mag01[y & 1]
+
+        self.mti = 0
+
+    def genrand_uint32(self):
+        """Extract a tempered 32-bit value from the MT state.
+
+        Matches tempering at VA 0x10006EAE:
+          y ^= (y >> 11)
+          y ^= (y << 7) & 0x9D2C5680
+          y ^= (y << 15) & 0xEFC60000
+          y ^= (y >> 18)
+
+        Note: The DLL uses an algebraically equivalent form for the shift-and-mask:
+          (y & 0xFF3A58AD) << 7  ==  (y << 7) & 0x9D2C5680
+          (y & 0xFFFFDF8C) << 15 ==  (y << 15) & 0xEFC60000
+        """
+        if self.mti >= self.N:
+            self._twist()
+
+        y = self.mt[self.mti]
+        self.mti += 1
+
+        # Tempering
+        y ^= (y >> 11)
+        y ^= (y << 7) & 0x9D2C5680
+        y ^= (y << 15) & 0xEFC60000
+        y ^= (y >> 18)
+
+        return y & self.MASK32
+
+    def genrand_double(self):
+        """Generate a double in [0.0, 1.0) from a single MT output.
+
+        Matches Fireway.dll function at VA 0x10006EF0 (case _9c4 == 0,
+        little-endian path):
+          raw = genrand_uint32()
+          lo = (raw << 20) & 0xFFFFFFFF   # low 32 bits of IEEE 754 double
+          hi = (raw >> 12) | 0x3FF00000   # high 32 bits (exponent = 1023)
+          double = pack(lo, hi)           # value in [1.0, 2.0)
+          return double - 1.0            # value in [0.0, 1.0)
+
+        Uses all 32 bits of the MT output to fill 32 of the 52 mantissa bits.
+        """
+        raw = self.genrand_uint32()
+        lo = (raw << 20) & 0xFFFFFFFF
+        hi = (raw >> 12) | 0x3FF00000
+        dbl = struct.unpack('<d', struct.pack('<II', lo, hi))[0]
+        return dbl - 1.0
+
+    def genrand_range(self, min_val, max_val):
+        """Generate a random integer in [min_val, max_val].
+
+        Matches Fireway.dll function at VA 0x10006F70:
+          dbl = genrand_double()
+          range_size = max_val - min_val + 1
+          result = int(dbl * range_size) + min_val
+          clamp to [min_val, max_val]
+          return result
+
+        The DLL uses C-style truncation toward zero for float-to-int.
+        """
+        dbl = self.genrand_double()
+        range_size = (max_val - min_val + 1) & 0xFFFFFFFF
+        # fild loads range_size as signed int32 (it's 511 which fits fine)
+        result = int(dbl * range_size) + min_val
+        if result > max_val:
+            result = max_val
+        return result
+
+
+class CEncMsg:
+    """WindSlayer 2 packet encryption class.
+
+    Reverse engineered from Fireway.dll CEncMsg class exports.
+    Uses two independent MT19937 instances - one for send, one for receive.
+    Each call to Encode/Decode advances its respective MT to get a new XOR key byte.
+
+    The key byte is the low byte of an integer in [-255, 255] generated by the MT.
+    GetSendCodeKey/GetRecvCodeKey retry until they get a value different from the
+    previous key, ensuring the XOR key changes with every packet.
+    """
+
+    def __init__(self):
+        self._send_mt = MersenneTwister()
+        self._recv_mt = MersenneTwister()
+        self._send_key = 0  # int32 at this+0x1394
+        self._recv_key = 0  # int32 at this+0x1398
+
+    def set_code_key(self, seed):
+        """Initialize both MT states with the given seed and generate initial keys.
+
+        Matches Fireway.dll ?SetCodeKey@CEncMsg@@QAEXH@Z at VA 0x10006C60:
+          init_genrand(send_mt, seed)
+          init_genrand(recv_mt, seed)
+          GetSendCodeKey()
+          GetRecvCodeKey()
+        """
+        seed = seed & 0xFFFFFFFF
+        self._send_mt.init_genrand(seed)
+        self._recv_mt.init_genrand(seed)
+        self._get_send_code_key()
+        self._get_recv_code_key()
+
+    def _get_send_code_key(self):
+        """Advance send MT until a new key value is produced.
+
+        Matches ?GetSendCodeKey@CEncMsg@@QAEXXZ at VA 0x10006990:
+          do:
+              key = genrand_range(-255, 255)
+          while key == self._send_key
+          self._send_key = key
+        """
+        while True:
+            key = self._send_mt.genrand_range(-255, 255)
+            if key != self._send_key:
+                break
+        self._send_key = key
+
+    def _get_recv_code_key(self):
+        """Advance recv MT until a new key value is produced.
+
+        Matches ?GetRecvCodeKey@CEncMsg@@QAEXXZ at VA 0x100069D0:
+          do:
+              key = genrand_range(-255, 255)
+          while key == self._recv_key
+          self._recv_key = key
+        """
+        while True:
+            key = self._recv_mt.genrand_range(-255, 255)
+            if key != self._recv_key:
+                break
+        self._recv_key = key
+
+    def encode(self, packet):
+        """Encode (encrypt) a packet in-place.
+
+        Matches ?Encode@CEncMsg@@QAEXPAD@Z at VA 0x10006A20.
+
+        Packet layout:
+          [0..3]  uint32 header (contains size in low 11 bits, upper bits used for checksum seed)
+          [4..7]  uint32 checksum field
+          [8..]   payload data bytes
+
+        Algorithm:
+          1. Get new send key: GetSendCodeKey()
+          2. Store low byte of send_key as initial checksum: packet[4] = send_key & 0xFF
+          3. For each payload byte i (0 to payload_len-1):
+              a. Add (payload[i] & 0x5F) to checksum: packet[4] += payload[i] & 0x5F
+              b. XOR payload byte with key: payload[i] ^= send_key & 0xFF
+          4. Compute final checksum:
+              extra = (header >> 12) & 0xFF
+              packet[4] = (checksum + extra * 2) & 0x0FFFFFFF
+
+        Args:
+            packet: bytearray of the full packet (header + checksum + payload).
+                    Modified in-place.
+        """
+        self._get_send_code_key()
+
+        header = struct.unpack_from('<I', packet, 0)[0]
+        payload_len = (header & 0x7FF) - 8
+        key_byte = self._send_key & 0xFF
+
+        checksum = key_byte
+
+        for i in range(max(0, payload_len)):
+            checksum = (checksum + (packet[8 + i] & 0x5F)) & 0xFFFFFFFF
+            packet[8 + i] ^= key_byte
+
+        extra = (header >> 12) & 0xFF
+        checksum = (checksum + extra * 2) & 0x0FFFFFFF
+        struct.pack_into('<I', packet, 4, checksum)
+
+    def decode(self, packet):
+        """Decode (decrypt) a packet in-place. Returns True if checksum is valid.
+
+        Matches ?Decode@CEncMsg@@QAE_NPAD@Z at VA 0x10006AA0.
+
+        Algorithm:
+          1. Get new recv key: GetRecvCodeKey()
+          2. Initialize checksum accumulator: checksum = recv_key & 0xFF
+          3. For each payload byte i (0 to payload_len-1):
+              a. XOR payload byte with key: payload[i] ^= recv_key & 0xFF
+              b. Add (decrypted payload[i] & 0x5F) to checksum
+          4. Compute expected checksum:
+              extra = (header >> 12) & 0xFF
+              expected = (checksum + extra) & 0x0FFFFFFF
+          5. Verify: return (stored_checksum - expected) == extra
+
+        Args:
+            packet: bytearray of the full packet. Modified in-place (decrypted).
+
+        Returns:
+            bool: True if the checksum matches, False otherwise.
+        """
+        self._get_recv_code_key()
+
+        header = struct.unpack_from('<I', packet, 0)[0]
+        stored_checksum = struct.unpack_from('<I', packet, 4)[0]
+        payload_len = (header & 0x7FF) - 8
+        key_byte = self._recv_key & 0xFF
+
+        checksum = key_byte
+
+        for i in range(max(0, payload_len)):
+            packet[8 + i] ^= key_byte
+            checksum = (checksum + (packet[8 + i] & 0x5F)) & 0xFFFFFFFF
+
+        extra = (header >> 12) & 0xFF
+        expected = (checksum + extra) & 0x0FFFFFFF
+
+        # The DLL computes: (stored_checksum - expected) and checks if it equals extra
+        # using: sub ecx, edx / cmp ecx, eax / sete al
+        # where ecx = stored_checksum, edx = expected, eax = extra
+        diff = (stored_checksum - expected) & 0xFFFFFFFF
+        return diff == extra
+
+    def encode_by_array(self, packet):
+        """Encode using a static byte array instead of MT keys.
+
+        Matches ?EncodebyArray@CEncMsg@@QAEXPAD@Z at VA 0x10006B20.
+        Uses a hardcoded 256-byte lookup table at 0x1000B138 in the DLL.
+        Does NOT advance the MT state - this is a stateless encoding.
+
+        Algorithm:
+          1. key_index = (header >> 12) & 0xFF
+          2. checksum = STATIC_TABLE[key_index]
+          3. For each payload byte:
+              a. checksum += payload[i] & 0x5F
+              b. xor_index = ((header >> 12) + 15) & 0xFF
+              c. payload[i] ^= STATIC_TABLE[xor_index]
+          4. final_index = ((header >> 12) + 0x25) & 0xFF
+          5. checksum = (checksum + STATIC_TABLE[final_index] + key_index) & 0x0FFFFFFF
+          6. packet[4] = checksum
+        """
+        header = struct.unpack_from('<I', packet, 0)[0]
+        payload_len = (header & 0x7FF) - 8
+        key_index = (header >> 12) & 0xFF
+
+        checksum = _STATIC_TABLE[key_index]
+        xor_index = (key_index + 0x0F) & 0xFF
+        xor_byte = _STATIC_TABLE[xor_index]
+
+        for i in range(max(0, payload_len)):
+            checksum = (checksum + (packet[8 + i] & 0x5F)) & 0xFFFFFFFF
+            packet[8 + i] ^= xor_byte
+
+        final_index = (key_index + 0x25) & 0xFF
+        checksum = (checksum + _STATIC_TABLE[final_index] + key_index) & 0x0FFFFFFF
+        struct.pack_into('<I', packet, 4, checksum)
+
+    def decode_by_array(self, packet):
+        """Decode using a static byte array instead of MT keys.
+
+        Matches ?DecodebyArray@CEncMsg@@QAE_NPAD@Z at VA 0x10006BC0.
+
+        Returns:
+            bool: True if checksum is valid.
+        """
+        header = struct.unpack_from('<I', packet, 0)[0]
+        stored_checksum = struct.unpack_from('<I', packet, 4)[0]
+        payload_len = (header & 0x7FF) - 8
+        key_index = (header >> 12) & 0xFF
+
+        checksum = _STATIC_TABLE[key_index]
+        xor_index = (key_index + 0x0F) & 0xFF
+        xor_byte = _STATIC_TABLE[xor_index]
+
+        for i in range(max(0, payload_len)):
+            packet[8 + i] ^= xor_byte
+            checksum = (checksum + (packet[8 + i] & 0x5F)) & 0xFFFFFFFF
+
+        final_index = (key_index + 0x25) & 0xFF
+        expected = (checksum + _STATIC_TABLE[final_index]) & 0x0FFFFFFF
+
+        diff = (stored_checksum - expected) & 0xFFFFFFFF
+        # cmp ecx, edx where edx = (header >> 12) & 0xFF (movzx edx, al where al = shr eax, 0xc)
+        # Actually: at 0x10006C49: movzx edx, al  where eax was last shr eax, 0xc
+        # al = low byte of (header >> 12) = key_index & 0xFF
+        return diff == key_index
+
+
+# Static byte table extracted from Fireway.dll at RVA 0xB138
+# Used by EncodebyArray and DecodebyArray
+# Each entry is the first byte of a dword at [index*4 + 0x1000B138]
+_STATIC_TABLE = [
+    113,  52,  63, 129, 107,  52,  84, 119, 242,  53, 202, 133, 144,  34,  62, 236,
+      6,   1, 109,  16,  23, 188,  28, 182, 142, 207,  67,   5, 146, 131,  18,  22,
+     69, 159,  23, 185,  43,  83, 124,  85, 206, 134, 246, 223,   3, 104,  84, 136,
+    235, 219, 237, 138,  69,  86, 126, 166, 201, 115, 213, 170,  64,  95, 154,  92,
+    248, 177,  46, 189,  27,  20,  63, 255, 216, 226,  30,   2, 152,   8,  24, 162,
+    170,  14,  80,  54, 209, 250, 100, 155, 116, 106, 215,  93, 245,  11, 159,  33,
+    254, 176, 207, 171, 102, 182, 179, 195, 215,  13, 192, 113, 180, 127, 174,  67,
+    175, 226, 144,  73,  57,  86, 214, 108, 253, 201, 210,  68, 220, 243, 122, 145,
+     65,  56,  44,  15, 219, 155, 105, 123,  97,  80,   3,  48,  70,  96,  56,  92,
+    162, 202, 198, 183, 189, 101, 200,  50,  45,  75, 211,  76, 247,  32, 124, 110,
+    105,  13, 129, 251, 191,  88, 204, 198, 164, 168, 127, 193, 187, 111, 228, 102,
+    118,  32,  98,  85, 174, 163,  94,  44,  83, 225,  58,   4, 222, 190, 221,  10,
+    236, 183, 142, 250,  36, 143, 114,  77, 112, 137,  14,  78, 227,  42,  40, 134,
+     66, 167, 150, 149, 246, 197,  94, 119, 121,  98,  72, 178, 252,  49,  73, 117,
+    176,  34, 242,  90,  87,  12,   7, 235,  36,  55,  64, 194,  74, 208, 131,  96,
+    145,  12, 231, 114, 255,  50, 132,  24, 200, 240, 179, 234, 160,  37,  16, 148,
+]
+
+
+if __name__ == '__main__':
+    # Self-test: verify MT19937 against known values
+    mt = MersenneTwister()
+    mt.init_genrand(12345)
+    first_10 = [mt.genrand_uint32() for _ in range(10)]
+    print("MT19937 first 10 outputs with seed 12345:")
+    for i, v in enumerate(first_10):
+        print(f"  [{i}] = {v} (0x{v:08X})")
+
+    print()
+
+    # Test encode/decode round-trip
+    enc = CEncMsg()
+    enc.set_code_key(42)
+
+    # Build a test packet: header (size=16, 8 header + 8 payload), checksum, 8 payload bytes
+    payload = b'ABCDEFGH'
+    packet_size = 8 + len(payload)  # 16
+    header = packet_size  # just size in low bits, no upper bits set
+    packet = bytearray(struct.pack('<I', header) + b'\x00\x00\x00\x00' + payload)
+    original = bytearray(packet)
+
+    print(f"Original packet: {packet.hex()}")
+    enc.encode(packet)
+    print(f"Encoded packet:  {packet.hex()}")
+
+    # Create a separate decoder with same seed
+    dec = CEncMsg()
+    dec.set_code_key(42)
+
+    valid = dec.decode(packet)
+    print(f"Decoded packet:  {packet.hex()}")
+    print(f"Checksum valid:  {valid}")
+    print(f"Payload match:   {packet[8:] == original[8:]}")
+
+    print()
+
+    # Test encode_by_array / decode_by_array round-trip
+    packet2 = bytearray(struct.pack('<I', header) + b'\x00\x00\x00\x00' + payload)
+    original2 = bytearray(packet2)
+    print(f"Original packet: {packet2.hex()}")
+
+    enc2 = CEncMsg()
+    enc2.encode_by_array(packet2)
+    print(f"EncodeByArray:   {packet2.hex()}")
+
+    dec2 = CEncMsg()
+    valid2 = dec2.decode_by_array(packet2)
+    print(f"DecodeByArray:   {packet2.hex()}")
+    print(f"Checksum valid:  {valid2}")
+    print(f"Payload match:   {packet2[8:] == original2[8:]}")

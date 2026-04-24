@@ -1,0 +1,21 @@
+{
+  "test": {
+    "password": "test",
+    "characters": [
+      {
+        "name": "TestHero",
+        "level": 1,
+        "class": 0,
+        "map": 0,
+        "x": 100,
+        "y": 100,
+        "hp": 100,
+        "mp": 50
+      }
+    ]
+  },
+  "admin": {
+    "password": "admin",
+    "characters": []
+  }
+}

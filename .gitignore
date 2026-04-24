@@ -1,0 +1,47 @@
+# Local runtime state
+server/server_live.log
+server/server_output.log
+server/*.log
+server/log/
+server/accounts.json
+server/kr_capture_*.txt
+
+# Never commit game binaries or assets
+*.exe
+*.dll
+*.hmi
+*.hsi
+*.hsc
+*.hsc1
+*.hsc2
+*.hsd
+*.hci
+*.hii
+*.hni
+*.hqi
+*.hbi
+*.hui
+*.lng
+*.bmp
+*.dds
+*.wav
+*.mp3
+*.ogg
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
