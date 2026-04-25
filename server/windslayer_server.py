@@ -742,7 +742,10 @@ class GameServer:
         name = char.get('name', 'Hero').encode('ascii', errors='replace')[:16]
         body.extend(name + b'\x00' * (17 - len(name)))       # name CHAR[17]
         body.extend(struct.pack('<I', session.get('account_id', 1) & 0xFFFFFFFF))  # uid
-        body.extend(struct.pack('<I', 1))                    # ?
+        # 2026-04-25: PySlayer KR sends p32u(1) here. EN client reads the FIRST
+        # byte of this as buf[304] and if non-zero triggers extra reads
+        # (uint16 + uint16 + string). Send 0 to skip that branch.
+        body.extend(struct.pack('<I', 0))                    # was 1; now 0 to skip EN conditional
         body.extend(struct.pack('<H', 0))                    # chat target flag
         body.extend(struct.pack('<H', 0))                    # guild flag (0 = none)
         body.append(0)                                       # marriage flag
