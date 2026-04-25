@@ -405,17 +405,27 @@ class GameServer:
         elif opcode == 0x2B:
             self._handle_enter_world(sock, session, payload, no_enc)
         elif opcode == 0x63:
-            # 0x63 client-side handler is effectively a no-op (calls
-            # LeaveCriticalSection and returns). Echo back with 0 payload so
-            # the client gets its expected ack.
-            log.info(f'[0x63] Client sent post-world-enter ping; echoing back.')
             self._send_encrypted(sock, session, 0x63, b'', use_by_array=no_enc)
+        elif opcode == 0x03:
+            # CHAT — echo it as a server announcement (opcode 0x16)
+            self._handle_chat(sock, session, payload, no_enc)
+        elif opcode == 0x04:
+            # SET STATS — increase a stat
+            self._handle_set_stats(sock, session, payload, no_enc)
+        elif opcode == 0x0B:
+            # BUY ITEM — respond with 0x18 (got item)
+            self._handle_buy_item(sock, session, payload, no_enc)
+        elif opcode == 0x0C:
+            # SELL ITEM — respond with 0x19 (lost item)
+            self._handle_sell_item(sock, session, payload, no_enc)
+        elif opcode == 0x15:
+            # USE ITEM/SKILL — respond with HP/MP delta
+            self._handle_use_item(sock, session, payload, no_enc)
+        elif opcode == 0x7E:
+            # CHANGE MAP via portal
+            self._handle_change_map(sock, session, payload, no_enc)
         elif opcode == 0x2F:
-            # 0x2F client-side handler at VA 0x4551BE ALWAYS shows a dialog
-            # ("arena/play room excessive") regardless of payload, so we can't
-            # echo it. Log only for now; if 0x63 echo alone doesn't unblock,
-            # we'll need to try a different response opcode here.
-            log.info(f'[0x2F] Client sent (0B payload); NOT responding to avoid dialog trigger.')
+            log.info(f'[0x2F] arena query — ignoring')
         else:
             log.info(f'[FIREWAY] Unhandled opcode 0x{opcode:02X}')
             try:
@@ -593,6 +603,95 @@ class GameServer:
         body.extend(name + b'\x00' * (17 - len(name)))  # 0xf4a CHAR[17]
         return bytes(body)
 
+    # =================================================================
+    # In-game packet handlers (ported from PySlayer game_server.py)
+    # =================================================================
+
+    def _handle_chat(self, sock, session, payload, no_enc):
+        """0x03 CHAT from client → echo as 0x16 announcement."""
+        if len(payload) < 1: return
+        text = payload[1:].split(b'\x00')[0].decode('ascii', errors='replace')
+        username = session.get('username', 'Player')
+        log.info(f'[CHAT] {username}: {text}')
+        # Build opcode_16 (chat broadcast) per PySlayer: name(17) + len + text
+        name_bytes = username.encode('ascii', 'replace')[:16].ljust(17, b'\x00')
+        msg_bytes = text.encode('ascii', 'replace')[:255]
+        body = struct.pack('<B', 1) + name_bytes + struct.pack('<B', len(msg_bytes)) + msg_bytes
+        self._send_encrypted(sock, session, 0x16, body, use_by_array=no_enc)
+
+    def _handle_set_stats(self, sock, session, payload, no_enc):
+        """0x04 client increased a stat → respond with 0x14 stat update."""
+        if len(payload) < 1: return
+        stat_type = payload[0]
+        # opcode_14: uid(4) + stat_type(1) + value(2)
+        uid = session.get('account_id', 1) & 0xFFFFFFFF
+        # Just echo a +1 value for now (real server would track)
+        body = struct.pack('<I', uid) + struct.pack('<B', stat_type) + struct.pack('<H', 4)
+        log.info(f'[STATS] type={stat_type} +1')
+        self._send_encrypted(sock, session, 0x14, body, use_by_array=no_enc)
+
+    def _handle_buy_item(self, sock, session, payload, no_enc):
+        """0x0B BUY → respond with 0x18 (got item)."""
+        if len(payload) < 4: return
+        item = struct.unpack('<H', payload[0:2])[0]
+        count = struct.unpack('<H', payload[2:4])[0]
+        log.info(f'[BUY] item={item} count={count}')
+        # opcode_18: item(2) + count(2)
+        body = struct.pack('<H', item) + struct.pack('<H', count)
+        self._send_encrypted(sock, session, 0x18, body, use_by_array=no_enc)
+
+    def _handle_sell_item(self, sock, session, payload, no_enc):
+        """0x0C SELL → respond with 0x19 (lost item)."""
+        if len(payload) < 4: return
+        item = struct.unpack('<H', payload[0:2])[0]
+        count = struct.unpack('<H', payload[2:4])[0]
+        log.info(f'[SELL] item={item} count={count}')
+        body = struct.pack('<H', item) + struct.pack('<H', count)
+        self._send_encrypted(sock, session, 0x19, body, use_by_array=no_enc)
+
+    def _handle_use_item(self, sock, session, payload, no_enc):
+        """0x15 USE ITEM/SKILL → set HP/MP via 0x28/0x44."""
+        if len(payload) < 2: return
+        item = struct.unpack('<H', payload[0:2])[0]
+        log.info(f'[USE] item={item} → applying default heal')
+        # Restore HP via opcode_28
+        hp = 100
+        body_hp = struct.pack('<H', hp)
+        self._send_encrypted(sock, session, 0x28, body_hp, use_by_array=no_enc)
+        # Restore MP via opcode_44
+        body_mp = struct.pack('<H', 50)
+        self._send_encrypted(sock, session, 0x44, body_mp, use_by_array=no_enc)
+
+    def _handle_change_map(self, sock, session, payload, no_enc):
+        """0x7E CHANGE MAP via portal → respond with 0x08 (and 0x07 spawn at new pos)."""
+        if len(payload) < 4: return
+        portal_code = struct.unpack('<I', payload[0:4])[0]
+        cur_map = session.get('current_map', 101)
+        # Look up portal in our table
+        portals = self._get_portals()
+        key = f'{cur_map}_{portal_code}'
+        if key in portals:
+            next_map, xpos, ypos = portals[key]
+        else:
+            log.warning(f'[CHANGE_MAP] unknown portal {portal_code} from map {cur_map}, defaulting to stage01_01')
+            next_map, xpos, ypos = 101, 1411.0, 714.0
+        session['current_map'] = next_map
+        log.info(f'[CHANGE_MAP] map {cur_map} portal {portal_code} → map {next_map} at ({xpos}, {ypos})')
+        # Send 0x08 — note no flag byte, mapcode LE
+        uid = session.get('account_id', 1) & 0xFFFFFFFF
+        body_08 = struct.pack('<H', next_map) + struct.pack('<I', uid) + struct.pack('<I', 0)
+        self._send_encrypted(sock, session, 0x08, body_08, use_by_array=no_enc)
+
+    def _get_portals(self):
+        """Lazy-load the portal table from JSON."""
+        if not hasattr(self, '_portals_cache'):
+            try:
+                with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'portals.json'), 'r') as f:
+                    self._portals_cache = json.load(f)
+            except FileNotFoundError:
+                self._portals_cache = {}
+        return self._portals_cache
+
     def _build_pyslayer_opcode_03(self, session, char, current_map=101):
         """
         opcode 0x03 — in-game state. Ported from PySlayer.
@@ -687,8 +786,11 @@ class GameServer:
             body.extend(struct.pack('<h', 0))
         body.append(0)                                       # buffs flag
         body.append(0)                                       # bool
-        body.extend(struct.pack('<d', 500.0))                # x position
-        body.extend(struct.pack('<d', 500.0))                # y position
+        # Spawn position from PySlayer's gamedef.sqlite3: portal_code 26 from
+        # stage01_02 → stage01_01 lands at (1411, 714) — verified valid on
+        # this map's playable area. Earlier (500, 500) put us off-map.
+        body.extend(struct.pack('<d', 1411.0))               # x position
+        body.extend(struct.pack('<d', 714.0))                # y position
         body.extend(struct.pack('<I', 32))                   # ?
         body.append(0)                                       # bool
         body.append(1)                                       # ?
@@ -713,6 +815,14 @@ class GameServer:
         body.append(1)
         # is_my_connection==True branch in PySlayer doesn't add the trailing
         # bool/string fields (those are for OTHER players)
+
+        # 2026-04-25: EN client's 0x07 handler reads ~1500 more bytes than
+        # PySlayer's KR format provides. Pad with zeros to satisfy the parser.
+        # Max packet body = 2047 - 8 (header) - 1 (opcode) = 2038. Body so far
+        # is ~405; cap padding at ~1600 to stay safely under the limit.
+        target_size = 2030  # leaves room for opcode + header
+        if len(body) < target_size:
+            body.extend(b'\x00' * (target_size - len(body)))
         return bytes(body)
 
     def _build_pyslayer_enter_world(self, session, char):
