@@ -481,19 +481,17 @@ class GameServer:
         log.info(f'[ENTER_WORLD] Sending 0x07 spawn: {len(resp_07)}B')
         self._send_encrypted(sock, session, 0x07, resp_07, use_by_array=no_enc)
 
-        # 2026-04-25: also send 0x08 CHANGE_MAP — tells client to actually
-        # render the map. file_mapcode is DECIMAL "XXYY" where XX=stage major
-        # and YY=stage minor. For stage01_01 that's 101 (not 0x0101=257).
-        # Client format: stage{n/100:02d}_{n%100:02d}.hmi
+        # 2026-04-25: PySlayer follows up 0x07 with a welcome chat (0x0A) —
+        # this may be the trigger that finalizes the in-game transition.
         time.sleep(0.05)
-        uid = session.get('account_id', 1) & 0xFFFFFFFF
-        map_file_code = 101  # stage01_01
-        # Mapcode is read as BIG-ENDIAN uint16 by the client (verified by
-        # observing stage258_56 result when sending 101 LE — client got 0x6500).
-        body_08 = struct.pack('<B', 0) + struct.pack('>H', map_file_code) \
-                + struct.pack('<I', uid) + struct.pack('<I', 0)
-        log.info(f'[ENTER_WORLD] Sending 0x08 change_map (file_mapcode={map_file_code} = stage01_01, BE): {len(body_08)}B')
-        self._send_encrypted(sock, session, 0x08, body_08, use_by_array=no_enc)
+        chat = b'Welcome to WindSlayer!'
+        sender = b'Server'
+        body_0A = struct.pack('<B', 1) \
+                + sender + b'\x00' * (17 - len(sender)) \
+                + struct.pack('<B', len(chat)) \
+                + chat
+        log.info(f'[ENTER_WORLD] Sending 0x0A welcome chat: {len(body_0A)}B')
+        self._send_encrypted(sock, session, 0x0A, body_0A, use_by_array=no_enc)
 
         # 2026-04-24: UDP map-server simulator (20 packets opcode 0x11 to
         # 127.0.0.1:42907) caused cascading UI errors — client parsed each
@@ -974,8 +972,27 @@ class GameServer:
             resp.extend(struct.pack('<I', 0))
             for _ in range(6):
                 resp.extend(struct.pack('<I', 0))
-            for _ in range(14):
-                resp.extend(struct.pack('<H', 0))
+            # Appearance fields (14 USHORTs). Zero values render an invisible
+            # character. Use non-zero ID for default body+clothes so the
+            # character appears on the select screen. Pattern from PySlayer.
+            apparences = [
+                0,                              # head/chunk
+                123,                            # hair
+                char.get('face', 1) & 0xFFFF,   # face
+                0,                              # ?
+                char.get('top', 100) & 0xFFFF,  # top (clothes)
+                char.get('bottom', 200) & 0xFFFF,  # bottom (pants)
+                char.get('shoes', 300) & 0xFFFF,   # shoes
+                0,                              # gloves?
+                0,                              # helm
+                0,                              # weapon
+                0,                              # ?
+                0,                              # ?
+                0,                              # ?
+                0,                              # ?
+            ]
+            for v in apparences:
+                resp.extend(struct.pack('<H', v))
 
         resp.append(0x03)
         resp.extend(b'\x00' * 16)
