@@ -798,10 +798,13 @@ class GameServer:
         body.extend(struct.pack('<I', 502))
         body.append(0)
         body.extend(struct.pack('<I', 503))
-        body.append(127)                                     # ip[3]
+        # IP bytes in reverse order (PySlayer convention). For 127.0.0.1 we send
+        # [ip[3], ip[2], ip[1], ip[0]] = [1, 0, 0, 127]. The last octet was 127
+        # before — should have been 1.
+        body.append(1)                                       # ip[3] = last octet
         body.append(0)                                       # ip[2]
         body.append(0)                                       # ip[1]
-        body.append(127)                                     # ip[0]
+        body.append(127)                                     # ip[0] = first octet
         body.append(0)                                       # action flag
         body.append(0)
         body.append(0)
