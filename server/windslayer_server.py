@@ -469,15 +469,31 @@ class GameServer:
         # transition helpers (0x442EE0, 0x443280, 0x443690, 0x443780) when the
         # received opcode was 0x2E. The sub_opcode byte at payload[0] is the
         # LOOP COUNT (must be > 0). Count=1 means one character state follows.
-        resp = self._build_enter_world_response(session, char)
-        log.info(f'[ENTER_WORLD] Sending 0x2E response (world transition): {len(resp)}B')
-        self._send_encrypted(sock, session, 0x2E, resp, use_by_array=no_enc)
+        # 2026-04-25: PySlayer flow — send 0x03 (in-game state) + 0x07 (spawn)
+        # in response to client's 0x2B. This is what the real Korean Yahoo
+        # server does. Replaces our previous 0x2E + 0x2B combo.
+        resp_03 = self._build_pyslayer_opcode_03(session, char)
+        log.info(f'[ENTER_WORLD] Sending 0x03 in-game state: {len(resp_03)}B')
+        self._send_encrypted(sock, session, 0x03, resp_03, use_by_array=no_enc)
 
-        # 2026-04-24: also send 0x2B (client handler 0x4503E1 calls
-        # scene_A/scene_B). Previously got us to loading screen reliably.
         time.sleep(0.05)
-        log.info(f'[ENTER_WORLD] Also sending 0x2B (scene commit): {len(resp)}B')
-        self._send_encrypted(sock, session, 0x2B, resp, use_by_array=no_enc)
+        resp_07 = self._build_pyslayer_opcode_07(session, char)
+        log.info(f'[ENTER_WORLD] Sending 0x07 spawn: {len(resp_07)}B')
+        self._send_encrypted(sock, session, 0x07, resp_07, use_by_array=no_enc)
+
+        # 2026-04-25: also send 0x08 CHANGE_MAP — tells client to actually
+        # render the map. file_mapcode is DECIMAL "XXYY" where XX=stage major
+        # and YY=stage minor. For stage01_01 that's 101 (not 0x0101=257).
+        # Client format: stage{n/100:02d}_{n%100:02d}.hmi
+        time.sleep(0.05)
+        uid = session.get('account_id', 1) & 0xFFFFFFFF
+        map_file_code = 101  # stage01_01
+        # Mapcode is read as BIG-ENDIAN uint16 by the client (verified by
+        # observing stage258_56 result when sending 101 LE — client got 0x6500).
+        body_08 = struct.pack('<B', 0) + struct.pack('>H', map_file_code) \
+                + struct.pack('<I', uid) + struct.pack('<I', 0)
+        log.info(f'[ENTER_WORLD] Sending 0x08 change_map (file_mapcode={map_file_code} = stage01_01, BE): {len(body_08)}B')
+        self._send_encrypted(sock, session, 0x08, body_08, use_by_array=no_enc)
 
         # 2026-04-24: UDP map-server simulator (20 packets opcode 0x11 to
         # 127.0.0.1:42907) caused cascading UI errors — client parsed each
@@ -577,6 +593,171 @@ class GameServer:
         body.append(0)                              # 0xf70 - CRITICAL: 0-3
         name = char.get('name', 'Hero').encode('ascii', errors='replace')[:16]
         body.extend(name + b'\x00' * (17 - len(name)))  # 0xf4a CHAR[17]
+        return bytes(body)
+
+    def _build_pyslayer_opcode_03(self, session, char, current_map=101):
+        """
+        opcode 0x03 — in-game state. Ported from PySlayer.
+        Sent in response to client's 0x2B enter-game request.
+        """
+        body = bytearray()
+        body.append(1)                                       # must be >= 1
+        body.extend(struct.pack('<H', current_map))          # map xml_mapcode
+        body.extend(struct.pack('<I', 1000))                 # x ?
+        body.extend(struct.pack('<Q', 100000))               # gold
+        body.extend(struct.pack('<I', 30000))                # fame related
+        body.extend(struct.pack('<I', 0))                    # 명성
+        body.extend(struct.pack('<I', 0))                    # winnie
+        body.extend(struct.pack('<I', 0))                    # battle wins
+        body.extend(struct.pack('<I', 0))                    # battle losses
+        body.extend(struct.pack('<I', 0))                    # battle KO
+        body.extend(struct.pack('<I', 0))                    # battle Down
+        body.append(0)                                       # bool
+        body.extend(struct.pack('<I', 1000))                 # x again?
+        body.extend(b'Mentor'.ljust(17, b'\x00'))            # mentor name
+        body.append(0)                                       # var_y
+        body.append(10)
+        for i in range(5):
+            body.extend(struct.pack('<H', 10 + i))           # quest ids
+        for i in range(5):
+            body.append(10 + i)                              # quest counts
+        body.append(35)                                      # equip slots
+        body.append(35)                                      # consume slots
+        body.append(35)                                      # other slots
+        body.append(15)                                      # end-quest count
+        for i in range(15):
+            body.extend(struct.pack('<H', i))                # quest id
+            body.append(1)                                   # complete count
+        body.append(0)                                       # equipment lists (empty)
+        body.append(0)                                       # 2nd list (empty)
+        body.append(0)                                       # 3rd list (empty)
+        body.extend(struct.pack('<I', 0))                    # event time
+        return bytes(body)
+
+    def _build_pyslayer_opcode_07(self, session, char):
+        """
+        opcode 0x07 — spawn packet. Ported from PySlayer.
+        Player list visible in the current map (just self in single-player).
+        """
+        body = bytearray()
+        body.append(1)                                       # 1 player visible
+        # ---- self ----
+        name = char.get('name', 'Hero').encode('ascii', errors='replace')[:16]
+        body.extend(name + b'\x00' * (17 - len(name)))       # name CHAR[17]
+        body.extend(struct.pack('<I', session.get('account_id', 1) & 0xFFFFFFFF))  # uid
+        body.extend(struct.pack('<I', 1))                    # ?
+        body.extend(struct.pack('<H', 0))                    # chat target flag
+        body.extend(struct.pack('<H', 0))                    # guild flag (0 = none)
+        body.append(0)                                       # marriage flag
+        body.append(char.get('class', 0) & 0xFF)             # job1
+        body.append(0)                                       # job2
+        body.append(char.get('level', 1) & 0xFF)             # level
+        body.append(20)                                      # rank
+        body.append(0)                                       # ?
+        for _ in range(17):                                  # apparences
+            body.extend(struct.pack('<H', 0))
+        body.extend(struct.pack('<H', char.get('str', 3)))
+        body.extend(struct.pack('<H', char.get('dex', 3)))
+        body.extend(struct.pack('<H', char.get('int', 1)))
+        body.extend(struct.pack('<H', char.get('spr', 2)))   # tol
+        for _ in range(15):                                  # equips
+            body.extend(struct.pack('<H', 0))
+            for _ in range(6):
+                body.extend(struct.pack('<H', 0))
+        for _ in range(10):                                  # cash equips
+            body.extend(struct.pack('<h', 0))
+            body.extend(struct.pack('<h', 0))
+            body.extend(struct.pack('<h', 0))
+        body.append(0)                                       # buffs flag
+        body.append(0)                                       # bool
+        body.extend(struct.pack('<d', 500.0))                # x position
+        body.extend(struct.pack('<d', 500.0))                # y position
+        body.extend(struct.pack('<I', 32))                   # ?
+        body.append(0)                                       # bool
+        body.append(1)                                       # ?
+        body.extend(struct.pack('<I', 501))
+        body.extend(struct.pack('<I', 502))
+        body.append(0)
+        body.extend(struct.pack('<I', 503))
+        body.append(127)                                     # ip[3]
+        body.append(0)                                       # ip[2]
+        body.append(0)                                       # ip[1]
+        body.append(127)                                     # ip[0]
+        body.append(0)                                       # action flag
+        body.append(0)
+        body.append(0)
+        body.append(0)
+        body.append(0)
+        body.append(0)
+        body.append(1)
+        body.extend(struct.pack('<H', char.get('hp', 100)))
+        body.extend(struct.pack('<H', char.get('mp', 50)))
+        body.extend(struct.pack('<I', 1))
+        body.append(1)
+        # is_my_connection==True branch in PySlayer doesn't add the trailing
+        # bool/string fields (those are for OTHER players)
+        return bytes(body)
+
+    def _build_pyslayer_enter_world(self, session, char):
+        """
+        Format ported from PySlayer's server_packets/opcode_0x2E.py.
+        Returns a payload (excluding the leading opcode byte — caller should
+        send this with opcode=0x2B).
+        """
+        body = bytearray()
+
+        # v802 = 1 (character count)
+        body.append(1)
+
+        # ---- per-character ----
+        name = char.get('name', 'Hero').encode('ascii', errors='replace')[:16]
+        body.extend(name + b'\x00' * (17 - len(name)))   # name CHAR[17]
+        body.extend(struct.pack('<I', 10))                # uint32 = 10
+        body.extend(struct.pack('<I', 30))                # uint32 = 30
+        body.extend(struct.pack('<H', 0))                 # uint16 = 0 (chat target?)
+        body.append(0)                                     # guild flag = 0 (no guild)
+
+        body.append(char.get('class', 0) & 0xFF)           # job1
+        body.append(0)                                     # job2 (no second job)
+        body.append(char.get('level', 1) & 0xFF)           # level
+        body.append(20)                                    # rank
+        body.append(1)                                     # bool
+
+        # apparences: 17 uint16s — appearance/equipment IDs
+        for _ in range(17):
+            body.extend(struct.pack('<H', 0))
+
+        # stats — str/dex/int/tol + 2 trailers
+        body.extend(struct.pack('<H', char.get('str', 3)))
+        body.extend(struct.pack('<H', char.get('dex', 3)))
+        body.extend(struct.pack('<H', char.get('int', 1)))
+        body.extend(struct.pack('<H', char.get('spr', 2)))   # 'tol' in PySlayer
+        body.extend(struct.pack('<H', 100))
+        body.extend(struct.pack('<H', 101))
+
+        # equips: 15 entries × (1 uint16 + 6 enchant uint16) = 15*14 = 210 bytes
+        for _ in range(15):
+            body.extend(struct.pack('<H', 0))               # equip id
+            for _ in range(6):
+                body.extend(struct.pack('<H', 0))           # enchant
+
+        # cash equip: 10 entries × 3 uint16 = 60 bytes
+        for _ in range(10):
+            body.extend(struct.pack('<h', 100))             # signed in PySlayer
+            body.extend(struct.pack('<h', 1))
+            body.extend(struct.pack('<h', 1))
+
+        body.append(0)                                      # buffs flag
+        body.append(0)                                      # something
+        body.append(1)                                      # ?
+        body.append(2)                                      # ?
+        body.append(3)                                      # ?
+        body.extend(struct.pack('<I', 100))                 # uint32
+
+        body.append(0)                                      # else-method bool
+        body.extend(struct.pack('<b', 1))                   # signed int8
+        body.extend(b'test'.ljust(13, b'\x00'))             # string padded to 13
+
         return bytes(body)
 
     def _build_enter_world_response(self, session, char):
