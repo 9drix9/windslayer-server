@@ -652,8 +652,27 @@ class GameServer:
         body.append(char.get('level', 1) & 0xFF)             # level
         body.append(20)                                      # rank
         body.append(0)                                       # ?
-        for _ in range(17):                                  # apparences
-            body.extend(struct.pack('<H', 0))
+        # Apparences: 17 USHORTs. Values come from PySlayer's known-good dummy
+        # so the character actually renders. [head, hair, face, ?, top, bottom,
+        # shoes, ?, gloves, helm, ?, weapon, ?, eff, eff, eff, eff]
+        apparences = [
+            0,                                # head
+            123,                              # hair
+            char.get('face', 1) & 0xFFFF,     # face
+            0,                                # ?
+            char.get('top', 100) & 0xFFFF,    # top (clothes)
+            char.get('bottom', 200) & 0xFFFF, # bottom (pants)
+            char.get('shoes', 300) & 0xFFFF,  # shoes
+            0,                                # ?
+            116,                              # gloves
+            131,                              # helm
+            0,                                # ?
+            10,                               # weapon
+            0,                                # ?
+            701, 701, 701, 701,               # effects
+        ]
+        for v in apparences:
+            body.extend(struct.pack('<H', v))
         body.extend(struct.pack('<H', char.get('str', 3)))
         body.extend(struct.pack('<H', char.get('dex', 3)))
         body.extend(struct.pack('<H', char.get('int', 1)))
