@@ -28,6 +28,10 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from cencmsg import CEncMsg
 
+# Reference data tables built from KR Yahoo client dumps. Lazy-loaded; safe
+# to import even if a JSON is missing (will raise on first use only).
+from data import items as item_table, npcs as npc_table, map_codes, map_filename
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -234,8 +238,9 @@ class GameServer:
             'test': {
                 'password': 'test',
                 'characters': [
-                    {'name': 'TestHero', 'level': 1, 'class': 0, 'map': 0,
-                     'x': 100, 'y': 100, 'hp': 100, 'mp': 50}
+                    {'name': 'TestHero', 'level': 1, 'class': 1, 'map': 0,
+                     'x': 100, 'y': 100, 'hp': 100, 'mp': 50,
+                     'hair': 1, 'face': 1, 'uid': 1}
                 ]
             },
             'admin': {
@@ -322,8 +327,9 @@ class GameServer:
                 try:
                     chunk = sock.recv(4096)
                 except socket.timeout:
-                    log.info(f'[FIREWAY] Timeout waiting for client data')
-                    break
+                    # Keep-alive: don't drop an idle in-world client. (Was break;
+                    # the 120s drop kept closing the client mid-debug.)
+                    continue
                 except Exception as e:
                     log.info(f'[FIREWAY] recv error: {e}')
                     break
@@ -437,8 +443,16 @@ class GameServer:
                 pass
 
     def _handle_world_sync(self, sock, session, payload, no_enc=False):
-        """Echo 0x0D heartbeat back with MT encryption every time."""
-        self._send_encrypted(sock, session, 0x0D, bytes(payload), use_by_array=False)
+        """0x0D = local-player MOVEMENT (sent on every arrow-key step), NOT a
+        heartbeat. On a real server it is rebroadcast to OTHER players so they
+        see you move; the SENDER must NOT receive it back. The previous code
+        echoed it (MT-encrypted), which desynced the client's cipher stream into
+        garbage that the client parsed as random opcodes -> spurious menus,
+        'death', and loading-screen/map-warp. With no other players in the world
+        we simply consume it. (To support multiplayer later: broadcast this
+        payload to every OTHER session in the same map, not to `session`.)"""
+        # Optionally track the position server-side here. No response to sender.
+        return
 
     def _handle_enter_world(self, sock, session, payload, no_enc=False):
         """
@@ -486,10 +500,30 @@ class GameServer:
         log.info(f'[ENTER_WORLD] Sending 0x03 in-game state: {len(resp_03)}B')
         self._send_encrypted(sock, session, 0x03, resp_03, use_by_array=no_enc)
 
+        # 2026-04-26 Phase 4 step 6 (EN deep-RE workflow output):
+        # Use _build_en_opcode_07_packet — a BYTE-PERFECT spawn packet matching
+        # the EN handler 0x44EF72's exact read sequence. Critical fix: positions
+        # are i32 (not f64), apparences is 14 (not 17), equipment is 16 (not
+        # 15), extra_equip is 9 u16 (not 10×3 i16), and marriage/pvp flags are
+        # u16 (not u8). The i32-vs-f64 alone caused 16 bytes of misalignment
+        # that walked HP off into garbage.
+        # ALSO: removed the 0x2B follow-up. Both 0x44F762 (0x2B) and 0x44EF72
+        # (0x07) write to the SAME per-player struct — the padded 2000-byte
+        # 0x2B was scribbling ~1900 zero bytes through the alive flag, HP, MP,
+        # and apparences that 0x07 had just set correctly. The new 0x07 builder
+        # sets the active/alive bit inline (last action bool = 1).
         time.sleep(0.05)
-        resp_07 = self._build_pyslayer_opcode_07(session, char)
-        log.info(f'[ENTER_WORLD] Sending 0x07 spawn: {len(resp_07)}B')
-        self._send_encrypted(sock, session, 0x07, resp_07, use_by_array=no_enc)
+        body_07 = self._build_en_opcode_07_packet(session, char)
+        log.info(f'[ENTER_WORLD] Sending 0x07 EN player-spawn (byte-perfect): {len(body_07)}B')
+        self._send_encrypted(sock, session, 0x07, body_07, use_by_array=no_enc)
+
+        # 2026-06-09 Phase 4 step 7 REVERTED: tried adding 0x08 CHANGE_MAP here
+        # to commit the spawn into render/input pipeline. INSTEAD it caused the
+        # client to NOT TRANSITION TO IN-GAME at all (no heartbeats arrived
+        # after 0x2F+0x63 and client closed the connection in 16s). Memory was
+        # right: "PySlayer doesn't send 0x08 on enter-world; only on client-
+        # initiated change. The 0x03's mapcode handles initial map load."
+        # Sending 0x08 here triggers a re-map-load loop on the EN client.
 
         # 2026-04-25: PySlayer follows up 0x07 with a welcome chat (0x0A) —
         # this may be the trigger that finalizes the in-game transition.
@@ -502,6 +536,58 @@ class GameServer:
                 + chat
         log.info(f'[ENTER_WORLD] Sending 0x0A welcome chat: {len(body_0A)}B')
         self._send_encrypted(sock, session, 0x0A, body_0A, use_by_array=no_enc)
+
+        # 2026-06-09 Phase 4 step 8 — RENDER + INPUT ACTIVATION (opcode 0x6F).
+        # Four-way RE investigation converged on this as the missing trigger:
+        #
+        # 1) Keyboard handler 0x00487DB0 drops input when [ebx+0x5A0] == 0.
+        #    The ONLY writer of [+0x5A0]=1 is fn 0x0045AF00, called from
+        #    EXACTLY ONE site (0x00461F29) at the end of opcode 0x6F's case
+        #    in dispatcher 0x461890. → without 0x6F, arrow keys produce zero
+        #    client→server packets (matches observed symptom).
+        # 2) Sprite renderer sub_0x4305B0 returns if [esi+0x970] == 0. The
+        #    only writer of [char+0x970] (sub_0x444100) requires [+0x98]==4,
+        #    but our 0x07 handler writes 3. 0x6F's tail (call 0x45C470) is
+        #    the sprite-render activation handshake.
+        # 3) The 35-second loading-screen transition is TIMER_RECEIVELOADED
+        #    re-arming because the client never reaches "in-game ready".
+        #    0x6F completes that state.
+        #
+        # Body: 28 zero bytes — the case_0x6F at 0x004618EC does a fixed
+        # `rep movsd 7 dwords` (= 28 B) into [ebx+0x58..0x73] (a scratch
+        # slot), then [ebx+0x5B8]=0, then calls 0x45AF00 (activation) +
+        # 0x45C470 (final commit). The activation runs UNCONDITIONALLY after
+        # the copy regardless of body content.
+        # 2026-06-09 DISABLED 0x6F/0x19: these were built on the (now-disproven)
+        # theory that our 0x07 entity just needed an input/sprite "activation".
+        # Full RE shows 0x07 hardcodes alive=3 (remote player) and never sets
+        # +0x11dc; the local player is a separate spawn (0x1A). 0x6F/0x19 act on
+        # scene+0x970 (the local player) which doesn't exist yet, so they no-op
+        # or destabilise. Re-test corrected 0x07 (valid appearance + f64 pos)
+        # for VISIBILITY first; local-player/control handled separately.
+        if False:
+            time.sleep(0.05)
+            body_6F = b'\x00' * 28
+            log.info(f'[ENTER_WORLD] Sending 0x6F render+input activation: {len(body_6F)}B')
+            self._send_encrypted(sock, session, 0x6F, body_6F, use_by_array=no_enc)
+
+        # 2026-06-09 Phase 4 step 9 — SPRITE ACTIVATION (opcode 0x19).
+        # After step 8, input was bound (arrow keys send packets) but sprite
+        # still invisible — the partial-success path the workflow predicted.
+        # Per find_render_activation: handler 0x451D7E (case 0x19) reaches
+        # 0x451E24 which writes `[entity+0x98] = 4` DIRECTLY. The renderer's
+        # local-player pointer setter (sub_0x444100) requires `[+0x98]==4`
+        # AND `[+0x84]==session uid` before it sets `[char+0x970] = entity`,
+        # which the renderer dereferences for the draw call. Our 0x07 only
+        # writes 3 to [+0x98] (hardcoded in 0x44EF72), so the renderer's
+        # entity-lookup fails. Sending 0x19 with body matching the atlas's
+        # read pattern (u8 + u32 + u32 = 9 bytes) bumps [+0x98] to 4.
+        if False:
+            time.sleep(0.05)
+            uid = session.get('account_id', 1) & 0xFFFFFFFF
+            body_19 = struct.pack('<B', 0) + struct.pack('<I', uid) + struct.pack('<I', 0)
+            log.info(f'[ENTER_WORLD] Sending 0x19 sprite activation (state=4): {len(body_19)}B')
+            self._send_encrypted(sock, session, 0x19, body_19, use_by_array=no_enc)
 
         # 2026-04-24: UDP map-server simulator (20 packets opcode 0x11 to
         # 127.0.0.1:42907) caused cascading UI errors — client parsed each
@@ -676,7 +762,8 @@ class GameServer:
             log.warning(f'[CHANGE_MAP] unknown portal {portal_code} from map {cur_map}, defaulting to stage01_01')
             next_map, xpos, ypos = 101, 1411.0, 714.0
         session['current_map'] = next_map
-        log.info(f'[CHANGE_MAP] map {cur_map} portal {portal_code} → map {next_map} at ({xpos}, {ypos})')
+        log.info(f'[CHANGE_MAP] map {cur_map} ({map_filename(cur_map)}) portal {portal_code} → '
+                 f'map {next_map} ({map_filename(next_map)}) at ({xpos}, {ypos})')
         # Send 0x08 — note no flag byte, mapcode LE
         uid = session.get('account_id', 1) & 0xFFFFFFFF
         body_08 = struct.pack('<H', next_map) + struct.pack('<I', uid) + struct.pack('<I', 0)
@@ -731,10 +818,15 @@ class GameServer:
         body.extend(struct.pack('<I', 0))                    # event time
         return bytes(body)
 
-    def _build_pyslayer_opcode_07(self, session, char):
+    def _build_pyslayer_opcode_07(self, session, char, pad=True):
         """
         opcode 0x07 — spawn packet. Ported from PySlayer.
         Player list visible in the current map (just self in single-player).
+
+        pad=True (legacy): zero-pad to 2030 bytes — what we did before; may
+        cause the EN client's read-loop to overrun into bogus fields.
+        pad=False: end the packet at the natural PySlayer length (~400 bytes
+        for solo). PySlayer does not pad.
         """
         body = bytearray()
         body.append(1)                                       # 1 player visible
@@ -822,13 +914,156 @@ class GameServer:
         # is_my_connection==True branch in PySlayer doesn't add the trailing
         # bool/string fields (those are for OTHER players)
 
-        # 2026-04-25: EN client's 0x07 handler reads ~1500 more bytes than
-        # PySlayer's KR format provides. Pad with zeros to satisfy the parser.
-        # Max packet body = 2047 - 8 (header) - 1 (opcode) = 2038. Body so far
-        # is ~405; cap padding at ~1600 to stay safely under the limit.
-        target_size = 2030  # leaves room for opcode + header
-        if len(body) < target_size:
-            body.extend(b'\x00' * (target_size - len(body)))
+        # 2026-04-26 Phase 4 step 5: padding is now optional. The padding to
+        # 2030 bytes was added when we believed the EN client read past the
+        # PySlayer block (and zero-pad would be safer than random heap bytes).
+        # Deep RE of handler 0x44EF72 shows ~140-400 bytes are read on the
+        # main path with conditional reads — well within PySlayer's natural
+        # block size. Padding may cause overflow reads of zeros into HP/MP
+        # slots. Default to no padding now.
+        if pad:
+            target_size = 2030  # leaves room for opcode + header
+            if len(body) < target_size:
+                body.extend(b'\x00' * (target_size - len(body)))
+        return bytes(body)
+
+    def _build_en_opcode_07(self, session, char):
+        """
+        opcode 0x07 — EN player-spawn block, byte-exact per the handler at
+        VA 0x44EF72. Returns ONE per-player block (no leading count); the
+        caller prepends the u8 player-count byte.
+
+        This layout was re-derived field-by-field from a full trace of the
+        handler's Get* sequence (see trace_handler.py output). The PREVIOUS
+        version was misaligned: it omitted the +0xE1 byte, the 17-byte string
+        at +0xD0, and the +0x12/+0x14 fields, and treated POSITION as i32 at
+        +0x904/+0xE50. The real position is two f64 at +0x11F8/+0x1288. That
+        skew left the entity with garbage position (rendered off-world) and
+        scrambled appearance — i.e. the invisible character.
+
+        Field order / wire types (entity offsets in comments):
+          name CHAR[17] @+0x00 | uid u32 @+0x84 | i32 @+0x15D8 |
+          u16 @+0xE2 | u8 @+0xE1 | string CHAR[17] @+0xD0 | u16 @+0x12 |
+          u8 @+0x14 | u8 @+0x110 | u8 @+0x111 | u8 @+0x99 (level) | u8 @+0x9A |
+          u8 @+0x113 | apparences u16[14] @+0x120 | u16 @+0xE6/E8/EA/EC |
+          equipment 16×(u16 + 6×u16) @+0x13C/+0x16E | extra u16[9] @+0x15C |
+          N1 u8=0 | N2 u8=0 | u32 @+0x954 | u8 @+0x8D9 | u8 @+0x8CF |
+          i32 @+0x904 | u32 @+0xE00 | u8 @+0x8BD |
+          posX f64 @+0x11F8 | posY f64 @+0x1288 | i32 @+0xE50 |
+          ip u8×4 @+0x8B3.. | 5×bool @+0x8DA/DF/DC/DD/DE |
+          u16 @+0x9C | u16 @+0xA0 | u32 @+0xD94 | u8 @+0x8EC |
+          bool @+0x14F4 = 0  (=0 ends the block; nonzero would add u16+CHAR[25])
+        """
+        def u8(v):  body.append(v & 0xFF)
+        def u16(v): body.extend(struct.pack('<H', v & 0xFFFF))
+        def u32(v): body.extend(struct.pack('<I', v & 0xFFFFFFFF))
+        def i32(v): body.extend(struct.pack('<i', int(v)))
+        def f64(v): body.extend(struct.pack('<d', float(v)))
+        def cstr(s, n):
+            b = s.encode('ascii', errors='replace')[:n - 1]
+            body.extend(b + b'\x00' * (n - len(b)))
+
+        body = bytearray()
+
+        cstr(char.get('name', 'Hero'), 17)          # +0x00 name
+        u32(char.get('uid', 1))                      # +0x84 uid (network id)
+        i32(1)                                       # +0x15D8
+
+        # +0xE2 marriage u16. Handler GATE @0x44F03C: if marriage != 0 it then
+        # reads u8 @+0xE1 and CHAR[17] @+0xD0 (spouse name). marriage == 0 SKIPS
+        # both. We send 0, so we must NOT emit them.
+        marriage = 0
+        u16(marriage)
+        if marriage != 0:
+            u8(0)                                    # +0xE1 (only if married)
+            cstr(char.get('spouse', ''), 17)         # +0xD0 spouse name
+
+        # +0x12 u16. Handler GATE @0x44F093: reads bool @+0x14 ONLY if +0x12 == 1.
+        field12 = 0
+        u16(field12)
+        if field12 == 1:
+            u8(0)                                    # +0x14 (only if +0x12 == 1)
+
+        u8(char.get('class', 1))                      # +0x110 job1 (1=warrior)
+        u8(0)                                         # +0x111 job2
+        u8(min(char.get('level', 1), 99))            # +0x99 level
+        u8(0)                                         # +0x9A
+        u8(0)                                         # +0x113
+
+        # apparences u16[14] @+0x120 — body/cosmetic part ids
+        apparences = [
+            0,                                  # 0  head
+            char.get('hair', 1) & 0xFFFF,       # 1  hair
+            char.get('face', 1) & 0xFFFF,       # 2  face
+            0,                                  # 3
+            char.get('top', 0) & 0xFFFF,        # 4  top
+            char.get('bottom', 0) & 0xFFFF,     # 5  bottom
+            char.get('shoes', 0) & 0xFFFF,      # 6  shoes
+            0, 0, 0, 0,                         # 7..10
+            char.get('weapon', 0) & 0xFFFF,     # 11 weapon
+            0, 0,                              # 12,13
+        ]
+        assert len(apparences) == 14
+        for v in apparences:
+            u16(v)
+
+        # 4× u16 @+0xE6/E8/EA/EC (equip-appearance / dye ids)
+        u16(0); u16(0); u16(0); u16(0)
+
+        # equipment: 16 × {u16 item_id, 6×u16 enchant} @+0x13C / +0x16E
+        for _ in range(16):
+            u16(0)
+            for _ in range(6):
+                u16(0)
+
+        # extra u16[9] @+0x15C
+        for _ in range(9):
+            u16(0)
+
+        u8(0)                                         # N1 inventory count = 0
+        u8(0)                                         # N2 skill count = 0
+
+        u32(32)                                       # +0x954
+        u8(0)                                         # +0x8D9
+        u8(1)                                         # +0x8CF
+        i32(0)                                        # +0x904
+        u32(501)                                      # +0xE00
+        u8(0)                                         # +0x8BD
+
+        f64(char.get('x', 2000.0))                    # +0x11F8 posX  (f64!)
+        f64(char.get('y', 2000.0))                    # +0x1288 posY  (f64!)
+        i32(0)                                         # +0xE50
+
+        # ip bytes @+0x8B3..+0x8B6
+        client_ip = session.get('client_ip', '127.0.0.1')
+        try:
+            octets = [int(x) for x in client_ip.split('.')]
+            if len(octets) != 4:
+                raise ValueError
+        except ValueError:
+            octets = [127, 0, 0, 1]
+        for o in octets:
+            u8(o)
+
+        u8(0); u8(0); u8(0); u8(0); u8(0)            # 5 bools @+0x8DA/DF/DC/DD/DE
+
+        u16(0)                                         # +0x9C
+        u16(0)                                         # +0xA0
+        u32(0)                                         # +0xD94
+        u8(0)                                          # +0x8EC
+        u8(0)                                          # +0x14F4 = 0 -> block ends
+
+        return bytes(body)
+
+    def _build_en_opcode_07_packet(self, session, char):
+        """
+        Top-level wrapper for opcode 0x07: u8 player_count = 1, then ONE
+        per-player block from _build_en_opcode_07. Returns the packet body
+        (without the leading 0x07 opcode byte — _send_encrypted adds that).
+        """
+        body = bytearray()
+        body.append(1)  # player_count — must be >= 1
+        body.extend(self._build_en_opcode_07(session, char))
         return bytes(body)
 
     def _build_pyslayer_enter_world(self, session, char):
@@ -1072,7 +1307,12 @@ class GameServer:
 
         log.info(f'[LOGIN] SUCCESS for "{username}"')
         session['username'] = username
-        session['account_id'] = abs(hash(username)) & 0x7FFFFFFF
+        # DETERMINISTIC uid (was abs(hash(username)) — random per process due to
+        # Python hash randomization). The registration gate at 0x4221A2 requires
+        # spawn entity+0x84 (uid) == scene+0x220, and scene+0x220 is written from
+        # THIS account_id by the login-success handler (0x44DBB2). The spawn uid
+        # must use the SAME value. Use 1 for single-player bring-up.
+        session['account_id'] = 1
 
         resp = self._build_login_success(session, account)
         self._send_encrypted(sock, session, 0x02, resp, use_by_array=no_enc)
