@@ -432,6 +432,26 @@ class GameServer:
             self._handle_change_map(sock, session, payload, no_enc)
         elif opcode == 0x2F:
             log.info(f'[0x2F] arena query — ignoring')
+        elif opcode == 0x05:
+            # client heartbeat / periodic keepalive (~4 min). Consume, NO reply
+            # (replying with the 0x05 init packet resets in-game state -> kick).
+            log.info('[0x05] client heartbeat - consumed')
+        elif opcode == 0x0F:
+            self._handle_equip_item(sock, session, payload, no_enc)
+        elif opcode == 0x16:
+            # ACCEPT QUEST (inbound). 0x16 is ALSO the outbound chat opcode.
+            self._handle_accept_quest(sock, session, payload, no_enc)
+        elif opcode == 0x1A:
+            # mob/target query (inbound). Outbound 0x1A is the mob-spawn builder.
+            log.info('[0x1A] mob query - consumed')
+        elif opcode == 0x25:
+            self._handle_use_skill(sock, session, payload, no_enc)
+        elif opcode == 0x2C:
+            self._handle_room_query(sock, session, payload, no_enc)
+        elif opcode == 0x2D:
+            # scene-finalize / map-ready ack (inbound). Consume (replying froze
+            # the client in a prior experiment).
+            log.info('[0x2D] scene-finalize ack - consumed')
         else:
             log.info(f'[FIREWAY] Unhandled opcode 0x{opcode:02X}')
             try:
@@ -486,6 +506,11 @@ class GameServer:
         if not char:
             log.warning(f'[ENTER_WORLD] Character "{char_name_str}" not found')
             return
+
+        # Persist identity so portal/map-change (0x7E) can find the character
+        # and use the correct source map for portal lookups.
+        session['char_name'] = char_name_str
+        session['current_map'] = char.get('map', 101) or 101
 
         # CRITICAL: respond with opcode 0x2E (not 0x2B)! Opcodes 0x2B and 0x2E
         # share the handler at VA 0x44F762, but the post-read check at
@@ -716,24 +741,116 @@ class GameServer:
         log.info(f'[STATS] type={stat_type} +1')
         self._send_encrypted(sock, session, 0x14, body, use_by_array=no_enc)
 
+    # =================================================================
+    # SHOP / ECONOMY (opcodes 0x0B,0x0C inbound; 0x18,0x19,0x80 outbound)
+    #
+    # Wire formats verified against the EN client handlers reached via
+    # dispatcher 0x004582B3, cross-checked with PySlayer:
+    #
+    #   0x0B BuyItem  (client->server)  : u16 item, u16 count, u8 undef
+    #       (client SEND builder; the client's *receive* handler 0x0047091D is
+    #        the shop-inventory listing — a separate, deeper feature, TODO.)
+    #   0x0C SellItem (client->server)  : u16 item, u8 count, u16 undef
+    #       (PySlayer client_packets/parse_0x0C.py: count is a U8, not U16.)
+    #   0x18 GetItem/BuyResult (server->client), handler 0x0046DE3E:
+    #       u64 gold, u32 winnie(cash), u16 item, u16 count   (16 B payload)
+    #   0x19 SellResult        (server->client), handler 0x0046DBEE:
+    #       u64 gold, u16 item, u16 count, u8 loopN, loopN*u16, u16 trailer
+    #       (we send loopN=0 -> 15 B payload, matching PySlayer opcode_0x19)
+    #   0x80 CashShopBalance   (server->client), handler 0x0044E2FE:
+    #       u8 flag(=1), u32 value   (5 B payload; flag!=1 pops an error box)
+    #
+    # The economy is a protocol-correct stub: the server has no persistent
+    # gold/inventory yet, so it always reports a large balance and grants/
+    # removes the requested item so the client UI stays in sync. Hook real
+    # gold/inventory accounting where marked TODO.
+    # =================================================================
+
+    # Default wallet values reported to the client until real accounting lands.
+    _DEFAULT_GOLD = 999999
+    _DEFAULT_WINNIE = 999999   # cash/premium currency
+
+    def _wallet(self, session):
+        """Return (gold, winnie) for this session. TODO: persist per account."""
+        return (session.get('gold', self._DEFAULT_GOLD),
+                session.get('winnie', self._DEFAULT_WINNIE))
+
     def _handle_buy_item(self, sock, session, payload, no_enc):
-        """0x0B BUY → respond with 0x18 (got item)."""
-        if len(payload) < 4: return
-        item = struct.unpack('<H', payload[0:2])[0]
-        count = struct.unpack('<H', payload[2:4])[0]
+        """0x0B BUY (client->server) → respond 0x18 (item granted + wallet).
+
+        Payload: u16 item, u16 count, u8 undef (5 B). Mirrors EN client
+        builder 0x0047... and PySlayer parse_0B.
+        """
+        if len(payload) < 4:
+            log.warning(f'[BUY] short payload {len(payload)}B')
+            return
+        item = struct.unpack_from('<H', payload, 0)[0]
+        count = struct.unpack_from('<H', payload, 2)[0]
         log.info(f'[BUY] item={item} count={count}')
-        # opcode_18: item(2) + count(2)
-        body = struct.pack('<H', item) + struct.pack('<H', count)
-        self._send_encrypted(sock, session, 0x18, body, use_by_array=no_enc)
+        # TODO: validate item is in the shop, check & deduct gold, add to inv.
+        self._send_buy_result(sock, session, item, count, no_enc=no_enc)
 
     def _handle_sell_item(self, sock, session, payload, no_enc):
-        """0x0C SELL → respond with 0x19 (lost item)."""
-        if len(payload) < 4: return
-        item = struct.unpack('<H', payload[0:2])[0]
-        count = struct.unpack('<H', payload[2:4])[0]
+        """0x0C SELL (client->server) → respond 0x19 (item removed + wallet).
+
+        Payload: u16 item, u8 count, u16 undef (5 B). PySlayer parse_0C shows
+        count is a U8 here (unlike buy).
+        """
+        if len(payload) < 3:
+            log.warning(f'[SELL] short payload {len(payload)}B')
+            return
+        item = struct.unpack_from('<H', payload, 0)[0]
+        count = payload[2]
         log.info(f'[SELL] item={item} count={count}')
-        body = struct.pack('<H', item) + struct.pack('<H', count)
+        # TODO: verify the player owns `count` of `item`, credit gold.
+        self._send_sell_result(sock, session, item, count, no_enc=no_enc)
+
+    # ---- outbound shop/economy builders ----
+
+    def _build_opcode_18(self, gold, winnie, item, count):
+        """0x18 GetItem / BuyResult body (16 B). Handler 0x0046DE3E reads:
+        GetU64 gold, GetU32 winnie, GetU16 item, GetU16 count."""
+        return (struct.pack('<Q', gold & 0xFFFFFFFFFFFFFFFF)
+                + struct.pack('<I', winnie & 0xFFFFFFFF)
+                + struct.pack('<H', item & 0xFFFF)
+                + struct.pack('<H', count & 0xFFFF))
+
+    def _build_opcode_19(self, gold, item, count):
+        """0x19 SellResult body (15 B with empty list). Handler 0x0046DBEE reads:
+        GetU64 gold, GetU16 item, GetU16 count, GetU8 loopN, loopN*GetU16,
+        GetU16 trailer. We emit loopN=0 (so no loop entries) + a 0 trailer."""
+        return (struct.pack('<Q', gold & 0xFFFFFFFFFFFFFFFF)
+                + struct.pack('<H', item & 0xFFFF)
+                + struct.pack('<H', count & 0xFFFF)
+                + struct.pack('<B', 0)            # loopN = 0 (no extra u16 list)
+                + struct.pack('<H', 0))           # trailing u16
+
+    def _build_opcode_80(self, value, flag=1):
+        """0x80 CashShopBalance / CurrencyUpdate body (5 B). Handler 0x0044E2FE:
+        GetU8 flag (MUST be 1, else the client shows an error message box),
+        then GetU32K value. The 'K' GET variant is a cipher-layer detail; on
+        the wire it is a plain 4-byte LE u32 (PySlayer sends p32u)."""
+        return struct.pack('<B', flag & 0xFF) + struct.pack('<I', value & 0xFFFFFFFF)
+
+    def _send_buy_result(self, sock, session, item, count, no_enc=False):
+        gold, winnie = self._wallet(session)
+        body = self._build_opcode_18(gold, winnie, item, count)
+        self._send_encrypted(sock, session, 0x18, body, use_by_array=no_enc)
+
+    def _send_sell_result(self, sock, session, item, count, no_enc=False):
+        gold, _ = self._wallet(session)
+        body = self._build_opcode_19(gold, item, count)
         self._send_encrypted(sock, session, 0x19, body, use_by_array=no_enc)
+
+    def _send_cash_balance(self, sock, session, value=None, no_enc=False):
+        """Push a 0x80 currency/cash-shop balance to the client. Call after
+        enter-world (or whenever the cash balance changes) to populate the
+        cash-shop UI. value defaults to the session's winnie balance."""
+        if value is None:
+            value = self._wallet(session)[1]
+        body = self._build_opcode_80(value, flag=1)
+        log.info(f'[CASH] balance update value={value}')
+        self._send_encrypted(sock, session, 0x80, body, use_by_array=no_enc)
 
     def _handle_use_item(self, sock, session, payload, no_enc):
         """0x15 USE ITEM/SKILL → set HP/MP via 0x28/0x44."""
@@ -748,26 +865,68 @@ class GameServer:
         body_mp = struct.pack('<H', 50)
         self._send_encrypted(sock, session, 0x44, body_mp, use_by_array=no_enc)
 
+    def _session_char(self, session):
+        """Resolve the character dict for this session (mirrors enter-world)."""
+        account = self.accounts.get(session.get('username'), {})
+        chars = account.get('characters', [])
+        name = session.get('char_name')
+        if name:
+            for c in chars:
+                if c.get('name') == name:
+                    return c
+        return chars[0] if chars else None
+
     def _handle_change_map(self, sock, session, payload, no_enc):
-        """0x7E CHANGE MAP via portal → respond with 0x08 (and 0x07 spawn at new pos)."""
-        if len(payload) < 4: return
+        """0x7E portal → 0x08 (change map) THEN 0x07 (re-spawn).
+
+        0x08 alone (handler 0x450867) only rebuilds the map container and sets
+        the transition state; the player entity is created ONLY by the 0x07
+        handler (0x44EF72). Without a following 0x07 the new map loads but no
+        player exists → infinite loading screen. So we replay the same
+        byte-perfect 0x07 spawn the enter-world flow uses, at the portal's
+        destination x/y. (0x03 is enter-world only; not resent on map change.)
+
+        EN 0x08 body has NO leading flag byte: [u16 mapcode LE][u32 uid][u32 0]
+        (the cmp cl,0x5e/0xa3/0xa4 at 0x450867 compares the OPCODE, not payload).
+        """
+        if len(payload) < 4:
+            return
         portal_code = struct.unpack('<I', payload[0:4])[0]
         cur_map = session.get('current_map', 101)
-        # Look up portal in our table
         portals = self._get_portals()
         key = f'{cur_map}_{portal_code}'
         if key in portals:
             next_map, xpos, ypos = portals[key]
         else:
-            log.warning(f'[CHANGE_MAP] unknown portal {portal_code} from map {cur_map}, defaulting to stage01_01')
-            next_map, xpos, ypos = 101, 1411.0, 714.0
+            # Unknown portal: stay on the current map but STILL re-spawn so the
+            # client doesn't hang. (Populate portals.json to actually move.)
+            log.warning(f'[CHANGE_MAP] unknown portal {portal_code} from map {cur_map}; staying on {cur_map}')
+            next_map, xpos, ypos = cur_map, 1411.0, 714.0
         session['current_map'] = next_map
         log.info(f'[CHANGE_MAP] map {cur_map} ({map_filename(cur_map)}) portal {portal_code} → '
                  f'map {next_map} ({map_filename(next_map)}) at ({xpos}, {ypos})')
-        # Send 0x08 — note no flag byte, mapcode LE
+
         uid = session.get('account_id', 1) & 0xFFFFFFFF
+        # 1) 0x08 change-map (body unchanged from the working code)
         body_08 = struct.pack('<H', next_map) + struct.pack('<I', uid) + struct.pack('<I', 0)
         self._send_encrypted(sock, session, 0x08, body_08, use_by_array=no_enc)
+
+        # 2) 0x07 re-spawn the local player at the destination, reusing the SAME
+        #    byte-perfect builder enter-world uses. uid stays account_id so the
+        #    registration gate (entity+0x84 == scene+0x220, set once at login)
+        #    still passes.
+        char = self._session_char(session)
+        if char is not None:
+            char = dict(char)
+            char['x'] = float(xpos)
+            char['y'] = float(ypos)
+            char['uid'] = uid
+            time.sleep(0.05)
+            body_07 = self._build_en_opcode_07_packet(session, char)
+            log.info(f'[CHANGE_MAP] Sending 0x07 re-spawn: {len(body_07)}B')
+            self._send_encrypted(sock, session, 0x07, body_07, use_by_array=no_enc)
+        else:
+            log.warning('[CHANGE_MAP] no character in session; cannot re-spawn')
 
     def _get_portals(self):
         """Lazy-load the portal table from JSON."""
@@ -778,6 +937,106 @@ class GameServer:
             except FileNotFoundError:
                 self._portals_cache = {}
         return self._portals_cache
+
+    # ========================================================================
+    # In-game opcode handlers (generated + verified by the opcode workflow).
+    # Inbound handlers consume/ack so the client never hangs waiting on a reply.
+    # ========================================================================
+    def _handle_accept_quest(self, sock, session, payload, no_enc):
+        """0x16 inbound = AcceptQuest (u16 quest_id, built by client at 0x477330).
+        There is NO server->client 'quest granted' opcode in the EN dispatch (the
+        active-quest log is only delivered via the 0x03 enter-world packet), so we
+        record it server-side and give chat feedback. Do NOT resend 0x03 (resets
+        in-world state)."""
+        if len(payload) < 2:
+            log.warning(f'[QUEST] short accept payload {len(payload)}B')
+            return
+        quest_id = struct.unpack_from('<H', payload, 0)[0]
+        quests = session.setdefault('quests', [])
+        if quest_id not in quests:
+            quests.append(quest_id)
+        log.info(f'[QUEST] accepted quest_id={quest_id} (active={quests})')
+        self._send_chat_line(sock, session, 'Server', f'Quest {quest_id} accepted.', no_enc)
+
+    def _handle_use_skill(self, sock, session, payload, no_enc):
+        """0x25 inbound = UseSkill (u16 skill). Echo the cast so the animation
+        plays (EN handler 0x452D69 first read is an unconditional u16)."""
+        if len(payload) < 2:
+            return
+        skill = struct.unpack_from('<H', payload, 0)[0]
+        log.info(f'[SKILL] cast skill={skill}')
+        self._send_encrypted(sock, session, 0x25, struct.pack('<H', skill & 0xFFFF), use_by_array=no_enc)
+
+    def _handle_equip_item(self, sock, session, payload, no_enc):
+        """0x0F inbound = EquipItem. No persistent inventory yet: consume so the
+        UI settles. TODO: update char equipment + rebroadcast appearance via 0x07."""
+        if len(payload) >= 2:
+            item = struct.unpack_from('<H', payload, 0)[0]
+            log.info(f'[EQUIP] item={item} - consumed (no inventory backend yet)')
+
+    def _handle_room_query(self, sock, session, payload, no_enc):
+        """0x2C inbound = room/arena list query (u8 code), sent once at spawn.
+        Consume; answering with 0x33 unprompted opens the arena UI."""
+        code = payload[0] if payload else 0
+        log.info(f'[0x2C] room query code={code} - consumed')
+
+    def _send_chat_line(self, sock, session, sender, text, no_enc=False):
+        """Outbound chat broadcast (opcode 0x16): u8 count=1, CHAR[17] sender,
+        u8 len, text. (EN receive-handler 0x451AF0 reads a leading entry count.)"""
+        name_bytes = sender.encode('ascii', 'replace')[:16].ljust(17, b'\x00')
+        msg_bytes = text.encode('ascii', 'replace')[:255]
+        body = struct.pack('<B', 1) + name_bytes + struct.pack('<B', len(msg_bytes)) + msg_bytes
+        self._send_encrypted(sock, session, 0x16, body, use_by_array=no_enc)
+
+    def _build_opcode_1A(self, npccode, mob_uid, x, y):
+        """Outbound monster spawn (0x1A) — byte-exact per EN handler 0x451D8D."""
+        b = bytearray()
+        def u8(v):  b.append(v & 0xFF)
+        def u16(v): b.extend(struct.pack('<H', v & 0xFFFF))
+        def u32(v): b.extend(struct.pack('<I', v & 0xFFFFFFFF))
+        def f64(v): b.extend(struct.pack('<d', float(v)))
+        ix, iy = int(x), int(y)
+        u8(1)                       # count (>=1)
+        u32(npccode)                # +0xe60 npc id
+        u32(mob_uid)                # +0x84  uid
+        u8(0)                       # buff loop count = 0
+        u8(0)                       # secondary loop count = 0
+        f64(x); f64(y)              # +0x11f8 / +0x1288 position
+        u8(0); u8(0)                # +0x8bb / +0x8bc
+        u32(ix); u32(iy)            # base pos pair 1
+        u32(ix); u32(iy)            # base pos pair 2
+        u32(ix); u32(iy)            # base pos pair 3
+        u8(0); u8(0)                # two bools
+        u32(1); u32(1)
+        u8(0)
+        u32(1)
+        u8(0); u8(0); u8(0); u8(0)
+        u8(0); u8(0); u8(0); u8(0); u8(0); u8(0); u8(0)   # 7 bools
+        u16(202)
+        u32(1)
+        u8(0)                       # aggro flag = 0
+        return bytes(b)
+
+    def _spawn_test_monster(self, sock, session, npccode=1001, x=None, y=None, no_enc=False):
+        """Debug: spawn one monster near the player (combat bring-up). NOT called
+        automatically (avoids duplicate-uid mobs on re-entry)."""
+        char = self._session_char(session) or {}
+        if x is None: x = char.get('x', 1411.0)
+        if y is None: y = char.get('y', 714.0)
+        mob_uid = session.get('next_mob_uid', 0x1000)
+        session['next_mob_uid'] = mob_uid + 1
+        body = self._build_opcode_1A(npccode, mob_uid, x, y)
+        log.info(f'[MOB] spawn npc={npccode} uid={mob_uid} at ({x},{y}) {len(body)}B')
+        self._send_encrypted(sock, session, 0x1A, body, use_by_array=no_enc)
+        return mob_uid
+
+    def _send_hp(self, sock, session, hp, no_enc=False):
+        """Outbound 0x28 setHP (single u16)."""
+        self._send_encrypted(sock, session, 0x28, struct.pack('<H', hp & 0xFFFF), use_by_array=no_enc)
+
+    def _send_mp(self, sock, session, mp, no_enc=False):
+        """Outbound 0x44 setMP (single u16)."""
+        self._send_encrypted(sock, session, 0x44, struct.pack('<H', mp & 0xFFFF), use_by_array=no_enc)
 
     def _build_pyslayer_opcode_03(self, session, char, current_map=101):
         """
@@ -796,26 +1055,35 @@ class GameServer:
         body.extend(struct.pack('<I', 0))                    # battle losses
         body.extend(struct.pack('<I', 0))                    # battle KO
         body.extend(struct.pack('<I', 0))                    # battle Down
-        body.append(0)                                       # bool
-        body.extend(struct.pack('<I', 1000))                 # x again?
-        body.extend(b'Mentor'.ljust(17, b'\x00'))            # mentor name
-        body.append(0)                                       # var_y
-        body.append(10)
-        for i in range(5):
-            body.extend(struct.pack('<H', 10 + i))           # quest ids
-        for i in range(5):
-            body.append(10 + i)                              # quest counts
+        # --- mentor/spouse gate (U32) — handler 0x44E54C: if NONZERO it then
+        # reads GetStr(17)+GetU8 (spouse/mentor name sub-block); 0 SKIPS it.
+        # The OLD code emitted bool(0)+U32(1000)+'Mentor'[17]+byte, which the
+        # client read as a NONZERO gate (0x0003E800) → over-read name+byte →
+        # desynced EVERY field after it (incl. the quest log) by ~18 bytes,
+        # making the 3-slot active-quest log read FULL → "only 3 at a time".
+        # Send exactly ONE zero U32. (Verified: handler 0x44E38F.)
+        body.extend(struct.pack('<I', 0))                    # mentor gate = 0
+        body.append(0)                                        # +0xe78 flag
+        # --- ACTIVE quest log: EXACTLY 3 slots (handler 0x44E650 reads 3 u16
+        # ids then 0x44E690 reads 3 u8 counts). Empty so the client lets you
+        # accept new quests. ---
+        for _ in range(3):
+            body.extend(struct.pack('<H', 0))                # active quest id (empty)
+        for _ in range(3):
+            body.append(0)                                    # active quest count (empty)
+        # --- 3 INVENTORY SLOT CAPACITIES (+0x3a9/+0x3aa/+0x3ab): equip /
+        # consume / other tab sizes. NOT value-irrelevant — zeroing these gave
+        # "There isn't empty space in the inventory" on quest-accept. 35 each. ---
         body.append(35)                                      # equip slots
         body.append(35)                                      # consume slots
         body.append(35)                                      # other slots
-        body.append(15)                                      # end-quest count
-        for i in range(15):
-            body.extend(struct.pack('<H', i))                # quest id
-            body.append(1)                                   # complete count
-        body.append(0)                                       # equipment lists (empty)
-        body.append(0)                                       # 2nd list (empty)
-        body.append(0)                                       # 3rd list (empty)
-        body.extend(struct.pack('<I', 0))                    # event time
+        # --- 4 count-prefixed lists (completed quests etc.); count=0 each
+        # (handler skips each list when count==0). ---
+        body.append(0)                                        # list A (completed quests) count
+        body.append(0)                                        # list B count
+        body.append(0)                                        # list C count
+        body.append(0)                                        # list D count
+        # NOTE: no trailing event-time U32 — handler reads nothing more here.
         return bytes(body)
 
     def _build_pyslayer_opcode_07(self, session, char, pad=True):
