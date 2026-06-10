@@ -1104,13 +1104,19 @@ class GameServer:
         cur_map = session.get('current_map', 101)
         portals = self._get_portals()
         key = f'{cur_map}_{portal_code}'
-        if key in portals:
-            next_map, xpos, ypos = portals[key]
-        else:
-            # Unknown portal: stay on the current map but STILL re-spawn so the
-            # client doesn't hang. (Populate portals.json to actually move.)
-            log.warning(f'[CHANGE_MAP] unknown portal {portal_code} from map {cur_map}; staying on {cur_map}')
-            next_map, xpos, ypos = cur_map, 1411.0, 714.0
+        if key not in portals:
+            # Unknown portal: DO NOTHING. The old code re-loaded the SAME map and
+            # re-spawned in place (0x08 same-mapcode + 0x07), which re-creates the
+            # player entity on an already-loaded scene -> duplicate/orphan entity
+            # -> character invisible/stuck + flashing HP (observed). Far safer to
+            # ignore the portal (player stays put) until it's mapped in portals.json.
+            log.warning(f'[CHANGE_MAP] unknown portal {portal_code} from map {cur_map} - ignoring (no re-spawn)')
+            return
+        next_map, xpos, ypos = portals[key]
+        if next_map == cur_map:
+            # Same-map portal: also skip the re-load+re-spawn (same duplicate risk).
+            log.info(f'[CHANGE_MAP] portal {portal_code} targets same map {cur_map} - ignoring')
+            return
         session['current_map'] = next_map
         log.info(f'[CHANGE_MAP] map {cur_map} ({map_filename(cur_map)}) portal {portal_code} → '
                  f'map {next_map} ({map_filename(next_map)}) at ({xpos}, {ypos})')
@@ -1310,8 +1316,12 @@ class GameServer:
             return
         char[char_key] = int(info.get('Spr_Num') or 0) & 0xFFFF
         equipped[char_key] = item
+        # Instant in-place appearance refresh via 0x1D (finds entity by uid,
+        # re-composes the skin; never allocates -> no duplicate player).
+        self._send_encrypted(sock, session, 0x1D,
+                             self._build_en_opcode_1D(char), use_by_array=no_enc)
         log.info(f"[EQUIP] {info.get('name')} item={item} -> {char_key}=Spr_Num {char[char_key]} "
-                 f"(shows on next spawn/map-change)")
+                 f"(instant 0x1D refresh, uid={char.get('uid', 1)})")
 
     def _handle_room_query(self, sock, session, payload, no_enc):
         """0x2C inbound = room/arena list query (u8 code), sent once at spawn.
@@ -1327,33 +1337,53 @@ class GameServer:
         body = struct.pack('<B', 1) + name_bytes + struct.pack('<B', len(msg_bytes)) + msg_bytes
         self._send_encrypted(sock, session, 0x16, body, use_by_array=no_enc)
 
-    def _build_opcode_1A(self, npccode, mob_uid, x, y):
-        """Outbound monster spawn (0x1A) — byte-exact per EN handler 0x451D8D."""
+    def _build_opcode_1A(self, npccode, mob_uid, x, y, anim_idx=None):
+        """Outbound monster spawn (0x1A) — byte-exact per EN handler 0x451D8D.
+
+        Re-derived field-by-field from the handler's Get* read order (workflow
+        ws-bug-triage). The PREVIOUS body diverged after field 4 (wrong order +
+        treated GetU32K as variable) which skewed the per-field cipher stream,
+        landing the monster off-world (garbage pos) so it was never finalized.
+
+        +0xe60 is the 1-based ANIM-CONTAINER index (1..count, ~180), NOT the
+        npccode — the handler at 0x451E47 does a container lookup (0x409770)
+        and if it fails the render record is never bound (entity stays invisible
+        even with a correct body). GetU32K is 4 bytes on the wire (same as the
+        working 0x07 builder)."""
+        if anim_idx is None:
+            anim_idx = npccode            # caller SHOULD pass a real anim index
         b = bytearray()
         def u8(v):  b.append(v & 0xFF)
         def u16(v): b.extend(struct.pack('<H', v & 0xFFFF))
         def u32(v): b.extend(struct.pack('<I', v & 0xFFFFFFFF))
+        def i32(v): b.extend(struct.pack('<i', int(v)))
         def f64(v): b.extend(struct.pack('<d', float(v)))
         ix, iy = int(x), int(y)
-        u8(1)                       # count (>=1)
-        u32(npccode)                # +0xe60 npc id
-        u32(mob_uid)                # +0x84  uid
-        u8(0)                       # buff loop count = 0
-        u8(0)                       # secondary loop count = 0
-        f64(x); f64(y)              # +0x11f8 / +0x1288 position
-        u8(0); u8(0)                # +0x8bb / +0x8bc
-        u32(ix); u32(iy)            # base pos pair 1
-        u32(ix); u32(iy)            # base pos pair 2
-        u32(ix); u32(iy)            # base pos pair 3
-        u8(0); u8(0)                # two bools
-        u32(1); u32(1)
-        u8(0)
-        u32(1)
-        u8(0); u8(0); u8(0); u8(0)
-        u8(0); u8(0); u8(0); u8(0); u8(0); u8(0); u8(0)   # 7 bools
-        u16(202)
-        u32(1)
-        u8(0)                       # aggro flag = 0
+        u8(1)                 # 451D9F count >=1
+        u32(anim_idx)         # 451E00 +0xe60 anim-container index (must resolve!)
+        u32(mob_uid)          # 451E1A +0x84  uid
+        u8(0)                 # 451F9D inner-loop count = 0 (no sub-entries)
+        u8(0)                 # 45204C +0x8bb
+        u8(0)                 # 452066 +0x8bc
+        u32(0)                # 452080 +0xdbc (K)
+        u32(0)                # 45209A +0xdb8 (K)
+        u32(ix)               # 4520B5 +0x1318 x (K, -> float)
+        u32(iy)               # 4520EE +0x1320 y (K, -> float)
+        u32(0)                # 452126 +0xe5c (K)
+        u32(32)               # 452140 +0x954 (K)  [match 0x07]
+        u8(0)                 # 45215A +0x8d9 bool
+        u8(1)                 # 452174 +0x8cf      [match 0x07]
+        i32(0)                # 45218E +0x904
+        u32(501)              # 4521A8 +0xe00 (K)  [match 0x07]
+        u8(0)                 # 4521C2 +0x8bd
+        f64(x)                # 4521DC +0x11f8 posX
+        f64(y)                # 4521F6 +0x1288 posY
+        i32(0)                # 452210 +0xe50
+        u8(127); u8(0); u8(0); u8(1)        # 45222A.. +0x8b3..8b6 ip
+        u8(0); u8(0); u8(0); u8(0); u8(0)   # 452292.. +0x8da/8df/8dc/8dd/8de bools
+        u16(0)                # 452315 +0x9c
+        u32(0)                # 45233D +0xd94 (K)
+        u8(0)                 # 452357 +0x8e4 bool = 0 -> SKIP +0xe48, block ends
         return bytes(b)
 
     def _spawn_test_monster(self, sock, session, npccode=1001, x=None, y=None, no_enc=False):
@@ -1401,8 +1431,8 @@ class GameServer:
                           spawn_x=float(x), spawn_y=float(y),
                           drop_items=stat.get('drops', []), gold=stat.get('gold', 0))
             session['monsters'][uid] = mob
-            body = self._build_opcode_1A(npccode, uid, x, y)
-            log.info(f"[MOB] spawn {mob.name} npc={npccode} uid={uid:#x} at ({x},{y}) hp={mob.hp}")
+            body = self._build_opcode_1A(npccode, uid, x, y, anim_idx=stat.get('anim', npccode))
+            log.info(f"[MOB] spawn {mob.name} npc={npccode} uid={uid:#x} anim={stat.get('anim', npccode)} at ({x},{y}) hp={mob.hp}")
             self._send_encrypted(sock, session, 0x1A, body, use_by_array=no_enc)
         log.info(f"[MOB] spawned {len(session['monsters'])} monsters on map {map_id}")
 
@@ -1677,6 +1707,34 @@ class GameServer:
             target_size = 2030  # leaves room for opcode + header
             if len(body) < target_size:
                 body.extend(b'\x00' * (target_size - len(body)))
+        return bytes(body)
+
+    def _build_en_opcode_1D(self, char):
+        """opcode 0x1D — in-place appearance/equip refresh for an EXISTING entity
+        (handler 0x0045298C). Finds the entity by uid (call 0x004189F0) and
+        re-composes its sprite skin; it NEVER allocates, so it cannot duplicate
+        the player (unlike 0x07/0x04 which always allocate via 0x444390).
+        Wire: u32 uid | u16 skinSelector | u8 N | N*u16 apparence | u16 weapon.
+        The 14-slot apparence layout mirrors _build_en_opcode_07 (idx11=weapon)."""
+        apparences = [
+            0,                                  # 0  head
+            char.get('hair', 1) & 0xFFFF,       # 1  hair
+            char.get('face', 1) & 0xFFFF,       # 2  face
+            0,                                  # 3
+            char.get('top', 0) & 0xFFFF,        # 4  top
+            char.get('bottom', 0) & 0xFFFF,     # 5  bottom
+            char.get('shoes', 0) & 0xFFFF,      # 6  shoes
+            0, 0, 0, 0,                         # 7..10
+            char.get('weapon', 0) & 0xFFFF,     # 11 weapon
+            0, 0,                              # 12,13
+        ]
+        body = bytearray()
+        body += struct.pack('<I', int(char.get('uid', 1)) & 0xFFFFFFFF)   # uid
+        body += struct.pack('<H', (char.get('class', 1) or 1) & 0xFFFF)   # skinSelector (1-based class)
+        body.append(len(apparences) & 0xFF)                              # N = 14
+        for v in apparences:
+            body += struct.pack('<H', v & 0xFFFF)
+        body += struct.pack('<H', char.get('weapon', 0) & 0xFFFF)        # trailing weapon
         return bytes(body)
 
     def _build_en_opcode_07(self, session, char):
