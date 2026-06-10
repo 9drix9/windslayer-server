@@ -24,6 +24,9 @@ import sys
 import logging
 import json
 import os
+import random
+import sqlite3
+from dataclasses import dataclass, field
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from cencmsg import CEncMsg
@@ -31,6 +34,99 @@ from cencmsg import CEncMsg
 # Reference data tables built from KR Yahoo client dumps. Lazy-loaded; safe
 # to import even if a JSON is missing (will raise on first use only).
 from data import items as item_table, npcs as npc_table, map_codes, map_filename
+
+
+# ============================================================================
+# Content DB (gamedef.sqlite3): items.json lacks Kind/Spr_Num/Buy/Sell which
+# equip + shop pricing need; source them here. Lazy connection; cached.
+# ============================================================================
+_GAMEDEF_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gamedef.sqlite3')
+if not os.path.exists(_GAMEDEF_PATH):
+    _GAMEDEF_PATH = r'C:\Users\ohdri\Desktop\PySlayer\gamedef.sqlite3'
+_gamedef_conn = None
+_gamedef_cache = {}
+
+def _gamedef_item(idx):
+    """items columns: Type,Kind,Sprite(icon),Spr_Num(body sprite),HP,MP,Buy,Sell,W_Att,Def,name. None if missing."""
+    global _gamedef_conn
+    if idx in _gamedef_cache:
+        return _gamedef_cache[idx]
+    try:
+        if _gamedef_conn is None:
+            _gamedef_conn = sqlite3.connect(_GAMEDEF_PATH, check_same_thread=False)
+            _gamedef_conn.row_factory = sqlite3.Row
+        row = _gamedef_conn.execute(
+            'SELECT Type,Kind,Sprite,Spr_Num,HP,MP,Buy,Sell,W_Att,Def,name FROM items WHERE idx=?',
+            (int(idx),)).fetchone()
+        info = dict(row) if row else None
+    except Exception as e:
+        info = None
+    _gamedef_cache[idx] = info
+    return info
+
+# gamedef Kind -> char-dict appearance key that _build_en_opcode_07 renders.
+_KIND_TO_APPARENCE = {11: 'weapon', 6: 'top', 5: 'bottom', 9: 'shoes', 15: 'head', 16: 'head', 10: 'head'}
+
+
+# ============================================================================
+# PHASE 1 COMBAT — server-authoritative monster model + content tables.
+# The client only renders what 0x1A (spawn) / 0x14 (hp) / 0x29 (death) tell it.
+# ============================================================================
+@dataclass
+class Monster:
+    uid: int                 # entity uid; MOB_UID_BASE+index (never collides with player uid=1)
+    npccode: int             # -> entity +0xe60 anim index (must be a client-loaded anim record to render)
+    name: str
+    level: int
+    hp: int
+    max_hp: int
+    body_atk: int            # monster melee attack (for when mobs hit back, later)
+    defense: int             # subtracted from incoming player damage
+    exp: int                 # exp granted to killer
+    x: float
+    y: float
+    spawn_x: float = 0.0
+    spawn_y: float = 0.0
+    alive: bool = True
+    aggro_uid: int = 0
+    drop_items: list = field(default_factory=list)
+    gold: int = 0
+    respawn_at: float = 0.0
+
+# Popola-region monster stats (gamedef.sqlite3 npcs, type=3 = AI monster).
+# npccode 1 (Seeyo) is the proven-rendering choice placed in map 102.
+MONSTER_DB = {
+    1:  dict(name='Seeyo',      level=1, hp=5,   atk=3,  defense=2,  exp=10,
+             drops=[3,4,5,18,19,20,21,47,48,2030,4356], gold=7),
+    2:  dict(name='Coring',     level=2, hp=10,  atk=4,  defense=5,  exp=14,
+             drops=[3,4,8,23,30,33,38,40,47,48,2031,4356], gold=10),
+    3:  dict(name='Oroling',    level=3, hp=15,  atk=6,  defense=8,  exp=20,
+             drops=[4,8,14,19,25,27,29,32,34,38,40,41,47,48,2032,4356], gold=14),
+    4:  dict(name='Bbonyang',   level=5, hp=30,  atk=9,  defense=13, exp=32,
+             drops=[2,4,5,8,39,47,103,210,2033,4356], gold=20),
+    5:  dict(name='Poko',       level=6, hp=50,  atk=11, defense=18, exp=40,
+             drops=[2,8,13,39,47,48,103,211,2034,4356], gold=25),
+    6:  dict(name='Kamikaji',   level=5, hp=30,  atk=9,  defense=13, exp=32,
+             drops=[2,3,5,7,39,47,51,209,2035,1570,4356], gold=20),
+    12: dict(name='Shiryosoni', level=8, hp=174, atk=18, defense=31, exp=112,
+             drops=[2036,1241,5,51], gold=60),
+}
+
+# Spawn layout from the client map files. 101 (town) = none; 102 (field) = 8 Seeyo.
+MAP_SPAWNS = {
+    101: [],
+    102: [
+        (1, 1239.0, 411.0), (1, 1194.0, 702.0), (1, 1494.0, 702.0), (1, 700.0, 900.0),
+        (1, 1300.0, 900.0), (1, 2100.0, 800.0), (1, 100.0, 485.0), (1, 1100.0, 530.0),
+    ],
+}
+MOB_UID_BASE = 0x000F0000
+MOB_RESPAWN_SECS = 15.0
+
+# Quests (content from quest_defs/gamedef.sqlite3). Client active log = 3 slots.
+from quest_defs import load_quests
+MAX_ACTIVE_QUESTS = 3
+
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -445,7 +541,9 @@ class GameServer:
             # mob/target query (inbound). Outbound 0x1A is the mob-spawn builder.
             log.info('[0x1A] mob query - consumed')
         elif opcode == 0x25:
-            self._handle_use_skill(sock, session, payload, no_enc)
+            # UseSkill / basic-attack (W key): client-authoritative hit list ->
+            # server resolves damage, broadcasts HP/death/exp/drop.
+            self._handle_attack(sock, session, payload, no_enc)
         elif opcode == 0x2C:
             self._handle_room_query(sock, session, payload, no_enc)
         elif opcode == 0x2D:
@@ -561,6 +659,10 @@ class GameServer:
                 + chat
         log.info(f'[ENTER_WORLD] Sending 0x0A welcome chat: {len(body_0A)}B')
         self._send_encrypted(sock, session, 0x0A, body_0A, use_by_array=no_enc)
+
+        # Phase 1 combat: populate the map with monsters once in-world.
+        time.sleep(0.05)
+        self._spawn_map_monsters(sock, session, session.get('current_map', 101) or 101, no_enc=no_enc)
 
         # 2026-06-09 Phase 4 step 8 — RENDER + INPUT ACTIVATION (opcode 0x6F).
         # Four-way RE investigation converged on this as the missing trigger:
@@ -785,10 +887,22 @@ class GameServer:
             log.warning(f'[BUY] short payload {len(payload)}B')
             return
         item = struct.unpack_from('<H', payload, 0)[0]
-        count = struct.unpack_from('<H', payload, 2)[0]
-        log.info(f'[BUY] item={item} count={count}')
-        # TODO: validate item is in the shop, check & deduct gold, add to inv.
-        self._send_buy_result(sock, session, item, count, no_enc=no_enc)
+        count = struct.unpack_from('<H', payload, 2)[0] or 1
+        info = _gamedef_item(item)
+        if info is None:
+            log.warning(f'[BUY] unknown item {item}'); return
+        gold, winnie = self._wallet(session)
+        cost = int(info.get('Buy') or 0) * count
+        if gold < cost:
+            log.info(f'[BUY] item={item} x{count} cost={cost} > gold={gold}; refusing')
+            self._send_chat_line(sock, session, 'Server', 'Not enough gold.', no_enc)
+            return
+        gold -= cost
+        session['gold'] = gold
+        self._inv_add(session, item, count)
+        log.info(f"[BUY] {info.get('name')} item={item} x{count} cost={cost} -> gold={gold}")
+        self._send_encrypted(sock, session, 0x18,
+                             self._build_opcode_18(gold, winnie, item, count), use_by_array=no_enc)
 
     def _handle_sell_item(self, sock, session, payload, no_enc):
         """0x0C SELL (client->server) → respond 0x19 (item removed + wallet).
@@ -800,10 +914,19 @@ class GameServer:
             log.warning(f'[SELL] short payload {len(payload)}B')
             return
         item = struct.unpack_from('<H', payload, 0)[0]
-        count = payload[2]
-        log.info(f'[SELL] item={item} count={count}')
-        # TODO: verify the player owns `count` of `item`, credit gold.
-        self._send_sell_result(sock, session, item, count, no_enc=no_enc)
+        count = payload[2] or 1   # u8 (not u16)
+        if not self._inv_has(session, item, count):
+            log.info(f'[SELL] item={item} x{count} not owned; refusing')
+            return
+        info = _gamedef_item(item)
+        self._inv_remove(session, item, count)
+        gold, _ = self._wallet(session)
+        refund = int((info.get('Sell') if info else 0) or 0) * count
+        gold += refund
+        session['gold'] = gold
+        log.info(f'[SELL] item={item} x{count} refund={refund} -> gold={gold}')
+        self._send_encrypted(sock, session, 0x19,
+                             self._build_opcode_19(gold, item, count), use_by_array=no_enc)
 
     # ---- outbound shop/economy builders ----
 
@@ -852,18 +975,104 @@ class GameServer:
         log.info(f'[CASH] balance update value={value}')
         self._send_encrypted(sock, session, 0x80, body, use_by_array=no_enc)
 
+    # ---- session inventory (point 4: persist drops/buys/uses for a session) ----
+    # Stored on the session as {item_idx:int -> count:int}. A separate, simple
+    # backend so the same model serves USE / EQUIP / SHOP / DROP-PICKUP.
+    def _inventory(self, session):
+        return session.setdefault('inventory', {})
+
+    def _inv_add(self, session, item, count=1):
+        inv = self._inventory(session)
+        inv[item] = inv.get(item, 0) + count
+        return inv[item]
+
+    def _inv_remove(self, session, item, count=1):
+        """Decrement; remove the key at <=0. Returns the remaining count (>=0)."""
+        inv = self._inventory(session)
+        have = inv.get(item, 0)
+        left = have - count
+        if left > 0:
+            inv[item] = left
+        else:
+            inv.pop(item, None)
+            left = 0
+        return left
+
+    def _inv_has(self, session, item, count=1):
+        return self._inventory(session).get(item, 0) >= count
+
     def _handle_use_item(self, sock, session, payload, no_enc):
-        """0x15 USE ITEM/SKILL → set HP/MP via 0x28/0x44."""
-        if len(payload) < 2: return
-        item = struct.unpack('<H', payload[0:2])[0]
-        log.info(f'[USE] item={item} → applying default heal')
-        # Restore HP via opcode_28
-        hp = 100
-        body_hp = struct.pack('<H', hp)
-        self._send_encrypted(sock, session, 0x28, body_hp, use_by_array=no_enc)
-        # Restore MP via opcode_44
-        body_mp = struct.pack('<H', 50)
-        self._send_encrypted(sock, session, 0x44, body_mp, use_by_array=no_enc)
+        """0x15 UseItemOrSkill (client->server) → apply a consumable's HP/MP.
+
+        Wire format (opcode byte already stripped by parse_packet):
+            u16 item_idx          # PySlayer parse_15: up16u(payload[1:3])
+
+        We look the idx up in the item DB (server/data/items.json, same data as
+        PySlayer gamedef.sqlite3 `items`). Columns used: `type` (0=consumable,
+        1=equip, 2=etc), `hp` (HP restored), `mp` (MP restored). Only type==0
+        is consumed here; equip/etc are ignored (equip arrives via 0x0F).
+
+        HP/MP are tracked as ABSOLUTE current values on the session and clamped
+        to the per-char max (the value the client was told at enter-world). The
+        outbound 0x28 (setHP) / 0x44 (setMP) carry the new ABSOLUTE value as a
+        single u16 — verified vs EN receive handlers and PySlayer opcode_28/44
+        (which send self.hp / self.mp, i.e. the post-heal absolute, not a delta).
+        """
+        if len(payload) < 2:
+            log.warning(f'[USE] short payload {len(payload)}B')
+            return
+        item = struct.unpack_from('<H', payload, 0)[0]
+
+        info = item_table.get(item)
+        if info is None:
+            log.info(f'[USE] item={item} unknown in item DB - ignoring')
+            return
+
+        itype = info.get('type', -1)
+        if itype != 0:
+            # Not a consumable; nothing to apply (equip = 0x0F, etc = 2).
+            log.info(f'[USE] item={item} type={itype} not consumable - ignoring')
+            return
+
+        # Optional inventory gate: only consume if we know the player owns it.
+        # (Inventory may be empty early on; don't hard-block so test heals work.)
+        inv = self._inventory(session)
+        if item in inv and inv[item] <= 0:
+            log.info(f'[USE] item={item} none left in inventory - ignoring')
+            return
+
+        hp_restore = int(info.get('hp', 0) or 0)
+        mp_restore = int(info.get('mp', 0) or 0)
+        if hp_restore <= 0 and mp_restore <= 0:
+            log.info(f'[USE] item={item} ("{info.get("title","?")}") has no hp/mp effect')
+
+        char = self._session_char(session) or {}
+        # max = what the client believes (sent at enter-world). Default to the
+        # spawn values so we never clamp above what the UI bar can show.
+        max_hp = int(session.get('max_hp', char.get('hp', 100)))
+        max_mp = int(session.get('max_mp', char.get('mp', 50)))
+
+        cur_hp = int(session.get('hp', char.get('hp', max_hp)))
+        cur_mp = int(session.get('mp', char.get('mp', max_mp)))
+
+        new_hp = min(cur_hp + hp_restore, max_hp)
+        new_mp = min(cur_mp + mp_restore, max_mp)
+        session['hp'] = new_hp
+        session['mp'] = new_mp
+
+        # Consume one from the session inventory (no-op if untracked).
+        if item in inv:
+            self._inv_remove(session, item, 1)
+
+        log.info(f'[USE] item={item} ("{info.get("title","?")}") '
+                 f'hp {cur_hp}->{new_hp}/{max_hp} mp {cur_mp}->{new_mp}/{max_mp}')
+
+        # Push absolute HP/MP only when they actually changed (avoid redundant
+        # UI churn). 0x28 setHP / 0x44 setMP, single u16 each.
+        if new_hp != cur_hp:
+            self._send_hp(sock, session, new_hp, no_enc=no_enc)
+        if new_mp != cur_mp:
+            self._send_mp(sock, session, new_mp, no_enc=no_enc)
 
     def _session_char(self, session):
         """Resolve the character dict for this session (mirrors enter-world)."""
@@ -907,14 +1116,16 @@ class GameServer:
                  f'map {next_map} ({map_filename(next_map)}) at ({xpos}, {ypos})')
 
         uid = session.get('account_id', 1) & 0xFFFFFFFF
-        # 1) 0x08 change-map (body unchanged from the working code)
+        # 1) 0x08 change-map (body unchanged) — loads + renders the new map.
         body_08 = struct.pack('<H', next_map) + struct.pack('<I', uid) + struct.pack('<I', 0)
         self._send_encrypted(sock, session, 0x08, body_08, use_by_array=no_enc)
 
-        # 2) 0x07 re-spawn the local player at the destination, reusing the SAME
-        #    byte-perfect builder enter-world uses. uid stays account_id so the
-        #    registration gate (entity+0x84 == scene+0x220, set once at login)
-        #    still passes.
+        # 2) Re-establish the FULL in-game state for the new map by mirroring the
+        #    PROVEN enter-world sequence (0x03 in-game-state + 0x07 spawn + 0x0A).
+        #    0x08 alone loads the map but does NOT re-create/finalize the player:
+        #    the body stayed invisible and the client never sent its post-spawn
+        #    handshake (0x2F/0x63) — only 0x0D. Replaying 0x03+0x07+0x0A (the same
+        #    thing that works on enter-world) re-establishes the local player.
         char = self._session_char(session)
         if char is not None:
             char = dict(char)
@@ -922,9 +1133,21 @@ class GameServer:
             char['y'] = float(ypos)
             char['uid'] = uid
             time.sleep(0.05)
+            resp_03 = self._build_pyslayer_opcode_03(session, char, current_map=next_map)
+            log.info(f'[CHANGE_MAP] Sending 0x03 in-game state (map {next_map}): {len(resp_03)}B')
+            self._send_encrypted(sock, session, 0x03, resp_03, use_by_array=no_enc)
+            time.sleep(0.05)
             body_07 = self._build_en_opcode_07_packet(session, char)
             log.info(f'[CHANGE_MAP] Sending 0x07 re-spawn: {len(body_07)}B')
             self._send_encrypted(sock, session, 0x07, body_07, use_by_array=no_enc)
+            time.sleep(0.05)
+            chat, sender = b'Welcome!', b'Server'
+            body_0A = (struct.pack('<B', 1) + sender + b'\x00' * (17 - len(sender))
+                       + struct.pack('<B', len(chat)) + chat)
+            self._send_encrypted(sock, session, 0x0A, body_0A, use_by_array=no_enc)
+            # Phase 1 combat: seed the new map's monsters (none in town 101).
+            time.sleep(0.05)
+            self._spawn_map_monsters(sock, session, next_map, no_enc=no_enc)
         else:
             log.warning('[CHANGE_MAP] no character in session; cannot re-spawn')
 
@@ -943,20 +1166,116 @@ class GameServer:
     # Inbound handlers consume/ack so the client never hangs waiting on a reply.
     # ========================================================================
     def _handle_accept_quest(self, sock, session, payload, no_enc):
-        """0x16 inbound = AcceptQuest (u16 quest_id, built by client at 0x477330).
-        There is NO server->client 'quest granted' opcode in the EN dispatch (the
-        active-quest log is only delivered via the 0x03 enter-world packet), so we
-        record it server-side and give chat feedback. Do NOT resend 0x03 (resets
-        in-world state)."""
+        """0x16 inbound: ACCEPT (at start NPC) OR TURN-IN (at end NPC) — one opcode
+        for both; the server decides from current quest state. Live quest-log via
+        the 0x26 grant cluster (NOT a 0x03 reset). u16 quest_id (client builder 0x477330)."""
         if len(payload) < 2:
-            log.warning(f'[QUEST] short accept payload {len(payload)}B')
+            log.warning(f'[QUEST] short 0x16 payload {len(payload)}B')
             return
         quest_id = struct.unpack_from('<H', payload, 0)[0]
-        quests = session.setdefault('quests', [])
-        if quest_id not in quests:
-            quests.append(quest_id)
-        log.info(f'[QUEST] accepted quest_id={quest_id} (active={quests})')
-        self._send_chat_line(sock, session, 'Server', f'Quest {quest_id} accepted.', no_enc)
+        q = load_quests().get(quest_id)
+        if q is None:
+            log.warning(f'[QUEST] unknown quest_id={quest_id}')
+            self._send_chat_line(sock, session, 'Server', 'Unknown quest.', no_enc)
+            return
+        active = session.setdefault('quests', [])
+        done = session.setdefault('quests_done', [])
+        prog = session.setdefault('quest_progress', {})
+
+        if quest_id not in active and quest_id not in done:
+            # ----- ACCEPT -----
+            if len(active) >= MAX_ACTIVE_QUESTS:
+                self._send_chat_line(sock, session, 'Server', 'Quest log full (3).', no_enc)
+                return
+            self._quest_assign_slot(session, quest_id)
+            active.append(quest_id)
+            prog.setdefault(quest_id, {})
+            self._send_quest_grant(sock, session, quest_id, no_enc)
+            for item, count in q['send']:           # items the NPC hands you on accept
+                self._inv_add(session, item, count)
+                self._send_drop(sock, session, item=item, count=count, no_enc=no_enc)
+            if q['demand']:
+                self._send_quest_progress(sock, session, quest_id, 0, no_enc)
+            self._send_chat_line(sock, session, 'Server', f'Quest {quest_id} accepted.', no_enc)
+            return
+
+        if quest_id in active:
+            # ----- TURN-IN -----
+            if not self._quest_demand_met(session, q):
+                have = sum(prog.get(quest_id, {}).get(i, 0) for i, _ in q['demand'])
+                need = sum(n for _, n in q['demand'])
+                self._send_chat_line(sock, session, 'Server',
+                                     f'Quest {quest_id}: not complete ({have}/{need}).', no_enc)
+                return
+            self._complete_quest(sock, session, q, no_enc)
+
+    # ---- quest helpers (live log via 0x26 grant / 0x59 progress / 0x27 complete) ----
+    def _quest_assign_slot(self, session, quest_id):
+        slots = session.setdefault('quest_slot', {})
+        if quest_id in slots:
+            return slots[quest_id]
+        used = set(slots.values())
+        for s in (1, 2, 3):
+            if s not in used:
+                slots[quest_id] = s
+                return s
+        return None
+
+    def _send_quest_grant(self, sock, session, quest_id, no_enc=False):
+        """0x26 GRANT — add quest to the client's active log live (no 0x03 reset)."""
+        log.info(f'[QUEST] -> 0x26 GRANT quest_id={quest_id}')
+        self._send_encrypted(sock, session, 0x26, struct.pack('<H', quest_id & 0xFFFF), use_by_array=no_enc)
+
+    def _send_quest_progress(self, sock, session, quest_id, current, no_enc=False):
+        """0x59 PROGRESS — [u8 slot][u8 count] update the slot's on-screen counter."""
+        slot = session.get('quest_slot', {}).get(quest_id)
+        if slot is None:
+            return
+        log.info(f'[QUEST] -> 0x59 PROGRESS quest_id={quest_id} slot={slot} count={current}')
+        self._send_encrypted(sock, session, 0x59, struct.pack('<BB', slot & 0xFF, current & 0xFF), use_by_array=no_enc)
+
+    def _send_quest_complete(self, sock, session, quest_id, no_enc=False):
+        """0x27 COMPLETE — remove from active log + credit quest Money client-side."""
+        log.info(f'[QUEST] -> 0x27 COMPLETE quest_id={quest_id}')
+        self._send_encrypted(sock, session, 0x27, struct.pack('<H', quest_id & 0xFFFF), use_by_array=no_enc)
+
+    def _quest_demand_met(self, session, q):
+        prog = session.get('quest_progress', {}).get(q['idx'], {})
+        return all(prog.get(item, 0) >= need for item, need in q['demand'])
+
+    def _complete_quest(self, sock, session, q, no_enc):
+        qid = q['idx']
+        for item, need in q['demand']:
+            self._inv_remove(session, item, need)        # consume collected items
+        self._send_quest_complete(sock, session, qid, no_enc)
+        for item, count in q['reward']:                  # reward items via 0x18
+            self._inv_add(session, item, count)
+            self._send_drop(sock, session, item=item, count=count,
+                            gold_gain=(q['money'] if (item, count) == q['reward'][0] else 0), no_enc=no_enc)
+        if not q['reward'] and q['money']:
+            self._send_drop(sock, session, gold_gain=q['money'], no_enc=no_enc)
+        if q['exp']:
+            self._send_exp(sock, session, q['exp'], no_enc=no_enc)
+        session['quests'].remove(qid)
+        session.get('quest_slot', {}).pop(qid, None)
+        session.setdefault('quests_done', []).append(qid)
+        self._send_chat_line(sock, session, 'Server',
+                             f'Quest {qid} complete! +{q["exp"]} exp, +{q["money"]} gold.', no_enc)
+
+    def _quest_credit_item(self, sock, session, item_id, qty, no_enc):
+        """Credit a collected/dropped item toward any active quest's demand."""
+        if qty <= 0:
+            return
+        prog = session.setdefault('quest_progress', {})
+        for qid in list(session.get('quests', [])):
+            q = load_quests().get(qid)
+            if not q:
+                continue
+            for d_item, need in q['demand']:
+                if d_item == item_id:
+                    cur = prog.setdefault(qid, {})
+                    cur[item_id] = min(need, cur.get(item_id, 0) + qty)
+                    self._send_quest_progress(sock, session, qid, cur[item_id], no_enc)
 
     def _handle_use_skill(self, sock, session, payload, no_enc):
         """0x25 inbound = UseSkill (u16 skill). Echo the cast so the animation
@@ -968,11 +1287,31 @@ class GameServer:
         self._send_encrypted(sock, session, 0x25, struct.pack('<H', skill & 0xFFFF), use_by_array=no_enc)
 
     def _handle_equip_item(self, sock, session, payload, no_enc):
-        """0x0F inbound = EquipItem. No persistent inventory yet: consume so the
-        UI settles. TODO: update char equipment + rebroadcast appearance via 0x07."""
-        if len(payload) >= 2:
-            item = struct.unpack_from('<H', payload, 0)[0]
-            log.info(f'[EQUIP] item={item} - consumed (no inventory backend yet)')
+        """0x0F EQUIP. Update the char's appearance state from items.Spr_Num
+        (BODY sprite, not the icon) so the gear shows on the next spawn/map-change.
+        NOTE: instant appearance refresh (re-sending 0x07) is DEFERRED — re-sending
+        0x07 without a preceding map-clear risks a duplicate player entity; needs
+        a safe appearance-update opcode (future RE)."""
+        if len(payload) < 2:
+            return
+        item = struct.unpack_from('<H', payload, 0)[0]
+        info = _gamedef_item(item)
+        if info is None or info.get('Type') != 1:
+            log.info(f'[EQUIP] item={item} not equippable (Type!=1) - ignoring')
+            return
+        char_key = _KIND_TO_APPARENCE.get(info.get('Kind'))
+        equipped = session.setdefault('equipped', {})
+        if char_key is None:
+            equipped[f"kind{info.get('Kind')}"] = item
+            log.info(f"[EQUIP] {info.get('name')} Kind={info.get('Kind')} - no visible slot (state only)")
+            return
+        char = self._session_char(session)
+        if char is None:
+            return
+        char[char_key] = int(info.get('Spr_Num') or 0) & 0xFFFF
+        equipped[char_key] = item
+        log.info(f"[EQUIP] {info.get('name')} item={item} -> {char_key}=Spr_Num {char[char_key]} "
+                 f"(shows on next spawn/map-change)")
 
     def _handle_room_query(self, sock, session, payload, no_enc):
         """0x2C inbound = room/arena list query (u8 code), sent once at spawn.
@@ -1037,6 +1376,151 @@ class GameServer:
     def _send_mp(self, sock, session, mp, no_enc=False):
         """Outbound 0x44 setMP (single u16)."""
         self._send_encrypted(sock, session, 0x44, struct.pack('<H', mp & 0xFFFF), use_by_array=no_enc)
+
+    # ========================================================================
+    # PHASE 1 COMBAT — spawn monsters per map; resolve attack -> hp -> death ->
+    # exp/drop. Monster HP uses 0x14 (per-uid); 0x28/0x44 are LOCAL-player only.
+    # ========================================================================
+    def _spawn_map_monsters(self, sock, session, map_id, no_enc=True):
+        """Spawn all monsters for map_id (0x1A each) and track them in
+        session['monsters']={uid:Monster}. Rebuilt fresh on every map enter."""
+        spawns = MAP_SPAWNS.get(map_id, [])
+        session['monsters'] = {}
+        if not spawns:
+            log.info(f'[MOB] map {map_id} has no monster spawns (town/none)')
+            return
+        for i, (npccode, x, y) in enumerate(spawns):
+            stat = MONSTER_DB.get(npccode)
+            if stat is None:
+                log.warning(f'[MOB] no stats for npccode {npccode}, skipping')
+                continue
+            uid = MOB_UID_BASE + i
+            mob = Monster(uid=uid, npccode=npccode, name=stat['name'], level=stat['level'],
+                          hp=stat['hp'], max_hp=stat['hp'], body_atk=stat['atk'],
+                          defense=stat['defense'], exp=stat['exp'], x=float(x), y=float(y),
+                          spawn_x=float(x), spawn_y=float(y),
+                          drop_items=stat.get('drops', []), gold=stat.get('gold', 0))
+            session['monsters'][uid] = mob
+            body = self._build_opcode_1A(npccode, uid, x, y)
+            log.info(f"[MOB] spawn {mob.name} npc={npccode} uid={uid:#x} at ({x},{y}) hp={mob.hp}")
+            self._send_encrypted(sock, session, 0x1A, body, use_by_array=no_enc)
+        log.info(f"[MOB] spawned {len(session['monsters'])} monsters on map {map_id}")
+
+    def _handle_attack(self, sock, session, payload, no_enc=True):
+        """Inbound 0x25. Parse the client's hit-target uid list and resolve each.
+        Format (lenient): u64 skillId | u8 count | count*{u16 uid,u16,u8 sub,sub*u16,u16}"""
+        self._tick_respawns(sock, session, no_enc)
+        p = payload
+        if len(p) < 9:
+            log.info(f'[ATK] short 0x25 ({len(p)}B) - echo only')
+            return
+        off = 0
+        skill_id = struct.unpack_from('<Q', p, off)[0]; off += 8
+        targets = []
+
+        def parse_group(off):
+            if off >= len(p):
+                return off
+            count = p[off]; off += 1
+            for _ in range(count):
+                if off + 5 > len(p):
+                    break
+                uid = struct.unpack_from('<H', p, off)[0]; off += 2
+                off += 2
+                sub = p[off]; off += 1
+                for _s in range(sub):
+                    if off + 2 > len(p):
+                        break
+                    off += 2
+                if off + 2 <= len(p):
+                    off += 2
+                targets.append(uid)
+            return off
+
+        off = parse_group(off)
+        if off + 8 <= len(p):
+            off += 8
+            off = parse_group(off)
+        log.info(f'[ATK] skill={skill_id} targets={[hex(t) for t in targets]}')
+        for uid in targets:
+            self._resolve_hit(sock, session, skill_id, uid, no_enc=no_enc)
+
+    def _compute_damage(self, session, skill_id, mob):
+        char = self._session_char(session) or {}
+        base = int(char.get('attack', char.get('str', 10)) or 10)
+        raw = int(base * (1.5 if skill_id else 1.0))
+        return max(1, raw - mob.defense)
+
+    def _resolve_hit(self, sock, session, skill_id, mob_uid, no_enc=True):
+        mob = session.get('monsters', {}).get(mob_uid)
+        # client sends the FULL uid (MOB_UID_BASE+i); it may arrive truncated to
+        # the low 16 bits, so match on either form.
+        if mob is None:
+            for m in session.get('monsters', {}).values():
+                if (m.uid & 0xFFFF) == (mob_uid & 0xFFFF):
+                    mob = m; break
+        if mob is None or not mob.alive:
+            return
+        dmg = self._compute_damage(session, skill_id, mob)
+        mob.hp = max(0, mob.hp - dmg)
+        log.info(f'[ATK] hit {mob.name} uid={mob.uid:#x} dmg={dmg} -> hp={mob.hp}/{mob.max_hp}')
+        self._send_entity_hp(sock, session, mob.uid, mob.hp, no_enc=no_enc)
+        if mob.hp <= 0:
+            self._kill_monster(sock, session, mob, no_enc=no_enc)
+
+    def _kill_monster(self, sock, session, mob, no_enc=True):
+        mob.alive = False
+        log.info(f'[KILL] {mob.name} uid={mob.uid:#x} dead; exp={mob.exp} gold={mob.gold}')
+        self._send_death(sock, session, mob.uid, no_enc=no_enc)
+        if mob.exp:
+            self._send_exp(sock, session, mob.exp, no_enc=no_enc)
+        item, count = 0, 0
+        if mob.drop_items and random.random() < 0.6:
+            item, count = random.choice(mob.drop_items), 1
+        if item:
+            self._inv_add(session, item, count)   # grant the drop into the inventory
+            self._quest_credit_item(sock, session, item, count, no_enc)  # quest collect/kill progress
+        self._send_drop(sock, session, item=item, count=count, gold_gain=mob.gold, no_enc=no_enc)
+        mob.respawn_at = time.monotonic() + MOB_RESPAWN_SECS
+
+    def _build_opcode_14(self, uid, stat_type, value):
+        return struct.pack('<I', uid & 0xFFFFFFFF) + struct.pack('<B', stat_type & 0xFF) + struct.pack('<H', value & 0xFFFF)
+
+    def _send_entity_hp(self, sock, session, uid, hp, no_enc=False):
+        # 0x14 UpdateStats type=2 -> per-uid overhead HP (NOT 0x28/0x44 which are local-only)
+        self._send_encrypted(sock, session, 0x14, self._build_opcode_14(uid, 2, hp), use_by_array=no_enc)
+
+    def _build_opcode_29(self, uid, anim=0, dx=0, dz=0):
+        return (struct.pack('<I', uid & 0xFFFFFFFF) + struct.pack('<I', anim & 0xFFFFFFFF)
+                + struct.pack('<I', dx & 0xFFFFFFFF) + struct.pack('<I', dz & 0xFFFFFFFF))
+
+    def _send_death(self, sock, session, uid, anim=0, dx=0, dz=0, no_enc=False):
+        log.info(f'[COMBAT] death uid={uid:#x}')
+        self._send_encrypted(sock, session, 0x29, self._build_opcode_29(uid, anim, dx, dz), use_by_array=no_enc)
+
+    def _send_exp(self, sock, session, exp_delta, no_enc=False):
+        session['exp'] = session.get('exp', 0) + exp_delta
+        log.info(f"[COMBAT] +{exp_delta} exp (session total={session['exp']})")
+        self._send_encrypted(sock, session, 0x21, struct.pack('<i', exp_delta), use_by_array=no_enc)
+
+    def _send_drop(self, sock, session, item=0, count=0, gold_gain=0, winnie_gain=0, no_enc=False):
+        gold, winnie = self._wallet(session)
+        gold = (gold + gold_gain) & 0xFFFFFFFFFFFFFFFF
+        winnie = (winnie + winnie_gain) & 0xFFFFFFFF
+        session['gold'], session['winnie'] = gold, winnie
+        log.info(f'[DROP] item={item}x{count} gold+={gold_gain} -> gold={gold}')
+        self._send_encrypted(sock, session, 0x18, self._build_opcode_18(gold, winnie, item, count), use_by_array=no_enc)
+
+    def _tick_respawns(self, sock, session, no_enc=True):
+        now = time.monotonic()
+        for mob in list(session.get('monsters', {}).values()):
+            if not mob.alive and mob.respawn_at and now >= mob.respawn_at:
+                mob.hp, mob.alive, mob.respawn_at = mob.max_hp, True, 0.0
+                mob.x, mob.y = mob.spawn_x, mob.spawn_y
+                log.info(f'[MOB] respawn {mob.name} uid={mob.uid:#x}')
+                self._send_encrypted(sock, session, 0x1A,
+                                     self._build_opcode_1A(mob.npccode, mob.uid, mob.x, mob.y),
+                                     use_by_array=no_enc)
 
     def _build_pyslayer_opcode_03(self, session, char, current_map=101):
         """

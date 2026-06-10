@@ -1,0 +1,31 @@
+WindSlayer — Higher Resolution on Modern Monitors
+==================================================
+The game's 2D renderer is DirectDraw7 (D2DSprite.dll), and it's authored for a
+fixed 800x600 canvas (HUD, camera, UI all assume 800x600).
+
+OPTION 1 — DirectDraw upscaling wrapper  (RECOMMENDED, clean, preserves UI)
+--------------------------------------------------------------------------
+Use cnc-ddraw (https://github.com/FunkyFr3sh/cnc-ddraw) — a drop-in ddraw.dll
+that stretches the 800x600 surface to any monitor size with crisp filtering and
+borderless/fullscreen, WITHOUT touching the game or breaking the HUD layout.
+
+  1. Download cnc-ddraw (release zip).
+  2. Copy its ddraw.dll (and cnc-ddraw.ini) next to WindSlayer_patched.exe.
+  3. In cnc-ddraw.ini set:  windowed=false  (or borderless)  / maintas=true
+     (keep aspect)  / renderer=opengl  / scaling=1 (sharp) or as preferred.
+  4. Launch WindSlayer_patched.exe normally — it now fills your monitor.
+
+This is the standard way to HD old DirectDraw games. The 800x600 UI stays pixel-
+correct and just scales up.
+
+OPTION 2 — Native-resolution binary patch  (WindSlayer_hires.exe, EXPERIMENTAL)
+------------------------------------------------------------------------------
+WindSlayer_hires.exe is a COPY of the client patched to a native 1280x960
+surface (4 byte edits: window/surface width 800->1280, height 600->960).
+CAVEAT: the HUD/camera are laid out for 800x600, so panels may anchor to a
+corner with empty bands and the camera clamp may be slightly off. Try it; if the
+UI looks wrong, use Option 1 instead. (The original WindSlayer_patched.exe is
+untouched.)
+
+To pick a different size, re-run the patch with other 4:3 dims (e.g. 1024x768,
+1600x1200); keep 4:3 to avoid stretch distortion.
