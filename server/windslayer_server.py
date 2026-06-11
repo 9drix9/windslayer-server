@@ -130,6 +130,11 @@ MOB_RESPAWN_SECS = 15.0
 # Server-authoritative basic-attack (0x38) reach around the player's position.
 MELEE_RANGE_X = 130.0
 MELEE_RANGE_Y = 90.0
+# Monster wander DISABLED: the agent's 0x12="walk" was wrong — in-client it spawns
+# spurious ground loot, not movement. Needs the real entity-move opcode (future RE).
+WANDER_ENABLED = False
+WANDER_RADIUS = 80.0
+WANDER_PERIOD = 4.0
 
 # Quests (content from quest_defs/gamedef.sqlite3). Client active log = 3 slots.
 from quest_defs import load_quests
@@ -1348,34 +1353,21 @@ class GameServer:
             return
         char_key = _KIND_TO_APPARENCE.get(kind)
         grid_idx = _KIND_TO_GRID.get(kind)
-        equipped = session.setdefault('equipped', {})
-        # Slot swap: if a different item already occupies this equip slot, return
-        # it to the bag first (0x18 GetItem) so the swap doesn't leak it.
-        prev = equipped.get(char_key) if char_key else None
-        if prev is not None and prev != item:
-            self._inv_add(session, prev, 1)
-            g, w = self._wallet(session)
-            self._send_encrypted(sock, session, 0x18,
-                                 self._build_opcode_18(g, w, prev, 1), use_by_array=no_enc)
-        # (a) BAG: remove the equipped item from the bag (0x19 LostItem). The bag
-        #     and equip slots are independent client structures; without this the
-        #     item would linger in the bag (duplicate).
-        self._inv_remove(session, item, 1)
-        g, w = self._wallet(session)
-        self._send_encrypted(sock, session, 0x19,
-                             self._build_opcode_19(g, item, 1), use_by_array=no_enc)
-        # (b) persistence so the next 0x07 respawn keeps the gear (menu + sprite).
+        # Persistence so the next 0x07 respawn shows the gear in the Equipment menu
+        # (the live-menu update is unresolved; for now the menu populates on map
+        # change). Keep the item IN THE BAG — sending 0x19 here read as a SELL and
+        # lost the item.
         if grid_idx is not None:
             session.setdefault('equip_grid', {})[grid_idx] = item & 0xFFFF
         if char_key is not None:
             char[char_key] = int(info.get('Spr_Num') or 0) & 0xFFFF
-            equipped[char_key] = item
-        # (c) LIVE equip via 0x1D (ADD routine 0x426680): writes the item id into
-        #     entity+0x13c (the menu's array) AND recomposes the sprite. One packet.
+            session.setdefault('equipped', {})[char_key] = item
+        # LIVE: 0x1D writes the item into the entity equip grid (+0x13c) and
+        # recomposes the body sprite, so the gear shows ON THE CHARACTER live.
         self._send_encrypted(sock, session, 0x1D,
                              self._build_en_opcode_1D_equip(char, item), use_by_array=no_enc)
         log.info(f"[EQUIP] {info.get('name')} item={item} Kind={kind} grid={grid_idx} "
-                 f"-> 0x19 bag-remove + 0x1D equip (uid={char.get('uid', 1)})")
+                 f"-> 0x1D live sprite (item kept in bag; menu shows after map change)")
 
     def _handle_room_query(self, sock, session, payload, no_enc):
         """0x2C inbound = room/arena list query (u8 code), sent once at spawn.
@@ -1537,11 +1529,50 @@ class GameServer:
                 except Exception as ex:
                     log.info(f'[ATK] memory-melee send failed: {ex}')
 
+    def _build_opcode_12(self, uid, tx, ty, speed=1, anim=0):
+        """Outbound ENTITY WALK (0x12) -> inbound handler 0x451516 -> walk fn
+        0x423A10. Queues an animated path for an EXISTING entity (uid matched at
+        entity+0x84 via 0x4189F0) to (tx,ty). 1-entity batch. Field order from the
+        handler's Get* sequence (MEDIUM-confidence layout; tune if it desyncs)."""
+        b = bytearray()
+        def u8(v):  b.append(v & 0xFF)
+        def u16(v): b.extend(struct.pack('<H', v & 0xFFFF))
+        def u32(v): b.extend(struct.pack('<I', v & 0xFFFFFFFF))
+        itx, ity = int(tx), int(ty)
+        u8(1)            # 451548 batch count
+        u16(itx)         # 451576 target x
+        u16(ity)         # 451591 target y
+        u16(speed)       # 4515AC speed
+        u16(anim)        # 4515C7 anim/dir
+        u16(0)           # 4515E2
+        u32(0)           # 4515FD (K) flags
+        u32(itx)         # 451618 int target x
+        u32(uid)         # 451633 UID (lookup key, entity+0x84)
+        u8(1)            # 45164B inner waypoint count
+        u16(itx)         # 451682 waypoint[0]
+        u16(0)           # 4516B6 trailing
+        return bytes(b)
+
+    def _tick_wander(self, sock, session, no_enc=True):
+        if not WANDER_ENABLED:
+            return
+        for uid, mob in session.get('monsters', {}).items():
+            if not getattr(mob, 'alive', False):
+                continue
+            tx = mob.spawn_x + random.uniform(-WANDER_RADIUS, WANDER_RADIUS)
+            ty = mob.spawn_y + random.uniform(-WANDER_RADIUS, WANDER_RADIUS)
+            mob.x, mob.y = tx, ty
+            try:
+                self._send_encrypted(sock, session, 0x12,
+                                     self._build_opcode_12(uid, tx, ty), use_by_array=no_enc)
+            except Exception:
+                return
+
     def _combat_driver(self):
         import ctypes
         from ctypes import wintypes as wt
         k = ctypes.windll.kernel32; k.OpenProcess.restype = wt.HANDLE
-        proc = [None]; last = [0.0]
+        proc = [None]; last = [0.0]; lw = [0.0]
         def rd(a, n):
             b = (ctypes.c_ubyte * n)(); r = ctypes.c_size_t(0)
             k.ReadProcessMemory(proc[0], ctypes.c_void_p(a), b, n, ctypes.byref(r))
@@ -1576,6 +1607,12 @@ class GameServer:
                 if attacking and now - last[0] >= 0.45:    # ~one hit per swing cycle
                     last[0] = now
                     self._memory_melee(f64(player + 0x11f8), f64(player + 0x1288))
+                # periodic monster wander (server-sent 0x12 walk)
+                if WANDER_ENABLED and now - lw[0] >= WANDER_PERIOD:
+                    lw[0] = now
+                    for s in list(self.sessions.values()):
+                        if s.get('sock') and s.get('monsters'):
+                            self._tick_wander(s['sock'], s, no_enc=True)
                 time.sleep(0.05)
             except Exception:
                 proc[0] = None
