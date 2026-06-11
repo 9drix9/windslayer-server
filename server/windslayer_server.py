@@ -127,6 +127,7 @@ MAP_SPAWNS = {
 }
 MOB_UID_BASE = 0x000F0000
 MOB_RESPAWN_SECS = 15.0
+GROUND_ITEM_UID_BASE = 0x00200000   # ground-item instance ids (distinct from mob/player uids)
 # Server-authoritative basic-attack (0x38) reach around the player's position.
 MELEE_RANGE_X = 130.0
 MELEE_RANGE_Y = 90.0
@@ -1529,44 +1530,42 @@ class GameServer:
                 except Exception as ex:
                     log.info(f'[ATK] memory-melee send failed: {ex}')
 
-    def _build_opcode_12(self, uid, tx, ty, speed=1, anim=0):
-        """Outbound ENTITY WALK (0x12) -> inbound handler 0x451516 -> walk fn
-        0x423A10. Queues an animated path for an EXISTING entity (uid matched at
-        entity+0x84 via 0x4189F0) to (tx,ty). 1-entity batch. Field order from the
-        handler's Get* sequence (MEDIUM-confidence layout; tune if it desyncs)."""
+    def _build_opcode_12_drop(self, item, x, y, ground_uid, count=1):
+        """0x12 GROUND-ITEM DROP -> handler 0x451516 -> alloc 0x423A10. Spawns one
+        ground item. Entity-uid field (H) = 0 so the handler's entity lookup fails
+        and it uses the WIRE (x,y) = the mob's death spot. ground_uid (field F) ->
+        rec+0x12 (the instance id 0x13 pickup matches). MEDIUM-confidence A/B/C
+        (item/x/y) order — swap if a live test shows item/pos mismatched."""
         b = bytearray()
         def u8(v):  b.append(v & 0xFF)
         def u16(v): b.extend(struct.pack('<H', v & 0xFFFF))
         def u32(v): b.extend(struct.pack('<I', v & 0xFFFFFFFF))
-        itx, ity = int(tx), int(ty)
-        u8(1)            # 451548 batch count
-        u16(itx)         # 451576 target x
-        u16(ity)         # 451591 target y
-        u16(speed)       # 4515AC speed
-        u16(anim)        # 4515C7 anim/dir
-        u16(0)           # 4515E2
-        u32(0)           # 4515FD (K) flags
-        u32(itx)         # 451618 int target x
-        u32(uid)         # 451633 UID (lookup key, entity+0x84)
-        u8(1)            # 45164B inner waypoint count
-        u16(itx)         # 451682 waypoint[0]
-        u16(0)           # 4516B6 trailing
+        ix, iy = int(x), int(y)
+        u8(1)            # batch count = 1
+        u16(item)        # A item id   (word[rec+0])
+        u16(ix)          # B x
+        u16(iy)          # C y
+        u16(count)       # D quantity  (rec+0x10)
+        u16(0)           # E
+        u32(ground_uid)  # F (K) -> rec+0x12 ground-item instance uid
+        u32(ix)          # G int target x (fallback path)
+        u32(0)           # H entity uid = 0 -> use wire (x,y)
+        u8(0)            # inner waypoint count = 0
+        u16(0)           # trailer
         return bytes(b)
 
+    def _build_opcode_13(self, ground_uid, item, picker_uid):
+        """0x13 ground-item REMOVE + grant-to-bag (handler 0x4518D0 -> 0x440E50).
+        Matches the ground item by ground_uid (item+0x12); if picker_uid == local
+        player uid (scene+0x220) the client also adds it to the bag."""
+        return (struct.pack('<H', ground_uid & 0xFFFF)
+                + struct.pack('<H', item & 0xFFFF)
+                + struct.pack('<I', picker_uid & 0xFFFFFFFF))
+
     def _tick_wander(self, sock, session, no_enc=True):
-        if not WANDER_ENABLED:
-            return
-        for uid, mob in session.get('monsters', {}).items():
-            if not getattr(mob, 'alive', False):
-                continue
-            tx = mob.spawn_x + random.uniform(-WANDER_RADIUS, WANDER_RADIUS)
-            ty = mob.spawn_y + random.uniform(-WANDER_RADIUS, WANDER_RADIUS)
-            mob.x, mob.y = tx, ty
-            try:
-                self._send_encrypted(sock, session, 0x12,
-                                     self._build_opcode_12(uid, tx, ty), use_by_array=no_enc)
-            except Exception:
-                return
+        # DISABLED: 0x12 is the ground-item DROP opcode, not entity-walk. The real
+        # entity-move opcode is still unknown, so monsters stay static.
+        return
 
     def _combat_driver(self):
         import ctypes
@@ -1722,8 +1721,12 @@ class GameServer:
         if mob.drop_items and random.random() < 0.6:
             item, count = random.choice(mob.drop_items), 1
         if item:
-            self._inv_add(session, item, count)   # grant the drop into the inventory
-            self._quest_credit_item(sock, session, item, count, no_enc)  # quest collect/kill progress
+            self._inv_add(session, item, count)   # loot -> inventory (clean/no lag)
+            self._quest_credit_item(sock, session, item, count, no_enc)
+        # GROUND DROP (0x12) is implemented (_build_opcode_12_drop) but DEFERRED:
+        # the drop position fields are misaligned and un-pickable items pile up and
+        # lag the client (pickup-request opcode still unidentified). Loot goes to
+        # the bag for now; revisit ground drops + pickup as a focused pass.
         self._send_drop(sock, session, item=item, count=count, gold_gain=mob.gold, no_enc=no_enc)
         mob.respawn_at = time.monotonic() + MOB_RESPAWN_SECS
 
