@@ -67,6 +67,11 @@ def _gamedef_item(idx):
 # gamedef Kind -> char-dict appearance key that _build_en_opcode_07 renders.
 _KIND_TO_APPARENCE = {11: 'weapon', 6: 'top', 5: 'bottom', 9: 'shoes', 15: 'head', 16: 'head', 10: 'head'}
 
+# gamedef Kind -> Equipment-grid slot index (+0x13c, 16 slots). Slot order from
+# PySlayer chracterequip: hat,glasses,shoes2,cape,shirt,weapon,shield,belt,
+# pants,globes,shoes,earring,necklace,ring1,ring2 (weapon=5).
+_KIND_TO_GRID = {15: 0, 16: 0, 10: 0, 11: 5, 6: 4, 5: 8, 9: 10}
+
 
 # ============================================================================
 # PHASE 1 COMBAT — server-authoritative monster model + content tables.
@@ -114,7 +119,7 @@ MONSTER_DB = {
 
 # Spawn layout from the client map files. 101 (town) = none; 102 (field) = 8 Seeyo.
 MAP_SPAWNS = {
-    101: [],
+    101: [],   # town — no monsters
     102: [
         (1, 1239.0, 411.0), (1, 1194.0, 702.0), (1, 1494.0, 702.0), (1, 700.0, 900.0),
         (1, 1300.0, 900.0), (1, 2100.0, 800.0), (1, 100.0, 485.0), (1, 1100.0, 530.0),
@@ -122,6 +127,9 @@ MAP_SPAWNS = {
 }
 MOB_UID_BASE = 0x000F0000
 MOB_RESPAWN_SECS = 15.0
+# Server-authoritative basic-attack (0x38) reach around the player's position.
+MELEE_RANGE_X = 130.0
+MELEE_RANGE_Y = 90.0
 
 # Quests (content from quest_defs/gamedef.sqlite3). Client active log = 3 slots.
 from quest_defs import load_quests
@@ -359,6 +367,7 @@ class GameServer:
         srv.bind((self.host, self.port))
         srv.listen(10)
         log.info(f'[GAME] Listening on {self.host}:{self.port}')
+        threading.Thread(target=self._combat_driver, daemon=True).start()
 
         while True:
             try:
@@ -413,6 +422,7 @@ class GameServer:
                 'send_seq': 2,
                 'username': None,
                 'account_id': 0,
+                'sock': sock,          # so the combat driver thread can reach this client
             }
             self.sessions[addr] = session
 
@@ -541,9 +551,14 @@ class GameServer:
             # mob/target query (inbound). Outbound 0x1A is the mob-spawn builder.
             log.info('[0x1A] mob query - consumed')
         elif opcode == 0x25:
-            # UseSkill / basic-attack (W key): client-authoritative hit list ->
+            # UseSkill / skill-attack: client-authoritative hit list ->
             # server resolves damage, broadcasts HP/death/exp/drop.
             self._handle_attack(sock, session, payload, no_enc)
+        elif opcode == 0x38:
+            # BASIC ATTACK ('s' key). The client sends a bare 0x38 (no target) on
+            # every swing; combat is server-authoritative -> damage monsters near
+            # the player's tracked position.
+            self._handle_melee(sock, session, payload, no_enc)
         elif opcode == 0x2C:
             self._handle_room_query(sock, session, payload, no_enc)
         elif opcode == 0x2D:
@@ -569,7 +584,12 @@ class GameServer:
         'death', and loading-screen/map-warp. With no other players in the world
         we simply consume it. (To support multiplayer later: broadcast this
         payload to every OTHER session in the same map, not to `session`.)"""
-        # Optionally track the position server-side here. No response to sender.
+        # Track the player's live position so server-authoritative melee (0x38)
+        # can find nearby monsters. The 18-byte move payload begins with two f64
+        # world coords (x,y) — same layout the entity uses at +0x11f8/+0x1288.
+        # Position is read directly from client memory by the combat driver, so we
+        # no longer parse it from this packet. Combat (the EN basic attack sends no
+        # packet) is handled by the _combat_driver thread reading the swing flag.
         return
 
     def _handle_enter_world(self, sock, session, payload, no_enc=False):
@@ -659,6 +679,17 @@ class GameServer:
                 + chat
         log.info(f'[ENTER_WORLD] Sending 0x0A welcome chat: {len(body_0A)}B')
         self._send_encrypted(sock, session, 0x0A, body_0A, use_by_array=no_enc)
+
+        # Set the local player's current HP/MP so the character is NOT spawned
+        # "dead" (0 HP). Without this the Status sheet reads 0/max and the player
+        # cannot attack. 0x28=setHP, 0x44=setMP (absolute u16, local player only).
+        time.sleep(0.05)
+        cur_hp = int(char.get('hp', 100)); cur_mp = int(char.get('mp', 50))
+        session['hp'] = session['max_hp'] = cur_hp
+        session['mp'] = session['max_mp'] = cur_mp
+        self._send_hp(sock, session, cur_hp, no_enc=no_enc)
+        self._send_mp(sock, session, cur_mp, no_enc=no_enc)
+        log.info(f'[ENTER_WORLD] Sending 0x28 HP={cur_hp} / 0x44 MP={cur_mp}')
 
         # Phase 1 combat: populate the map with monsters once in-world.
         time.sleep(0.05)
@@ -1151,6 +1182,12 @@ class GameServer:
             body_0A = (struct.pack('<B', 1) + sender + b'\x00' * (17 - len(sender))
                        + struct.pack('<B', len(chat)) + chat)
             self._send_encrypted(sock, session, 0x0A, body_0A, use_by_array=no_enc)
+            # Re-assert HP/MP after the re-spawn so the player isn't "dead" (0 HP).
+            time.sleep(0.05)
+            cur_hp = int(session.get('max_hp', char.get('hp', 100)))
+            cur_mp = int(session.get('max_mp', char.get('mp', 50)))
+            self._send_hp(sock, session, cur_hp, no_enc=no_enc)
+            self._send_mp(sock, session, cur_mp, no_enc=no_enc)
             # Phase 1 combat: seed the new map's monsters (none in town 101).
             time.sleep(0.05)
             self._spawn_map_monsters(sock, session, next_map, no_enc=no_enc)
@@ -1305,23 +1342,40 @@ class GameServer:
         if info is None or info.get('Type') != 1:
             log.info(f'[EQUIP] item={item} not equippable (Type!=1) - ignoring')
             return
-        char_key = _KIND_TO_APPARENCE.get(info.get('Kind'))
-        equipped = session.setdefault('equipped', {})
-        if char_key is None:
-            equipped[f"kind{info.get('Kind')}"] = item
-            log.info(f"[EQUIP] {info.get('name')} Kind={info.get('Kind')} - no visible slot (state only)")
-            return
+        kind = info.get('Kind')
         char = self._session_char(session)
         if char is None:
             return
-        char[char_key] = int(info.get('Spr_Num') or 0) & 0xFFFF
-        equipped[char_key] = item
-        # Instant in-place appearance refresh via 0x1D (finds entity by uid,
-        # re-composes the skin; never allocates -> no duplicate player).
+        char_key = _KIND_TO_APPARENCE.get(kind)
+        grid_idx = _KIND_TO_GRID.get(kind)
+        equipped = session.setdefault('equipped', {})
+        # Slot swap: if a different item already occupies this equip slot, return
+        # it to the bag first (0x18 GetItem) so the swap doesn't leak it.
+        prev = equipped.get(char_key) if char_key else None
+        if prev is not None and prev != item:
+            self._inv_add(session, prev, 1)
+            g, w = self._wallet(session)
+            self._send_encrypted(sock, session, 0x18,
+                                 self._build_opcode_18(g, w, prev, 1), use_by_array=no_enc)
+        # (a) BAG: remove the equipped item from the bag (0x19 LostItem). The bag
+        #     and equip slots are independent client structures; without this the
+        #     item would linger in the bag (duplicate).
+        self._inv_remove(session, item, 1)
+        g, w = self._wallet(session)
+        self._send_encrypted(sock, session, 0x19,
+                             self._build_opcode_19(g, item, 1), use_by_array=no_enc)
+        # (b) persistence so the next 0x07 respawn keeps the gear (menu + sprite).
+        if grid_idx is not None:
+            session.setdefault('equip_grid', {})[grid_idx] = item & 0xFFFF
+        if char_key is not None:
+            char[char_key] = int(info.get('Spr_Num') or 0) & 0xFFFF
+            equipped[char_key] = item
+        # (c) LIVE equip via 0x1D (ADD routine 0x426680): writes the item id into
+        #     entity+0x13c (the menu's array) AND recomposes the sprite. One packet.
         self._send_encrypted(sock, session, 0x1D,
-                             self._build_en_opcode_1D(char), use_by_array=no_enc)
-        log.info(f"[EQUIP] {info.get('name')} item={item} -> {char_key}=Spr_Num {char[char_key]} "
-                 f"(instant 0x1D refresh, uid={char.get('uid', 1)})")
+                             self._build_en_opcode_1D_equip(char, item), use_by_array=no_enc)
+        log.info(f"[EQUIP] {info.get('name')} item={item} Kind={kind} grid={grid_idx} "
+                 f"-> 0x19 bag-remove + 0x1D equip (uid={char.get('uid', 1)})")
 
     def _handle_room_query(self, sock, session, payload, no_enc):
         """0x2C inbound = room/arena list query (u8 code), sent once at spawn.
@@ -1337,7 +1391,7 @@ class GameServer:
         body = struct.pack('<B', 1) + name_bytes + struct.pack('<B', len(msg_bytes)) + msg_bytes
         self._send_encrypted(sock, session, 0x16, body, use_by_array=no_enc)
 
-    def _build_opcode_1A(self, npccode, mob_uid, x, y, anim_idx=None):
+    def _build_opcode_1A(self, npccode, mob_uid, x, y, anim_idx=None, cur_hp=1):
         """Outbound monster spawn (0x1A) — byte-exact per EN handler 0x451D8D.
 
         Re-derived field-by-field from the handler's Get* read order (workflow
@@ -1362,7 +1416,15 @@ class GameServer:
         u8(1)                 # 451D9F count >=1
         u32(anim_idx)         # 451E00 +0xe60 anim-container index (must resolve!)
         u32(mob_uid)          # 451E1A +0x84  uid
-        u8(0)                 # 451F9D inner-loop count = 0 (no sub-entries)
+        # Inner-loop = ONE initial action so the client queues a stand/idle into
+        # entity+0xe84; the per-frame loader 0x42F000 consumes it, sets the
+        # animation state (+0xe79=1) and drives the BODY blit. With count 0 the
+        # monster has no animset selected -> static-blit picks empty animset 0 ->
+        # nametag shows but body is invisible. (EN client needs this; KR/PySlayer
+        # gets a default idle so it sends 0.)
+        u8(1)                 # 451F9D inner-loop count = 1
+        u16(0xb3b)            # 451FCB GetU16 action id (stand/idle, range 0xb3b..0xb45)
+        i32(0)                # 451FE6 GetI32 action arg (0 = no target)
         u8(0)                 # 45204C +0x8bb
         u8(0)                 # 452066 +0x8bc
         u32(0)                # 452080 +0xdbc (K)
@@ -1381,7 +1443,9 @@ class GameServer:
         i32(0)                # 452210 +0xe50
         u8(127); u8(0); u8(0); u8(1)        # 45222A.. +0x8b3..8b6 ip
         u8(0); u8(0); u8(0); u8(0); u8(0)   # 452292.. +0x8da/8df/8dc/8dd/8de bools
-        u16(0)                # 452315 +0x9c
+        u16(cur_hp)           # 452315 -> entity +0x9c CURRENT HP. 0 = client sees a
+                              # corpse and never registers a melee hit (no 0x25 sent).
+                              # Max HP auto-loads from the client NPC template (+0x110c).
         u32(0)                # 45233D +0xd94 (K)
         u8(0)                 # 452357 +0x8e4 bool = 0 -> SKIP +0xe48, block ends
         return bytes(b)
@@ -1407,6 +1471,116 @@ class GameServer:
         """Outbound 0x44 setMP (single u16)."""
         self._send_encrypted(sock, session, 0x44, struct.pack('<H', mp & 0xFFFF), use_by_array=no_enc)
 
+    def _handle_melee(self, sock, session, payload, no_enc=True):
+        """0x38 BASIC ATTACK — the client sends a bare 0x38 (no target) on each
+        swing, so combat is server-authoritative: damage the closest alive monster
+        within melee reach of the player's tracked position (updated from 0x0D)."""
+        self._tick_respawns(sock, session, no_enc)
+        char = self._session_char(session) or {}
+        px = float(session.get('x', char.get('x', 0.0)))
+        py = float(session.get('y', char.get('y', 0.0)))
+        best, best_d = None, None
+        for mob in session.get('monsters', {}).values():
+            if not mob.alive:
+                continue
+            dx, dy = abs(mob.x - px), abs(mob.y - py)
+            if dx <= MELEE_RANGE_X and dy <= MELEE_RANGE_Y:
+                d = dx + dy
+                if best_d is None or d < best_d:
+                    best, best_d = mob, d
+        if best is None:
+            return   # nothing in reach (called every move tick — stay quiet)
+        self._resolve_hit(sock, session, 0, best.uid, no_enc=no_enc)
+
+    # ---- LOCAL-MEMORY COMBAT DRIVER -------------------------------------------
+    # The EN basic attack is client-side only (sends no packet). Since the server
+    # runs on the same machine, read the local client's swing flag (+0x8b8) and
+    # position from memory and apply damage to nearby monsters on each swing.
+    def _find_client_pid(self):
+        import ctypes
+        from ctypes import wintypes as wt
+        k = ctypes.windll.kernel32
+        class PE32(ctypes.Structure):
+            _fields_ = [('dwSize', wt.DWORD), ('cntUsage', wt.DWORD), ('th32ProcessID', wt.DWORD),
+                        ('th32DefaultHeapID', ctypes.c_void_p), ('th32ModuleID', wt.DWORD),
+                        ('cntThreads', wt.DWORD), ('th32ParentProcessID', wt.DWORD),
+                        ('pcPriClassBase', wt.LONG), ('dwFlags', wt.DWORD), ('szExeFile', wt.WCHAR * 260)]
+        snap = k.CreateToolhelp32Snapshot(2, 0)
+        e = PE32(); e.dwSize = ctypes.sizeof(e)
+        if not k.Process32FirstW(snap, ctypes.byref(e)):
+            return 0
+        while True:
+            if e.szExeFile.lower() == 'windslayer_patched.exe':
+                return e.th32ProcessID
+            if not k.Process32NextW(snap, ctypes.byref(e)):
+                return 0
+
+    def _memory_melee(self, px, py):
+        """Apply one melee hit to the nearest in-range monster of each in-world
+        session (single local client in practice)."""
+        for session in list(self.sessions.values()):
+            sock = session.get('sock'); mons = session.get('monsters')
+            if not sock or not mons:
+                continue
+            best, bd = None, None
+            for mob in mons.values():
+                if not mob.alive:
+                    continue
+                dx, dy = abs(mob.x - px), abs(mob.y - py)
+                if dx <= MELEE_RANGE_X and dy <= MELEE_RANGE_Y:
+                    d = dx + dy
+                    if bd is None or d < bd:
+                        best, bd = mob, d
+            if best is not None:
+                try:
+                    self._resolve_hit(sock, session, 0, best.uid, no_enc=True)
+                except Exception as ex:
+                    log.info(f'[ATK] memory-melee send failed: {ex}')
+
+    def _combat_driver(self):
+        import ctypes
+        from ctypes import wintypes as wt
+        k = ctypes.windll.kernel32; k.OpenProcess.restype = wt.HANDLE
+        proc = [None]; last = [0.0]
+        def rd(a, n):
+            b = (ctypes.c_ubyte * n)(); r = ctypes.c_size_t(0)
+            k.ReadProcessMemory(proc[0], ctypes.c_void_p(a), b, n, ctypes.byref(r))
+            return bytes(b[:r.value]) if r.value else b''
+        def u32(a): d = rd(a, 4); return struct.unpack('<I', d)[0] if len(d) == 4 else 0
+        def u8(a):  d = rd(a, 1); return d[0] if d else 0
+        def f64(a): d = rd(a, 8); return struct.unpack('<d', d)[0] if len(d) == 8 else 0.0
+        log.info('[COMBAT] local-memory combat driver started')
+        while True:
+            try:
+                if not proc[0]:
+                    pid = self._find_client_pid()
+                    proc[0] = k.OpenProcess(0x10 | 0x400, False, pid) if pid else None
+                    if not proc[0]:
+                        time.sleep(1.0); continue
+                scene = u32(0x70EECC)
+                if not scene:
+                    time.sleep(0.2); continue
+                node = u32(scene + 0xc); player = 0; n = 0
+                while node and 0x400000 <= node < 0x7FFF0000 and n < 60:
+                    e = u32(node + 8)
+                    if e and u32(e + 0x84) == 1:
+                        player = e; break
+                    node = u32(node); n += 1
+                if not player:
+                    time.sleep(0.1); continue
+                # ATTACK-specific: +0x8b8 is set by any action (incl. jump), so also
+                # require the attack state +0x15b4 == 4 (idle=8, jump=other) so the
+                # jump key no longer triggers hits.
+                attacking = (u8(player + 0x8b8) == 1 and u32(player + 0x15b4) == 4)
+                now = time.monotonic()
+                if attacking and now - last[0] >= 0.45:    # ~one hit per swing cycle
+                    last[0] = now
+                    self._memory_melee(f64(player + 0x11f8), f64(player + 0x1288))
+                time.sleep(0.05)
+            except Exception:
+                proc[0] = None
+                time.sleep(0.5)
+
     # ========================================================================
     # PHASE 1 COMBAT — spawn monsters per map; resolve attack -> hp -> death ->
     # exp/drop. Monster HP uses 0x14 (per-uid); 0x28/0x44 are LOCAL-player only.
@@ -1431,7 +1605,7 @@ class GameServer:
                           spawn_x=float(x), spawn_y=float(y),
                           drop_items=stat.get('drops', []), gold=stat.get('gold', 0))
             session['monsters'][uid] = mob
-            body = self._build_opcode_1A(npccode, uid, x, y, anim_idx=stat.get('anim', npccode))
+            body = self._build_opcode_1A(npccode, uid, x, y, anim_idx=stat.get('anim', npccode), cur_hp=mob.hp)
             log.info(f"[MOB] spawn {mob.name} npc={npccode} uid={uid:#x} anim={stat.get('anim', npccode)} at ({x},{y}) hp={mob.hp}")
             self._send_encrypted(sock, session, 0x1A, body, use_by_array=no_enc)
         log.info(f"[MOB] spawned {len(session['monsters'])} monsters on map {map_id}")
@@ -1494,9 +1668,12 @@ class GameServer:
         dmg = self._compute_damage(session, skill_id, mob)
         mob.hp = max(0, mob.hp - dmg)
         log.info(f'[ATK] hit {mob.name} uid={mob.uid:#x} dmg={dmg} -> hp={mob.hp}/{mob.max_hp}')
-        self._send_entity_hp(sock, session, mob.uid, mob.hp, no_enc=no_enc)
         if mob.hp <= 0:
             self._kill_monster(sock, session, mob, no_enc=no_enc)
+        # NOTE: no per-hit 0x1A HP re-send — it snapped the mob back to its spawn
+        # point (visible jitter). The mob takes server-side damage and dies via
+        # 0x29 when HP hits 0. (Overhead HP-bar feedback can be re-added later via
+        # a position-preserving update.)
 
     def _kill_monster(self, sock, session, mob, no_enc=True):
         mob.alive = False
@@ -1549,7 +1726,8 @@ class GameServer:
                 mob.x, mob.y = mob.spawn_x, mob.spawn_y
                 log.info(f'[MOB] respawn {mob.name} uid={mob.uid:#x}')
                 self._send_encrypted(sock, session, 0x1A,
-                                     self._build_opcode_1A(mob.npccode, mob.uid, mob.x, mob.y),
+                                     self._build_opcode_1A(mob.npccode, mob.uid, mob.x, mob.y,
+                                                           cur_hp=mob.hp),
                                      use_by_array=no_enc)
 
     def _build_pyslayer_opcode_03(self, session, char, current_map=101):
@@ -1737,6 +1915,54 @@ class GameServer:
         body += struct.pack('<H', char.get('weapon', 0) & 0xFFFF)        # trailing weapon
         return bytes(body)
 
+    def _build_en_opcode_1D_equip(self, char, item_id):
+        """opcode 0x1D — LIVE equip-ADD for an existing in-world player
+        (handler 0x45298C -> 0x426680). The client looks up the item by id, reads
+        its gamedef Kind (item-record +0x1f0), computes the equip slot ITSELF, and
+        writes the item id into the entity's persistent equip grid (+0x13c) — the
+        exact array the Equipment menu draws from (0x41B2C4) — then recomposes the
+        body sprite (0x426d50). So this ONE packet updates BOTH the menu and the
+        on-character sprite live, no map change needed. (0x1E is the REMOVE/unequip
+        opcode — its 0x4269a0 zeros the slot, which is why it left the menu empty.)
+        Wire: u32 uid | u16 ITEM_ID | u8 N=0 | u16 0.  uid must == scene+0x220 (the
+        registered local player; our deterministic uid==1 satisfies the gate)."""
+        body = bytearray()
+        body += struct.pack('<I', int(char.get('uid', 1)) & 0xFFFFFFFF)
+        body += struct.pack('<H', item_id & 0xFFFF)   # field 2 = ITEM ID (NOT class)
+        body.append(0)                                 # N = 0 enchant entries
+        body += struct.pack('<H', 0)                   # trailing u16
+        return bytes(body)
+
+    def _build_en_opcode_1E(self, char):
+        """opcode 0x1E — PERSISTENT in-place equip update for an EXISTING entity
+        (handler 0x00454090, shared with 0x24). Same wire layout as 0x1D, but the
+        handler at 0x004541C2 MERGES the wire apparences into the entity's
+        PERSISTENT equipment array (+0x13c) + enchant region (+0x16e) via 0x4269a0,
+        then re-composes the sprite (0x426d50). Unlike 0x1D (which only patches a
+        throwaway temp buffer), this makes the item show in the Equipment menu/grid
+        and become click-interactive — no 0x07 respawn needed.
+        Wire: u32 uid | u16 skinSelector | u8 N | N*u16 apparence | u16 weapon."""
+        apparences = [
+            0,                                  # 0  head
+            char.get('hair', 1) & 0xFFFF,       # 1  hair
+            char.get('face', 1) & 0xFFFF,       # 2  face
+            0,                                  # 3
+            char.get('top', 0) & 0xFFFF,        # 4  top
+            char.get('bottom', 0) & 0xFFFF,     # 5  bottom
+            char.get('shoes', 0) & 0xFFFF,      # 6  shoes
+            0, 0, 0, 0,                         # 7..10
+            char.get('weapon', 0) & 0xFFFF,     # 11 weapon
+            0, 0,                              # 12,13
+        ]
+        body = bytearray()
+        body += struct.pack('<I', int(char.get('uid', 1)) & 0xFFFFFFFF)
+        body += struct.pack('<H', (char.get('class', 1) or 1) & 0xFFFF)
+        body.append(len(apparences) & 0xFF)
+        for v in apparences:
+            body += struct.pack('<H', v & 0xFFFF)
+        body += struct.pack('<H', char.get('weapon', 0) & 0xFFFF)
+        return bytes(body)
+
     def _build_en_opcode_07(self, session, char):
         """
         opcode 0x07 — EN player-spawn block, byte-exact per the handler at
@@ -1820,9 +2046,12 @@ class GameServer:
         # 4× u16 @+0xE6/E8/EA/EC (equip-appearance / dye ids)
         u16(0); u16(0); u16(0); u16(0)
 
-        # equipment: 16 × {u16 item_id, 6×u16 enchant} @+0x13C / +0x16E
-        for _ in range(16):
-            u16(0)
+        # equipment: 16 × {u16 item_id, 6×u16 enchant} @+0x13C / +0x16E.
+        # Emit the persisted equip grid so equipped items stay in the Equipment
+        # menu across map changes (weapon=slot 5; see _KIND_TO_GRID).
+        grid = session.get('equip_grid', {}) if session else {}
+        for slot in range(16):
+            u16(grid.get(slot, 0) & 0xFFFF)
             for _ in range(6):
                 u16(0)
 

@@ -303,36 +303,64 @@ def cmd_autoborderless(args):
     WS_POPUP = 0x80000000; WS_VISIBLE = 0x10000000
     SWP_FRAMECHANGED = 0x0020; SWP_SHOWWINDOW = 0x0040; SWP_NOZORDER = 0x0004
     mode = (args[0] if args else 'fill').lower()
+    lock = 'lock' in [a.lower() for a in args]   # cursor confinement is opt-in
     sw = user32.GetSystemMetrics(0); sh = user32.GetSystemMetrics(1)
     if mode == 'fit':
         tw = min(sw, int(sh * 4 / 3)); th = min(sh, int(sw * 3 / 4))
     else:
         tw, th = sw, sh
     tx, ty = (sw - tw) // 2, (sh - th) // 2
-    print(f'auto-borderless ({mode}) -> {tw}x{th}@({tx},{ty}); watching... (Ctrl-C to stop)')
+    lockmsg = ('cursor FULLY LOCKED to game while focused (alt-tab to free for 2nd monitor)'
+               if lock else 'cursor free')
+    print(f'auto-borderless ({mode}) -> {tw}x{th}@({tx},{ty}); {lockmsg}; watching... (Ctrl-C to stop)')
     misses = 0
-    while True:
-        hwnd = _find_hwnd()
-        if not hwnd:
-            misses += 1
-            if misses > 20:          # game gone for ~10s
-                print('game closed; exiting watcher'); return
-            time.sleep(0.5); continue
-        misses = 0
-        r = wt.RECT(); user32.GetWindowRect(hwnd, ctypes.byref(r))
-        cr = wt.RECT(); user32.GetClientRect(hwnd, ctypes.byref(cr))
-        # only transform once the real game canvas exists (client >= 640px) and
-        # it's not already at our target rect
-        if cr.right >= 640 and not (r.left == tx and r.top == ty and
-                                    (r.right - r.left) == tw and (r.bottom - r.top) == th):
-            st = user32.GetWindowLongW(hwnd, GWL_STYLE) & 0xFFFFFFFF
-            new = (st & ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX |
-                          WS_SYSMENU | WS_BORDER | WS_DLGFRAME)) | WS_POPUP | WS_VISIBLE
-            user32.SetWindowLongW(hwnd, GWL_STYLE, new & 0xFFFFFFFF)
-            user32.SetWindowPos(hwnd, 0, tx, ty, tw, th,
-                                SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER)
-            print(f'applied borderless to hwnd=0x{hwnd:X}')
-        time.sleep(0.7)
+    tick = 0
+    hwnd = None
+    clipped = False
+    pt = wt.POINT()
+    try:
+        while True:
+            # --- window: keep it borderless (cheap check every ~0.3s) ---
+            if tick % 20 == 0:
+                hwnd = _find_hwnd()
+                if not hwnd:
+                    misses += 1
+                    if clipped:
+                        user32.ClipCursor(None); clipped = False
+                    if misses > 30:          # game gone for ~7.5s
+                        print('game closed; exiting watcher'); return
+                    time.sleep(0.25); tick += 1; continue
+                misses = 0
+                r = wt.RECT(); user32.GetWindowRect(hwnd, ctypes.byref(r))
+                cr = wt.RECT(); user32.GetClientRect(hwnd, ctypes.byref(cr))
+                if cr.right >= 640 and not (r.left == tx and r.top == ty and
+                                            (r.right - r.left) == tw and (r.bottom - r.top) == th):
+                    st = user32.GetWindowLongW(hwnd, GWL_STYLE) & 0xFFFFFFFF
+                    new = (st & ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX |
+                                  WS_SYSMENU | WS_BORDER | WS_DLGFRAME)) | WS_POPUP | WS_VISIBLE
+                    user32.SetWindowLongW(hwnd, GWL_STYLE, new & 0xFFFFFFFF)
+                    user32.SetWindowPos(hwnd, 0, tx, ty, tw, th,
+                                        SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOZORDER)
+                    print(f'applied borderless to hwnd=0x{hwnd:X}')
+            # --- cursor: FULL containment on all 4 edges while the game is the
+            # foreground window, so it can never escape and get lost. ClipCursor is
+            # the primary confinement; SetCursorPos is a backup if the game releases
+            # the clip between ticks. Alt-tab away (game loses foreground) frees it. ---
+            if lock and hwnd:
+                if user32.GetForegroundWindow() == hwnd:
+                    box = wt.RECT(tx, ty, tx + tw, ty + th)
+                    user32.ClipCursor(ctypes.byref(box)); clipped = True
+                    user32.GetCursorPos(ctypes.byref(pt))
+                    nx = min(max(pt.x, tx), tx + tw - 1)
+                    ny = min(max(pt.y, ty), ty + th - 1)
+                    if nx != pt.x or ny != pt.y:
+                        user32.SetCursorPos(nx, ny)
+                elif clipped:
+                    user32.ClipCursor(None); clipped = False
+            time.sleep(0.015)
+            tick += 1
+    finally:
+        user32.ClipCursor(None)
 
 
 def cmd_state(args):
