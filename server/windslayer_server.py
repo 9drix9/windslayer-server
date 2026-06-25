@@ -72,6 +72,16 @@ _KIND_TO_APPARENCE = {11: 'weapon', 6: 'top', 5: 'bottom', 9: 'shoes', 15: 'head
 # pants,globes,shoes,earring,necklace,ring1,ring2 (weapon=5).
 _KIND_TO_GRID = {15: 0, 16: 0, 10: 0, 11: 5, 6: 4, 5: 8, 9: 10}
 
+# KR gamedef item id -> EN client item id. The content DB is from the KR client and
+# item ids diverge from EN (same KR↔EN divergence as portal codes). The starter
+# quest (26) 'send's KR item 377 (Type=3, Kind/Spr_Num=None -> not a usable EN item:
+# the EN client shows the "got item" notice but can't place it in the bag). The EN
+# wooden-stick starter weapon is 179 (Type=1, Kind=11, W_Att=1). Map as discovered.
+_EN_ITEM_OVERRIDE = {377: 179}
+
+def _en_item(item):
+    return _EN_ITEM_OVERRIDE.get(item, item)
+
 
 # ============================================================================
 # PHASE 1 COMBAT — server-authoritative monster model + content tables.
@@ -101,8 +111,8 @@ class Monster:
 # Popola-region monster stats (gamedef.sqlite3 npcs, type=3 = AI monster).
 # npccode 1 (Seeyo) is the proven-rendering choice placed in map 102.
 MONSTER_DB = {
-    1:  dict(name='Seeyo',      level=1, hp=5,   atk=3,  defense=2,  exp=10,
-             drops=[3,4,5,18,19,20,21,47,48,2030,4356], gold=7),
+    1:  dict(name='Seeyo',      level=1, hp=24,  atk=3,  defense=2,  exp=10,
+             drops=[3,4,5,18,19,20,21,47,48,2030,4356], gold=7),  # hp 24 = ~3 hits so the HP bar visibly shrinks
     2:  dict(name='Coring',     level=2, hp=10,  atk=4,  defense=5,  exp=14,
              drops=[3,4,8,23,30,33,38,40,47,48,2031,4356], gold=10),
     3:  dict(name='Oroling',    level=3, hp=15,  atk=6,  defense=8,  exp=20,
@@ -128,6 +138,32 @@ MAP_SPAWNS = {
 MOB_UID_BASE = 0x000F0000
 MOB_RESPAWN_SECS = 15.0
 GROUND_ITEM_UID_BASE = 0x00200000   # ground-item instance ids (distinct from mob/player uids)
+
+# Cumulative exp thresholds, copied from the client exp table at VA 0x6f0eb0.
+# EXP_TABLE[i] = total exp required to reach level i+2. Leveling is CLIENT-SIDE:
+# the 0x21 ExpDelta handler adds the delta to scene+0x278, and when a threshold is
+# crossed the client auto-levels (sets entity+0x99, grows max HP/MP via 0x427d40,
+# full-heals, plays the level-up sound 0xa2 + effect 0x24). The server only needs
+# to (a) send 0x21 and (b) NOT reset the level back to 1 on the 0x07 respawn.
+EXP_TABLE = [56,121,238,425,700,1128,1708,2464,3420,4800,6556,8869,11718,15163,
+    19264,24081,29748,36261,44285,53599,64214,76323,90034,105455,122815,142240,
+    163856,187928,216080,247401,281920,320139,362268,408517,459284,514800,575498,
+    641839,717402,799875,889594,987377,1093608,1208928,1333745,1469013,1615188,
+    1773304,1950410,2141939,2348512,2571400,2811612,3070536,3349280,3648988,3971210,
+    4317189,4700676,5112786,5555038,6029829,6538818,7084582,7669369,8295507,8965873,
+    9682985,10471300,11315085,12217856,13183261,14215080,15317770,16495408,17753337,
+    19095964,20528417,22093361,23764171,25546875,27448330,29476282,31638765,33943428,
+    36399530,39015969,41802640,44831868,48059445,51497556,55158802,59056974,63206331,
+    67622400,72321228,77319382,82635627]
+
+def _level_for_exp(exp):
+    lv = 1
+    for t in EXP_TABLE:
+        if exp >= t:
+            lv += 1
+        else:
+            break
+    return min(lv, 99)
 # Server-authoritative basic-attack (0x38) reach around the player's position.
 MELEE_RANGE_X = 130.0
 MELEE_RANGE_Y = 90.0
@@ -985,6 +1021,40 @@ class GameServer:
                 + struct.pack('<B', 0)            # loopN = 0 (no extra u16 list)
                 + struct.pack('<H', 0))           # trailing u16
 
+    def _build_opcode_23(self, item, count=1):
+        """0x23 SILENT remove-from-bag. Verified via the client RECEIVE dispatcher
+        chain: trampoline 0x4582B3 -> 0x46CF40 (opcodes 0x18..0x8F: add eax,-0x18;
+        byte table 0x46F000; jmp [eax*4+0x46EF90]). Byte-table idx for 0x23 == 2 ->
+        jump entry [2] == handler 0x0046DD4B. (Disasm-confirmed, not assumed.)
+
+        0x46DD4B read order (each Get* off the packet ctx [ebx+0x14]):
+            GetU16  field0   <- the bag CATALOG KEY (see below)
+            GetU16  field1   <- count
+            GetU8   loopN
+            loopN * GetU16   (extra list; we send loopN=0 so none)
+            GetU16  trailer
+        then:  edx=[ebx+0x10] (scene);  esi=[edx+0xf84] (bag);
+               eax = field0;  call 0x404210  -> bag element-by-index
+               call 0x467140 -> subtract `count` from the item's category bucket.
+
+        CRITICAL — what field0 indexes: 0x404210 does `edi=eax-1;
+        return [start + edi*4]` i.e. element (field0 - 1). The ADD path (0x18
+        GetItem handler 0x46DE3E -> 0x440920) writes that SAME element with
+        `ebp=item-1; bag[item-1]` keyed by the ITEM ID. So bag[] is a catalog-
+        indexed array and field0 == ITEM ID (handler subtracts 1 internally).
+        => send the ITEM ID here, NOT a positional slot.
+
+        UNLIKE 0x19 SELL (0x46DBEE, structurally identical) there is NO leading
+        GetU64 gold and NO 'sold' chat (0x4817d0) / gold refresh — pure silent
+        remove. PREREQUISITE: bag[item-1] must currently exist (the item was put
+        in the bag via 0x18 GetItem); if not, 0x404210 returns NULL and the
+        handler bails (this is why the earlier 0x23 'did nothing' — the starter
+        was pre-equipped, so there was no bag element to remove)."""
+        return (struct.pack('<H', item & 0xFFFF)   # field0 = item id (catalog key)
+                + struct.pack('<H', count & 0xFFFF)  # field1 = count
+                + struct.pack('<B', 0)            # loopN = 0 (no extra u16 list)
+                + struct.pack('<H', 0))           # trailer
+
     def _build_opcode_80(self, value, flag=1):
         """0x80 CashShopBalance / CurrencyUpdate body (5 B). Handler 0x0044E2FE:
         GetU8 flag (MUST be 1, else the client shows an error message box),
@@ -1241,8 +1311,16 @@ class GameServer:
             prog.setdefault(quest_id, {})
             self._send_quest_grant(sock, session, quest_id, no_enc)
             for item, count in q['send']:           # items the NPC hands you on accept
+                item = _en_item(item)               # map KR gamedef id -> EN client id
+                # Hand EVERYTHING into the bag via 0x18 GetItem (handler 0x46DE3E ->
+                # 0x440920 writes the catalog slot bag[item-1] at scene+0xf84). Even
+                # equippable gear now goes into the bag so the user can EQUIP IT
+                # THEMSELVES; the equip click (0x0F) then moves it bag->grid with a
+                # silent 0x23 remove (see _handle_equip_item). Pre-equipping is gone:
+                # it left nothing in the bag, so there was nothing for 0x23 to find.
                 self._inv_add(session, item, count)
                 self._send_drop(sock, session, item=item, count=count, no_enc=no_enc)
+                log.info(f'[QUEST] gave item {item} x{count} into bag (equip-from-bag)')
             if q['demand']:
                 self._send_quest_progress(sock, session, quest_id, 0, no_enc)
             self._send_chat_line(sock, session, 'Server', f'Quest {quest_id} accepted.', no_enc)
@@ -1298,9 +1376,11 @@ class GameServer:
             self._inv_remove(session, item, need)        # consume collected items
         self._send_quest_complete(sock, session, qid, no_enc)
         for item, count in q['reward']:                  # reward items via 0x18
+            gold_gain = q['money'] if (item, count) == q['reward'][0] else 0
+            item = _en_item(item)                         # map KR gamedef id -> EN client id
             self._inv_add(session, item, count)
             self._send_drop(sock, session, item=item, count=count,
-                            gold_gain=(q['money'] if (item, count) == q['reward'][0] else 0), no_enc=no_enc)
+                            gold_gain=gold_gain, no_enc=no_enc)
         if not q['reward'] and q['money']:
             self._send_drop(sock, session, gold_gain=q['money'], no_enc=no_enc)
         if q['exp']:
@@ -1336,14 +1416,34 @@ class GameServer:
         self._send_encrypted(sock, session, 0x25, struct.pack('<H', skill & 0xFFFF), use_by_array=no_enc)
 
     def _handle_equip_item(self, sock, session, payload, no_enc):
-        """0x0F EQUIP. Update the char's appearance state from items.Spr_Num
-        (BODY sprite, not the icon) so the gear shows on the next spawn/map-change.
-        NOTE: instant appearance refresh (re-sending 0x07) is DEFERRED — re-sending
-        0x07 without a preceding map-clear risks a duplicate player entity; needs
-        a safe appearance-update opcode (future RE)."""
+        """0x0F EQUIP-from-bag (client->server). The user clicked a bag item to
+        equip it. We move it bag -> equip-grid with NO duplicate and NO 'sold'
+        message, using two byte-verified outbound packets:
+
+          1) 0x1D  LIVE equip  (handler 0x45298C -> 0x426680): writes the item id
+             into the player's persistent equip grid (entity +0x13c) and recomposes
+             the body sprite. Does NOT touch the bag (+0xf84).
+          2) 0x23  SILENT bag-remove (handler 0x46DD4B, byte-table idx 2 of the
+             0x46CF40 receive dispatcher): looks up bag[item-1] at scene+0xf84
+             (0x404210) and subtracts `count` from its category bucket (0x467140).
+             NO gold field, NO chat — unlike 0x19 SELL (0x46DBEE).
+
+        Inbound 0x0F wire (PySlayer parse_0F / EN handler): u16 item [, u8, u16].
+        field0 is the ITEM ID — that is BOTH the equip-grid value (0x1D) AND the
+        bag catalog key (0x23), so one value drives both packets.
+
+        PREREQUISITE for the 0x23 remove to actually fire: bag[item-1] must exist
+        client-side, i.e. the item must really be in the bag (delivered earlier via
+        0x18 GetItem). The server-side inventory gate below mirrors that: we only
+        send 0x23 when our model says the bag holds the item. (The earlier 'did
+        nothing' was because the starter was PRE-EQUIPPED — no bag element existed
+        for 0x404210 to find; that pre-equip is now removed, items go to the bag.)
+        """
         if len(payload) < 2:
             return
         item = struct.unpack_from('<H', payload, 0)[0]
+        # Optional trailing count (EN 0x0F may carry u8 N + u16); default to 1.
+        count = 1
         info = _gamedef_item(item)
         if info is None or info.get('Type') != 1:
             log.info(f'[EQUIP] item={item} not equippable (Type!=1) - ignoring')
@@ -1354,21 +1454,28 @@ class GameServer:
             return
         char_key = _KIND_TO_APPARENCE.get(kind)
         grid_idx = _KIND_TO_GRID.get(kind)
-        # Persistence so the next 0x07 respawn shows the gear in the Equipment menu
-        # (the live-menu update is unresolved; for now the menu populates on map
-        # change). Keep the item IN THE BAG — sending 0x19 here read as a SELL and
-        # lost the item.
+        # Persistence so the next 0x07 respawn re-shows the gear in the Equipment menu.
         if grid_idx is not None:
             session.setdefault('equip_grid', {})[grid_idx] = item & 0xFFFF
         if char_key is not None:
             char[char_key] = int(info.get('Spr_Num') or 0) & 0xFFFF
             session.setdefault('equipped', {})[char_key] = item
-        # LIVE: 0x1D writes the item into the entity equip grid (+0x13c) and
-        # recomposes the body sprite, so the gear shows ON THE CHARACTER live.
+        # 1) LIVE equip (grid +0x13c + sprite).
         self._send_encrypted(sock, session, 0x1D,
                              self._build_en_opcode_1D_equip(char, item), use_by_array=no_enc)
+        # 2) SILENT bag-remove — only if the bag actually holds it (else 0x404210
+        #    would NULL-out and the packet is a no-op anyway). count from our model.
+        if self._inv_has(session, item, 1):
+            self._inv_remove(session, item, 1)
+            self._send_encrypted(sock, session, 0x23,
+                                 self._build_opcode_23(item, count), use_by_array=no_enc)
+            removed = True
+        else:
+            removed = False
+            log.info(f'[EQUIP] item={item} not in server bag model - skipping 0x23 '
+                     f'(client bag should also be empty of it)')
         log.info(f"[EQUIP] {info.get('name')} item={item} Kind={kind} grid={grid_idx} "
-                 f"-> 0x1D live sprite (item kept in bag; menu shows after map change)")
+                 f"-> 0x1D equip{' + 0x23 bag-remove (no sell)' if removed else ' (no bag copy)'}")
 
     def _handle_room_query(self, sock, session, payload, no_enc):
         """0x2C inbound = room/arena list query (u8 code), sent once at spawn.
@@ -1463,6 +1570,17 @@ class GameServer:
     def _send_mp(self, sock, session, mp, no_enc=False):
         """Outbound 0x44 setMP (single u16)."""
         self._send_encrypted(sock, session, 0x44, struct.pack('<H', mp & 0xFFFF), use_by_array=no_enc)
+
+    def _send_level(self, sock, session, level, uid=1, no_enc=False):
+        """0x22 SetLevel (handler 0x00454582): u32 uid | u8 level. Looks up the
+        entity by uid (+0x84), sets +0x99=level, calls 0x427d40 to recompute max
+        HP(+0x110c)/MP(+0x1110) + full-heal cur HP(+0x9c), refreshes the HP/MP
+        bars, and spawns the level-up effect 0x24. (The 0x21 exp packet does NOT
+        reliably apply the level to the rendered avatar in our spawn setup, so
+        this explicit per-uid packet is what makes the level visibly go up.)
+        level must be != 0 or the handler no-ops."""
+        self._send_encrypted(sock, session, 0x22,
+                             struct.pack('<IB', uid & 0xFFFFFFFF, level & 0xFF), use_by_array=no_enc)
 
     def _handle_melee(self, sock, session, payload, no_enc=True):
         """0x38 BASIC ATTACK — the client sends a bare 0x38 (no target) on each
@@ -1571,7 +1689,7 @@ class GameServer:
         import ctypes
         from ctypes import wintypes as wt
         k = ctypes.windll.kernel32; k.OpenProcess.restype = wt.HANDLE
-        proc = [None]; last = [0.0]; lw = [0.0]
+        proc = [None]; last = [0.0]; lw = [0.0]; pcache = [0]
         def rd(a, n):
             b = (ctypes.c_ubyte * n)(); r = ctypes.c_size_t(0)
             k.ReadProcessMemory(proc[0], ctypes.c_void_p(a), b, n, ctypes.byref(r))
@@ -1587,22 +1705,50 @@ class GameServer:
                     proc[0] = k.OpenProcess(0x10 | 0x400, False, pid) if pid else None
                     if not proc[0]:
                         time.sleep(1.0); continue
-                scene = u32(0x70EECC)
-                if not scene:
-                    time.sleep(0.2); continue
-                node = u32(scene + 0xc); player = 0; n = 0
-                while node and 0x400000 <= node < 0x7FFF0000 and n < 60:
-                    e = u32(node + 8)
-                    if e and u32(e + 0x84) == 1:
-                        player = e; break
-                    node = u32(node); n += 1
+                    log.info(f'[COMBAT] attached to client PID {pid}')
+                # Liveness/identity check: if the held handle's process has died
+                # (e.g. the client was relaunched to a NEW pid), the image-base 'MZ'
+                # read fails -> drop the stale handle and re-resolve the current pid.
+                # Without this the driver clings to the dead handle forever and
+                # combat silently stops working after any client relaunch.
+                if rd(0x400000, 2)[:2] != b'MZ':
+                    try: k.CloseHandle(proc[0])
+                    except Exception: pass
+                    proc[0] = None; pcache[0] = 0
+                    time.sleep(0.5); continue
+                # Cached player lookup: the full entity-list walk is ~120 memory
+                # reads; doing it every 50ms (~2400 reads/sec) hammered CPU and
+                # stuttered the game. Cache the player address and only re-walk
+                # when the cache goes stale (uid no longer 1, e.g. after a map
+                # change). Steady-state is ~4 reads/tick.
+                player = pcache[0]
+                if not (player and u32(player + 0x84) == 1):
+                    scene = u32(0x70EECC)
+                    if not scene:
+                        pcache[0] = 0; time.sleep(0.3); continue
+                    node = u32(scene + 0xc); player = 0; n = 0
+                    while node and 0x400000 <= node < 0x7FFF0000 and n < 60:
+                        e = u32(node + 8)
+                        if e and u32(e + 0x84) == 1:
+                            player = e; break
+                        node = u32(node); n += 1
+                    pcache[0] = player
                 if not player:
-                    time.sleep(0.1); continue
+                    time.sleep(0.3); continue
                 # ATTACK-specific: +0x8b8 is set by any action (incl. jump), so also
                 # require the attack state +0x15b4 == 4 (idle=8, jump=other) so the
                 # jump key no longer triggers hits.
                 attacking = (u8(player + 0x8b8) == 1 and u32(player + 0x15b4) == 4)
                 now = time.monotonic()
+                # DEBUG self-test hook: a `_dbg_attack` sentinel file (created by
+                # wsdev.py `hit`) forces one melee resolve on the nearest mob, so
+                # combat feedback/leveling can be tested without a real keypress
+                # (injected 's' doesn't set the swing flag).
+                dbg = os.path.join(os.path.dirname(os.path.abspath(__file__)), '_dbg_attack')
+                if os.path.exists(dbg):
+                    try: os.remove(dbg)
+                    except OSError: pass
+                    self._memory_melee(f64(player + 0x11f8), f64(player + 0x1288))
                 if attacking and now - last[0] >= 0.45:    # ~one hit per swing cycle
                     last[0] = now
                     self._memory_melee(f64(player + 0x11f8), f64(player + 0x1288))
@@ -1704,12 +1850,12 @@ class GameServer:
         dmg = self._compute_damage(session, skill_id, mob)
         mob.hp = max(0, mob.hp - dmg)
         log.info(f'[ATK] hit {mob.name} uid={mob.uid:#x} dmg={dmg} -> hp={mob.hp}/{mob.max_hp}')
+        # Per-hit feedback: 0x54 shrinks the overhead HP bar IN PLACE (writes
+        # entity+0x9c/+0x110c, NO position field -> no spawn-snap jitter); 0x40
+        # plays the flinch/hit-react anim + melee impact sound on the monster.
+        self._send_hit_feedback(sock, session, mob, no_enc=no_enc)
         if mob.hp <= 0:
             self._kill_monster(sock, session, mob, no_enc=no_enc)
-        # NOTE: no per-hit 0x1A HP re-send — it snapped the mob back to its spawn
-        # point (visible jitter). The mob takes server-side damage and dies via
-        # 0x29 when HP hits 0. (Overhead HP-bar feedback can be re-added later via
-        # a position-preserving update.)
 
     def _kill_monster(self, sock, session, mob, no_enc=True):
         mob.alive = False
@@ -1733,9 +1879,39 @@ class GameServer:
     def _build_opcode_14(self, uid, stat_type, value):
         return struct.pack('<I', uid & 0xFFFFFFFF) + struct.pack('<B', stat_type & 0xFF) + struct.pack('<H', value & 0xFFFF)
 
-    def _send_entity_hp(self, sock, session, uid, hp, no_enc=False):
-        # 0x14 UpdateStats type=2 -> per-uid overhead HP (NOT 0x28/0x44 which are local-only)
-        self._send_encrypted(sock, session, 0x14, self._build_opcode_14(uid, 2, hp), use_by_array=no_enc)
+    def _build_opcode_54(self, uid, max_hp, cur_hp):
+        """0x54 (handler 0x457341): u32 uid | u16 maxHP | u16 curHP. Writes
+        entity+0x110c=maxHP and entity+0x9c=curHP (the COMBAT HP the overhead bar
+        reads) and refreshes the floating HP-bar widget via 0x43d3f0 — NO position
+        write (no jitter), NO local-player guard. maxHP must be nonzero or the bar
+        refresh is skipped."""
+        return (struct.pack('<I', uid & 0xFFFFFFFF)
+                + struct.pack('<H', max(1, max_hp) & 0xFFFF)
+                + struct.pack('<H', cur_hp & 0xFFFF))
+
+    def _build_opcode_40(self, uid, hp=None, mp=None):
+        """0x40 (handler 0x454AF2): u32 uid | bool hp_present | bool mp_present |
+        [u16 hp] | [u16 mp]. For a monster (uid != local) with hp_present=1,
+        mp_present=0 the client plays the flinch/hit-react anim (action 0x37) on
+        the entity + the melee impact SOUND (id 0x37) at the target's world pos."""
+        body = struct.pack('<I', uid & 0xFFFFFFFF)
+        body += struct.pack('<B', 1 if hp is not None else 0)
+        body += struct.pack('<B', 1 if mp is not None else 0)
+        if hp is not None:
+            body += struct.pack('<H', hp & 0xFFFF)
+        if mp is not None:
+            body += struct.pack('<H', mp & 0xFFFF)
+        return body
+
+    def _send_hit_feedback(self, sock, session, mob, no_enc=False):
+        """Per-hit client feedback: 0x54 = HP-bar shrink in place (cheap widget
+        refresh, no position write). Uses the FULL mob.uid (matches entity+0x84).
+        NOTE: 0x40 (flinch + sound id 0x37) is DISABLED — it correlated with a
+        per-hit client hitch/lag and the sound id never actually played, so the
+        cost wasn't buying the feature. Revisit the impact sound separately (find
+        the correct loaded sound id) before re-enabling 0x40."""
+        self._send_encrypted(sock, session, 0x54,
+                             self._build_opcode_54(mob.uid, mob.max_hp, mob.hp), use_by_array=no_enc)
 
     def _build_opcode_29(self, uid, anim=0, dx=0, dz=0):
         return (struct.pack('<I', uid & 0xFFFFFFFF) + struct.pack('<I', anim & 0xFFFFFFFF)
@@ -1747,8 +1923,24 @@ class GameServer:
 
     def _send_exp(self, sock, session, exp_delta, no_enc=False):
         session['exp'] = session.get('exp', 0) + exp_delta
-        log.info(f"[COMBAT] +{exp_delta} exp (session total={session['exp']})")
+        # Keep level in sync with accumulated exp (client's own curve) so the next
+        # 0x07 respawn carries the real level instead of resetting +0x99 to 1.
+        new_lv = _level_for_exp(session['exp'])
+        old_lv = session.get('level', 1)
+        session['level'] = new_lv
+        ch = self._session_char(session)
+        if ch is not None:
+            ch['level'] = new_lv          # persist on the account char too
+        log.info(f"[COMBAT] +{exp_delta} exp (total={session['exp']}, lv={new_lv})")
+        # 0x21 ExpDelta = exp gain + the level-up SOUND (0xa2) on the client.
         self._send_encrypted(sock, session, 0x21, struct.pack('<i', exp_delta), use_by_array=no_enc)
+        # On an actual level-up, send 0x22 SetLevel — the dedicated packet that
+        # visibly raises the level (+0x99), grows max HP/MP, full-heals, and plays
+        # the level-up effect 0x24. (0x21 alone doesn't apply the level here.)
+        if new_lv != old_lv:
+            uid = ch.get('uid', 1) if ch else 1
+            self._send_level(sock, session, new_lv, uid=uid, no_enc=no_enc)
+            log.info(f"[LEVEL] {old_lv} -> {new_lv} (exp={session['exp']}) -> 0x22 SetLevel uid={uid}")
 
     def _send_drop(self, sock, session, item=0, count=0, gold_gain=0, winnie_gain=0, no_enc=False):
         gold, winnie = self._wallet(session)
@@ -2062,7 +2254,7 @@ class GameServer:
 
         u8(char.get('class', 1))                      # +0x110 job1 (1=warrior)
         u8(0)                                         # +0x111 job2
-        u8(min(char.get('level', 1), 99))            # +0x99 level
+        u8(min(session.get('level', char.get('level', 1)), 99))   # +0x99 level (live, not reset to 1)
         u8(0)                                         # +0x9A
         u8(0)                                         # +0x113
 
