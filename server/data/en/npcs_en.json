@@ -1,0 +1,2235 @@
+{
+  "1": {
+    "idx": "1",
+    "en_title": "Seeyo",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "씨요",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "2": {
+    "idx": "2",
+    "en_title": "Coring",
+    "en_description": "Habitat: Popola\\nA cute caterpillar bewitched into\\na monster. It still thinks of itself\\nas a caterpillar.",
+    "kr_title": "코링",
+    "kr_description": "출몰지역 : 포폴라\\n귀여운 애벌레에 마법이\\n걸려 몬스터가 되었다.\\n너무 애벌레라서 자신이\\n몬스터라는 자각이 없다."
+  },
+  "3": {
+    "idx": "3",
+    "en_title": "Oroling",
+    "en_description": "Habitat: Popola\\nA monster shaped like a tasty citrus.\\nSaid to be sweet and sour, though\\nno one has dared taste it.",
+    "kr_title": "오로링",
+    "kr_description": "출몰지역 : 포폴라\\n맛좋은 감귤처럼 생긴 몬스터. \\n시고 단 맛이 난다고 하지만\\n먹어본 사람은 없다고 한다."
+  },
+  "4": {
+    "idx": "4",
+    "en_title": "Bbonyang",
+    "en_description": "Habitat: Popola\\nA cute kitten monster.\\nSo soft and fluffy you want to\\ncurl up and nap against it.\\n",
+    "kr_title": "뽀냥",
+    "kr_description": "출몰지역 : 포폴라\\n귀여운 고양이 몬스터.\\n폭신하니 머리를 베고\\n잠을 자고 싶어진다.\\n"
+  },
+  "5": {
+    "idx": "5",
+    "en_title": "Poko",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "포코",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "6": {
+    "idx": "6",
+    "en_title": "Kamikaji",
+    "en_description": "Habitat: Popola\\nBullied into service by Shiryosoni.\\nHates being lumped together with\\nthe Dung Monsters.",
+    "kr_title": "카미카쥐",
+    "kr_description": "출몰지역 : 포폴라\\n시려소니의 협박으로 졸개가\\n되었다. 응가몬스터와 같은 \\n취급받는 걸 싫어한다."
+  },
+  "7": {
+    "idx": "7",
+    "en_title": "Popola Blacksmith",
+    "en_description": null,
+    "kr_title": "포폴라대장장이",
+    "kr_description": null
+  },
+  "8": {
+    "idx": "8",
+    "en_title": "Popola Item Merchant",
+    "en_description": null,
+    "kr_title": "포폴라아이템상인",
+    "kr_description": null
+  },
+  "9": {
+    "idx": "9",
+    "en_title": "Village Chief Gandalf",
+    "en_description": null,
+    "kr_title": "마을촌장강달프",
+    "kr_description": null
+  },
+  "10": {
+    "idx": "10",
+    "en_title": "Aspiring Painter Rona",
+    "en_description": null,
+    "kr_title": "화가지망생 로나",
+    "kr_description": null
+  },
+  "11": {
+    "idx": "11",
+    "en_title": "Popola Weapon Merchant",
+    "en_description": null,
+    "kr_title": "포폴라무기상인",
+    "kr_description": null
+  },
+  "12": {
+    "idx": "12",
+    "en_title": "Shiryosoni",
+    "en_description": "Habitat: Popola\\nA fierce monster from cold lands\\nwho brought the Kamikaji with him\\nwhen he moved to Popola.",
+    "kr_title": "시려소니",
+    "kr_description": "출몰지역 : 포폴라\\n추운 지방에서 카미카쥐를 \\n데리고 포폴라지역으로 온 \\n성격사나운 몬스터이다."
+  },
+  "13": {
+    "idx": "13",
+    "en_title": "Boing Peach",
+    "en_description": "Habitat: Mt. Ohaeng\\nA heavenly peach seed that drifted\\ndown to Mt. Ohaeng and became a\\nBoing Peach. Said to taste awful.\\n",
+    "kr_title": "보잉피치",
+    "kr_description": "출몰지역 : 오행산\\n천상의 복숭아 씨앗이 오행\\n산에 오게 되어 보잉피치가 \\n되었다. 맛은 없다고 한다.\\n"
+  },
+  "14": {
+    "idx": "14",
+    "en_title": "Pig Dumpling",
+    "en_description": "Habitat: Mt. Ohaeng\\nA pig monster shaped like a dumpling.\\nGentle in nature, but its hefty bulk\\nis already a deadly weapon.",
+    "kr_title": "돼지만두",
+    "kr_description": "출몰지역 : 오행산\\n만두처럼 생긴 돼지몬스터이다.\\n성격은 온순하지만 푸짐한 덩치\\n가 이미 흉기다."
+  },
+  "15": {
+    "idx": "15",
+    "en_title": "Gwiwon Grunt",
+    "en_description": "Habitat: Mt. Ohaeng\\nA grunt of the Gwiwon King. Has\\nbasic training and can handle\\nsimple weapons.",
+    "kr_title": "귀원졸개",
+    "kr_description": "출몰지역 : 오행산\\n귀원왕의 졸개로서, 기본적인 \\n학습이 되어있고 간단한 무기\\n를 다룰 줄 안다."
+  },
+  "16": {
+    "idx": "16",
+    "en_title": "Gwiwon Sergeant",
+    "en_description": "Habitat: Mt. Ohaeng\\nA Gwiwon Sergeant who picked up\\nShaolin martial arts by watching.\\nClumsy but quick.",
+    "kr_title": "귀원병장",
+    "kr_description": "출몰지역 : 오행산\\n소림사 정통 무술을 곁눈질로 \\n배운 귀윈병장. \\n어설프지만 민첩하다."
+  },
+  "17": {
+    "idx": "17",
+    "en_title": "Gwiwon Captain",
+    "en_description": "Habitat: Mt. Ohaeng\\nThe captain of the monkeys who\\ncommands the Gwiwon King's grunts.\\nNot the brightest of the bunch.",
+    "kr_title": "귀원대장",
+    "kr_description": "출몰지역 : 오행산\\n귀원왕 주변에서 졸개들을 \\n부리는 원숭이들의 대장. \\n머리는 썩 좋은 편이 아니다."
+  },
+  "18": {
+    "idx": "18",
+    "en_title": "Leon",
+    "en_description": null,
+    "kr_title": "레온",
+    "kr_description": null
+  },
+  "19": {
+    "idx": "19",
+    "en_title": "General Store Xiaoli",
+    "en_description": null,
+    "kr_title": "잡화상 샤오리",
+    "kr_description": null
+  },
+  "20": {
+    "idx": "20",
+    "en_title": "Shabang",
+    "en_description": null,
+    "kr_title": "샤방",
+    "kr_description": null
+  },
+  "21": {
+    "idx": "21",
+    "en_title": "Fortune-Teller May",
+    "en_description": null,
+    "kr_title": "점술가 메이",
+    "kr_description": null
+  },
+  "22": {
+    "idx": "22",
+    "en_title": "Leather Specialist",
+    "en_description": null,
+    "kr_title": "가죽전문가",
+    "kr_description": null
+  },
+  "23": {
+    "idx": "23",
+    "en_title": "General Store Xiaomei",
+    "en_description": null,
+    "kr_title": "잡화상 샤오메이",
+    "kr_description": null
+  },
+  "24": {
+    "idx": "24",
+    "en_title": "Conqueror Mask Man",
+    "en_description": null,
+    "kr_title": "패왕가면맨",
+    "kr_description": null
+  },
+  "25": {
+    "idx": "25",
+    "en_title": "Christina",
+    "en_description": null,
+    "kr_title": "크리스티나",
+    "kr_description": null
+  },
+  "26": {
+    "idx": "26",
+    "en_title": "Iron Ball",
+    "en_description": "Habitat: Balderan\\nA scrap-metal monster built by a\\nlone scientist. Its rapid rolling\\ncharge is genuinely dangerous.",
+    "kr_title": "아이언볼",
+    "kr_description": "출몰지역 : 발데란\\n한 과학자에 의해 탄생된 고철\\n몬스터. 때굴때굴 빠른 속도로 \\n다가오는 것이 위협적이다."
+  },
+  "27": {
+    "idx": "27",
+    "en_title": "Brian Ball",
+    "en_description": "Habitat: Balderan\\nThe Brian Ball, a refined version\\nof the Iron Ball. Watch out for\\nits biting attack.",
+    "kr_title": "브라이언볼",
+    "kr_description": "출몰지역 : 발데란\\n아이언볼이 조금 개량되어 \\n만들어진 브라이언볼. \\n깨물기공격을 조심하자."
+  },
+  "28": {
+    "idx": "28",
+    "en_title": "Radian Ball",
+    "en_description": "Habitat: Balderan\\nThe Radian Ball is highly aggressive.\\nApproach carelessly and you'll be\\nbattered in no time, so stay alert.",
+    "kr_title": "레디언볼",
+    "kr_description": "출몰지역 : 발데란\\n레디언볼은 매우 공격적이므로 \\nD불리 다가가면 괜히 얻어맞기 \\n쉽상이니 조심하자."
+  },
+  "29": {
+    "idx": "29",
+    "en_title": "Scrap Golem",
+    "en_description": "Habitat: Balderan\\nForged from extremely hard scrap.\\nThe crushing weight of its massive\\nbody is no joke.",
+    "kr_title": "고철골램",
+    "kr_description": "출몰지역 : 발데란\\n매우 단단한 고철로 이루어져 \\n있으며, 육중한 몸으로 가해오\\n는 압박은 장난이 아니다."
+  },
+  "30": {
+    "idx": "30",
+    "en_title": "Crow",
+    "en_description": "Habitat: Amakusa\\nVery wary of strangers. Anyone\\nwho isn't an Amakusa local is\\ntreated as a threat.",
+    "kr_title": "까마귀",
+    "kr_description": "출몰지역 : 아마쿠사\\n낯을 많이 가리는 성격이라 \\n아마쿠사 주민을 제외하고는 \\n전부 경계대상이다."
+  },
+  "31": {
+    "idx": "31",
+    "en_title": "Ninja Crow",
+    "en_description": "Habitat: Amakusa\\nCrows trained by a ninja clan are\\ncalled Ninja Crows. They attack\\nby hurling shuriken.",
+    "kr_title": "닌자귀",
+    "kr_description": "출몰지역 : 아마쿠사\\n닌자집단에 의해 훈련받은 까마\\n귀를 가리켜 닌자귀라 부른다. \\n표창을 휘두르며 공격한다."
+  },
+  "32": {
+    "idx": "32",
+    "en_title": "Bighead Swordsman",
+    "en_description": "Habitat: Amakusa\\nA wooden swordsman doll born of\\nshamanic magic. Wasablanca's\\ncurse turned it aggressive.\\n",
+    "kr_title": "대갈검사",
+    "kr_description": "출몰지역 : 아마쿠사\\n주술로 만들어진 목각인형 \\n검사. 와사블랑카로 인하여 \\n공격적으로 변하였다.\\n"
+  },
+  "33": {
+    "idx": "33",
+    "en_title": "Bighead Spearman",
+    "en_description": "Habitat: Amakusa\\nThe second wooden doll forged\\nby shamanic magic.\\nIts flashy spearwork is an art.\\n",
+    "kr_title": "대갈창병",
+    "kr_description": "출몰지역 : 아마쿠사\\n주술로 만들어진 두번째 \\n목각인형이다. \\n현란한 창솜씨가 예술이다.\\n"
+  },
+  "34": {
+    "idx": "34",
+    "en_title": "Bighead Warrior",
+    "en_description": "Habitat: Amakusa\\nThe final wooden doll in the\\nshamanic series.\\nNoted for its enormous head.",
+    "kr_title": "대갈무사",
+    "kr_description": "출몰지역 : 아마쿠사\\n주술로 인해 만들어진 마지막 \\n목각인형 씨리즈. \\n엄청나게 큰 머리가 특징."
+  },
+  "35": {
+    "idx": "35",
+    "en_title": "Topmost Gangun",
+    "en_description": null,
+    "kr_title": "으뜸강건",
+    "kr_description": null
+  },
+  "36": {
+    "idx": "36",
+    "en_title": "Esta Rose",
+    "en_description": null,
+    "kr_title": "에스타로제",
+    "kr_description": null
+  },
+  "37": {
+    "idx": "37",
+    "en_title": "Esta Blue",
+    "en_description": null,
+    "kr_title": "에스타블루",
+    "kr_description": null
+  },
+  "38": {
+    "idx": "38",
+    "en_title": "Emilia",
+    "en_description": null,
+    "kr_title": "에밀리아",
+    "kr_description": null
+  },
+  "39": {
+    "idx": "39",
+    "en_title": "Brother Singha",
+    "en_description": null,
+    "kr_title": "싱하형",
+    "kr_description": null
+  },
+  "40": {
+    "idx": "40",
+    "en_title": "Izumi",
+    "en_description": null,
+    "kr_title": "이즈미",
+    "kr_description": null
+  },
+  "41": {
+    "idx": "41",
+    "en_title": "Fisher",
+    "en_description": null,
+    "kr_title": "핏셔",
+    "kr_description": null
+  },
+  "42": {
+    "idx": "42",
+    "en_title": "Fiona",
+    "en_description": null,
+    "kr_title": "피오나",
+    "kr_description": null
+  },
+  "43": {
+    "idx": "43",
+    "en_title": "Selly",
+    "en_description": null,
+    "kr_title": "셀리",
+    "kr_description": null
+  },
+  "44": {
+    "idx": "44",
+    "en_title": "Nia",
+    "en_description": null,
+    "kr_title": "니아",
+    "kr_description": null
+  },
+  "45": {
+    "idx": "45",
+    "en_title": "Apprentice Warrior Armor Merchant",
+    "en_description": null,
+    "kr_title": "견습전사갑옷상인",
+    "kr_description": null
+  },
+  "46": {
+    "idx": "46",
+    "en_title": "Common Warrior Armor Merchant",
+    "en_description": null,
+    "kr_title": "일반전사갑옷상인",
+    "kr_description": null
+  },
+  "47": {
+    "idx": "47",
+    "en_title": "Warrior Armor Merchant",
+    "en_description": null,
+    "kr_title": "워리어갑옷상인",
+    "kr_description": null
+  },
+  "48": {
+    "idx": "48",
+    "en_title": "Ojicheon Item Merchant",
+    "en_description": null,
+    "kr_title": "오지촌아이템상인",
+    "kr_description": null
+  },
+  "49": {
+    "idx": "49",
+    "en_title": "Balderan Item Merchant",
+    "en_description": null,
+    "kr_title": "발데란아이템상인",
+    "kr_description": null
+  },
+  "50": {
+    "idx": "50",
+    "en_title": "Amakusa Retail Shop",
+    "en_description": null,
+    "kr_title": "아마쿠사소매점",
+    "kr_description": null
+  },
+  "51": {
+    "idx": "51",
+    "en_title": "Apprentice Weapon Merchant",
+    "en_description": null,
+    "kr_title": "견습무기상인",
+    "kr_description": null
+  },
+  "52": {
+    "idx": "52",
+    "en_title": "Warrior Weapon Merchant",
+    "en_description": null,
+    "kr_title": "전사용무기상인",
+    "kr_description": null
+  },
+  "53": {
+    "idx": "53",
+    "en_title": "Martial Artist Weapon Merchant",
+    "en_description": null,
+    "kr_title": "무도가용무기상인",
+    "kr_description": null
+  },
+  "54": {
+    "idx": "54",
+    "en_title": "Apprentice Thief Garb Merchant",
+    "en_description": null,
+    "kr_title": "견습도적옷상인",
+    "kr_description": null
+  },
+  "55": {
+    "idx": "55",
+    "en_title": "Common Thief Garb Merchant",
+    "en_description": null,
+    "kr_title": "일반도적옷상인",
+    "kr_description": null
+  },
+  "56": {
+    "idx": "56",
+    "en_title": "Apprentice Mage Robe Merchant",
+    "en_description": null,
+    "kr_title": "견습마법복상인",
+    "kr_description": null
+  },
+  "57": {
+    "idx": "57",
+    "en_title": "Common Mage Robe Merchant",
+    "en_description": null,
+    "kr_title": "일반마법복상인",
+    "kr_description": null
+  },
+  "58": {
+    "idx": "58",
+    "en_title": "Master Mage Robe Merchant",
+    "en_description": null,
+    "kr_title": "수석마법복상인",
+    "kr_description": null
+  },
+  "59": {
+    "idx": "59",
+    "en_title": "Apprentice Martial Garb Merchant",
+    "en_description": null,
+    "kr_title": "견습무도복상인",
+    "kr_description": null
+  },
+  "60": {
+    "idx": "60",
+    "en_title": "Common Martial Garb Merchant",
+    "en_description": null,
+    "kr_title": "일반무도복상인",
+    "kr_description": null
+  },
+  "61": {
+    "idx": "61",
+    "en_title": "Apprentice Priest Vestment Merchant",
+    "en_description": null,
+    "kr_title": "견습사제복상인",
+    "kr_description": null
+  },
+  "62": {
+    "idx": "62",
+    "en_title": "Common Priest Vestment Merchant",
+    "en_description": null,
+    "kr_title": "일반사제복상인",
+    "kr_description": null
+  },
+  "63": {
+    "idx": "63",
+    "en_title": "Master Priest Vestment Merchant",
+    "en_description": null,
+    "kr_title": "수석사제복상인",
+    "kr_description": null
+  },
+  "64": {
+    "idx": "64",
+    "en_title": "Archer Escort",
+    "en_description": null,
+    "kr_title": "궁수호위대",
+    "kr_description": null
+  },
+  "65": {
+    "idx": "65",
+    "en_title": "Cecilia",
+    "en_description": null,
+    "kr_title": "세실리아",
+    "kr_description": null
+  },
+  "66": {
+    "idx": "66",
+    "en_title": "Warrior Guard",
+    "en_description": null,
+    "kr_title": "전사호위병",
+    "kr_description": null
+  },
+  "67": {
+    "idx": "67",
+    "en_title": "Nameless Traveler",
+    "en_description": null,
+    "kr_title": "무명여행자",
+    "kr_description": null
+  },
+  "68": {
+    "idx": "68",
+    "en_title": "Apprentice Archer Garb Merchant",
+    "en_description": null,
+    "kr_title": "견습궁수복상인",
+    "kr_description": null
+  },
+  "69": {
+    "idx": "69",
+    "en_title": "Common Archer Garb Merchant",
+    "en_description": null,
+    "kr_title": "일반궁수복상인",
+    "kr_description": null
+  },
+  "70": {
+    "idx": "70",
+    "en_title": "Rogue Archer Garb Merchant",
+    "en_description": null,
+    "kr_title": "로그용궁수복상인",
+    "kr_description": null
+  },
+  "71": {
+    "idx": "71",
+    "en_title": "Dudeok",
+    "en_description": "Habitat: Mining Region\\nA mole monster, master of the\\nshovel. Tricked by a crooked\\ndealer, it now resents adventurers.",
+    "kr_title": "두덕",
+    "kr_description": "출몰지역 : 광산지역\\n삽질의 달인인 두더쥐 몬스터. \\n나쁜 사업가의 속임수에 넘어가 \\n모험가에게 적대감을 가지고 있다."
+  },
+  "72": {
+    "idx": "72",
+    "en_title": "Thief Weapon Merchant",
+    "en_description": null,
+    "kr_title": "도적용무기상인",
+    "kr_description": null
+  },
+  "73": {
+    "idx": "73",
+    "en_title": "Grazie",
+    "en_description": null,
+    "kr_title": "그라지에",
+    "kr_description": null
+  },
+  "74": {
+    "idx": "74",
+    "en_title": "Neoltikkamare",
+    "en_description": null,
+    "kr_title": "널띠까말레",
+    "kr_description": null
+  },
+  "75": {
+    "idx": "75",
+    "en_title": "Murbishiri",
+    "en_description": null,
+    "kr_title": "무르비시리",
+    "kr_description": null
+  },
+  "76": {
+    "idx": "76",
+    "en_title": "Nicolnas",
+    "en_description": null,
+    "kr_title": "니꼴나스",
+    "kr_description": null
+  },
+  "77": {
+    "idx": "77",
+    "en_title": "Dorijjoa",
+    "en_description": null,
+    "kr_title": "도리쪼아",
+    "kr_description": null
+  },
+  "78": {
+    "idx": "78",
+    "en_title": "Antigo",
+    "en_description": null,
+    "kr_title": "안티고",
+    "kr_description": null
+  },
+  "79": {
+    "idx": "79",
+    "en_title": "Nancho",
+    "en_description": null,
+    "kr_title": "난쵸",
+    "kr_description": null
+  },
+  "80": {
+    "idx": "80",
+    "en_title": "Erin",
+    "en_description": null,
+    "kr_title": "에린",
+    "kr_description": null
+  },
+  "81": {
+    "idx": "81",
+    "en_title": "???",
+    "en_description": "Habitat: Mt. Ohaeng\\nLord of the Gwiwon. Forced to\\nwear the golden headband by a\\nwicked rogue monk, he turned\\nferocious.",
+    "kr_title": "#NAME?",
+    "kr_description": "출몰지역 : 오행산\\n귀원들의 우두머리. 오행산에 갑자\\n기 나타난 나쁜 파계승에 의해 금고\\n아가 씌워지고 흉폭해졌다."
+  },
+  "82": {
+    "idx": "82",
+    "en_title": "Luxury",
+    "en_description": null,
+    "kr_title": "럭샤리",
+    "kr_description": null
+  },
+  "83": {
+    "idx": "83",
+    "en_title": "Ruby Dung",
+    "en_description": null,
+    "kr_title": "루비똥",
+    "kr_description": null
+  },
+  "84": {
+    "idx": "84",
+    "en_title": "Baegeok",
+    "en_description": null,
+    "kr_title": "배걱",
+    "kr_description": null
+  },
+  "85": {
+    "idx": "85",
+    "en_title": "Jiryongi",
+    "en_description": "Habitat: Mining Region\\nPrefers dank underground, yet\\nlately surfaces aboveground.\\nBeware its bite and limestone spines.\\n",
+    "kr_title": "지룡이",
+    "kr_description": "출몰지역 : 광산지역\\n음습한 지하를 좋아하나, 어느날 \\n부터 지상에 나타나기 시작했다. \\n깨물기와 석회가시 공격을 조심할것.\\n"
+  },
+  "86": {
+    "idx": "86",
+    "en_title": "Mining Region Potion Merchant",
+    "en_description": null,
+    "kr_title": "광산지역포션상인",
+    "kr_description": null
+  },
+  "87": {
+    "idx": "87",
+    "en_title": "Assassin Thief Garb Merchant",
+    "en_description": null,
+    "kr_title": "암살용도적옷상인",
+    "kr_description": null
+  },
+  "88": {
+    "idx": "88",
+    "en_title": "Martial Master Garb Merchant",
+    "en_description": null,
+    "kr_title": "무술가도복상인",
+    "kr_description": null
+  },
+  "89": {
+    "idx": "89",
+    "en_title": "Kawamatsuri",
+    "en_description": null,
+    "kr_title": "카와마츠리",
+    "kr_description": null
+  },
+  "90": {
+    "idx": "90",
+    "en_title": "Okane",
+    "en_description": null,
+    "kr_title": "오카네",
+    "kr_description": null
+  },
+  "91": {
+    "idx": "91",
+    "en_title": "Tachibana",
+    "en_description": null,
+    "kr_title": "다치바나",
+    "kr_description": null
+  },
+  "92": {
+    "idx": "92",
+    "en_title": "Donnamite",
+    "en_description": "Habitat: Mining Region\\nDonnamite, the gunpowder expert.\\nEven the mining village's Baegeok\\nis a Donnamite. Since the Baegeok\\nGang broke up, they've menaced travelers.\\n",
+    "kr_title": "돈나마이트",
+    "kr_description": "출몰지역 : 광산지역\\n화약 전문가 돈나마이트. 광산마을의 \\n배걱도 돈나마이트이다. 배걱단이 해\\n체된 이후 여행자를 괴롭히고 있다.\\n"
+  },
+  "93": {
+    "idx": "93",
+    "en_title": "Dudubebe",
+    "en_description": "Habitat: Mining Region\\nA dirt-digging pro with powerful\\nfront paws. Doesn't really enjoy\\nbeing underground, so it always\\nkeeps its head poked out.\\n",
+    "kr_title": "두두베베",
+    "kr_description": "출몰지역 : 광산지역\\n발달된 앞발로 흙을 파내는데 선수. \\n하지만 땅속을 그리 좋아하지 않아 \\n항상 고개를 내밀고 있다.\\n"
+  },
+  "94": {
+    "idx": "94",
+    "en_title": "Atomic Punch Ball",
+    "en_description": "Habitat: Balderan\\nThe scientist's final ultimate weapon.\\nFires cannon shots from its mouth\\nand strikes with brutal steel arms.",
+    "kr_title": "아토믹펀치볼",
+    "kr_description": "출몰지역 : 발데란\\n과학자의 마지막 최종병기로 입에선 \\n대포가 나가며, 무지막지한 강철팔로 \\n공격한다."
+  },
+  "95": {
+    "idx": "95",
+    "en_title": "Wasablanca",
+    "en_description": "Habitat: Amakusa\\nA swamp dweller that somehow\\ndrifted into Amakusa. Beware\\nthe secretions from its mouth.\\n",
+    "kr_title": "와사블랑카",
+    "kr_description": "출몰지역 : 아마쿠사\\n늪지대에 거주하나, 어찌된 일인지 \\n아마쿠사로 흘러오게 되었다. 입에\\n서 나오는 분비물을 조심하자.\\n"
+  },
+  "96": {
+    "idx": "96",
+    "en_title": "Redubebe",
+    "en_description": "Habitat: Mining Region\\nSame kind as the Dudubebe, but\\nunlike them prefers being\\nunderground. Spot one hiding in\\nthe earth and stay sharp.\\n",
+    "kr_title": "레두베베",
+    "kr_description": "출몰지역 : 광산지역\\n두두베베와 같은 종류. 두두베베와는 \\n다르게 땅속을 더 좋아한다. 땅속에 \\n숨어있는걸 발견한다면 조심하자.\\n"
+  },
+  "97": {
+    "idx": "97",
+    "en_title": "Mikomakisho",
+    "en_description": null,
+    "kr_title": "미코마키쇼",
+    "kr_description": null
+  },
+  "98": {
+    "idx": "98",
+    "en_title": "Archer Weapon Merchant",
+    "en_description": null,
+    "kr_title": "궁수용무기상인",
+    "kr_description": null
+  },
+  "99": {
+    "idx": "99",
+    "en_title": "Mage Weapon Merchant",
+    "en_description": null,
+    "kr_title": "마법사용무기상인",
+    "kr_description": null
+  },
+  "100": {
+    "idx": "100",
+    "en_title": "Priest Weapon Merchant",
+    "en_description": null,
+    "kr_title": "사제용무기상인",
+    "kr_description": null
+  },
+  "101": {
+    "idx": "101",
+    "en_title": "Plate Armor Merchant",
+    "en_description": null,
+    "kr_title": "판금갑옷상인",
+    "kr_description": null
+  },
+  "102": {
+    "idx": "102",
+    "en_title": "Master Martial Garb Merchant",
+    "en_description": null,
+    "kr_title": "사범용무도복상인",
+    "kr_description": null
+  },
+  "103": {
+    "idx": "103",
+    "en_title": "Ninja Thief Garb Merchant",
+    "en_description": null,
+    "kr_title": "닌자용도적옷상인",
+    "kr_description": null
+  },
+  "104": {
+    "idx": "104",
+    "en_title": "Hunter Archer Garb Merchant",
+    "en_description": null,
+    "kr_title": "헌터용궁수옷상인",
+    "kr_description": null
+  },
+  "105": {
+    "idx": "105",
+    "en_title": "Wizard Robe Merchant",
+    "en_description": null,
+    "kr_title": "위자드마법복상인",
+    "kr_description": null
+  },
+  "106": {
+    "idx": "106",
+    "en_title": "Master Priest Vestment Merchant",
+    "en_description": null,
+    "kr_title": "마스터사제복상인",
+    "kr_description": null
+  },
+  "107": {
+    "idx": "107",
+    "en_title": "Seren Potion Merchant",
+    "en_description": null,
+    "kr_title": "세렌포션상인",
+    "kr_description": null
+  },
+  "108": {
+    "idx": "108",
+    "en_title": "Chibit",
+    "en_description": null,
+    "kr_title": "치빗",
+    "kr_description": null
+  },
+  "109": {
+    "idx": "109",
+    "en_title": "Lara",
+    "en_description": null,
+    "kr_title": "라라",
+    "kr_description": null
+  },
+  "110": {
+    "idx": "110",
+    "en_title": "Killycat",
+    "en_description": null,
+    "kr_title": "킬리캣",
+    "kr_description": null
+  },
+  "111": {
+    "idx": "111",
+    "en_title": "Dwicheori",
+    "en_description": "Habitat: Seren Plains\\nKnown as the street cleaner.\\nIt always carries a bone, and\\nuses it to strike.\\n",
+    "kr_title": "뒤철이",
+    "kr_description": "출몰지역 : 세렌초원\\n거리의 청소부로 불리며, 항상 \\n가지고 다니는 뼈다귀를 이용해 \\n공격한다.\\n"
+  },
+  "112": {
+    "idx": "112",
+    "en_title": "Musso Turtle",
+    "en_description": "Habitat: Seren Plains\\nA rhino crowned with a turtle's\\nshell. Beware the heavy strike\\nof its horn.\\n",
+    "kr_title": "무쏘거북",
+    "kr_description": "출몰지역 : 세렌초원\\n거북이의 등껍질을 가진 코뿔소. \\n코의 뿔로 묵직한 공격을 하므로 \\n조심하자.\\n"
+  },
+  "113": {
+    "idx": "113",
+    "en_title": "Pyodong",
+    "en_description": "Habitat: Seren Plains\\nA mutant leopard with a plump,\\nun-leopard-like build. Far more\\nnimble than it looks.",
+    "kr_title": "표동",
+    "kr_description": "출몰지역 : 세렌초원\\n표범의 변종으로 표범답지 않게 \\n통통한 몸매가 키포인트지만, 보\\n기와 다르게 민첩하다."
+  },
+  "114": {
+    "idx": "114",
+    "en_title": "Goliphant",
+    "en_description": "Habitat: Seren Plains\\nAn elephantine beast crowned with\\na hardened skull. It charges with\\nshocking speed for its size.",
+    "kr_title": "골리펀트",
+    "kr_description": "출몰지역 : 세렌초원\\n이마에 단단한 두개골을 쓰고 있는 \\n코끼리형 몬스터. 커다란 덩치와 함\\n께 빠른 속도로 돌진해온다."
+  },
+  "115": {
+    "idx": "115",
+    "en_title": "Leowolf",
+    "en_description": "Habitat: Seren Plains\\nKing of the Seren Plains. Swings\\nmassive fists and breathes fire.\\nA lion-wolf hybrid.",
+    "kr_title": "레오울프",
+    "kr_description": "출몰지역 : 세렌초원\\n세렌초원의 왕. 커다란 주먹을 \\n휘두르며 입에서 불을 뿜는다. \\n사자와 늑대의 변종."
+  },
+  "116": {
+    "idx": "116",
+    "en_title": "Driller Dudak",
+    "en_description": "Habitat: Mining Region\\nA villain riding a huge excavator.\\nWatch out for its extending drill.",
+    "kr_title": "드릴러두닥크",
+    "kr_description": "출몰지역 : 광산지역\\n커다란 굴삭기를 타고다니는 \\n악당 몬스터. 길게 늘어나는 \\n드릴을 조심하자."
+  },
+  "117": {
+    "idx": "117",
+    "en_title": "Garan Maria",
+    "en_description": null,
+    "kr_title": "가란마리아",
+    "kr_description": null
+  },
+  "118": {
+    "idx": "118",
+    "en_title": "Common Herb",
+    "en_description": null,
+    "kr_title": "흔한약초",
+    "kr_description": null
+  },
+  "119": {
+    "idx": "119",
+    "en_title": "Smithy",
+    "en_description": null,
+    "kr_title": "제련소",
+    "kr_description": null
+  },
+  "120": {
+    "idx": "120",
+    "en_title": "Alchemy Lab",
+    "en_description": null,
+    "kr_title": "연금술소",
+    "kr_description": null
+  },
+  "121": {
+    "idx": "121",
+    "en_title": "Enhancement Shop",
+    "en_description": null,
+    "kr_title": "강화소",
+    "kr_description": null
+  },
+  "122": {
+    "idx": "122",
+    "en_title": "Mystic Ore Vein",
+    "en_description": null,
+    "kr_title": "신비한광맥",
+    "kr_description": null
+  },
+  "123": {
+    "idx": "123",
+    "en_title": "Quality Herb",
+    "en_description": null,
+    "kr_title": "질좋은약초",
+    "kr_description": null
+  },
+  "124": {
+    "idx": "124",
+    "en_title": "Rare Herb",
+    "en_description": null,
+    "kr_title": "귀한약초",
+    "kr_description": null
+  },
+  "125": {
+    "idx": "125",
+    "en_title": "Mystic Herb",
+    "en_description": null,
+    "kr_title": "신비한약초",
+    "kr_description": null
+  },
+  "126": {
+    "idx": "126",
+    "en_title": "Rare Ore Vein",
+    "en_description": null,
+    "kr_title": "귀한광맥",
+    "kr_description": null
+  },
+  "127": {
+    "idx": "127",
+    "en_title": "Quality Ore Vein",
+    "en_description": null,
+    "kr_title": "질좋은광맥",
+    "kr_description": null
+  },
+  "128": {
+    "idx": "128",
+    "en_title": "Common Ore Vein",
+    "en_description": null,
+    "kr_title": "흔한광맥",
+    "kr_description": null
+  },
+  "129": {
+    "idx": "129",
+    "en_title": "Crafting & Smelting Master",
+    "en_description": null,
+    "kr_title": "조합제련마스터",
+    "kr_description": null
+  },
+  "130": {
+    "idx": "130",
+    "en_title": "Choco",
+    "en_description": null,
+    "kr_title": "초코",
+    "kr_description": null
+  },
+  "131": {
+    "idx": "131",
+    "en_title": "Captain Kid",
+    "en_description": null,
+    "kr_title": "캡틴키드",
+    "kr_description": null
+  },
+  "132": {
+    "idx": "132",
+    "en_title": "Baron",
+    "en_description": null,
+    "kr_title": "바론",
+    "kr_description": null
+  },
+  "133": {
+    "idx": "133",
+    "en_title": "Jjutumi",
+    "en_description": "Habitat: Aquatic City Serien\\nLowest deckhand of the Ukcu Pirates.\\nFavors a nasty ink attack.\\nAlways teased by the Haebarage,\\nso it wears a perpetual scowl.",
+    "kr_title": "쭈뚜미",
+    "kr_description": "출몰지역 : 수상도시 세리엔\\n욱크 해적단의 말단 선원.\\n기분나쁜 먹물공격이 특기이다.\\n해바라게에게 항상 놀림을 당해\\n항상 찌뿌뚱한 표정이다."
+  },
+  "134": {
+    "idx": "134",
+    "en_title": "Haebarage",
+    "en_description": "Habitat: Aquatic City Serien\\nA fighter of the Ukcu Pirates.\\nClad in a hard shell, it strikes\\nwith sharp spines and pincers.\\nKnown to 'adore' Jjutumi, the\\nyoungest of the crew.",
+    "kr_title": "해바라게",
+    "kr_description": "출몰지역 : 수상도시 세리엔\\n욱크해적단의 전투원.\\n단단한 껍질로 둘려쌓여져 있으며,\\n뾰족한 가시와 집게발로 공격한다.\\n욱크해적단의 막내인 쭈뚜미를 \\n귀여워(?)한다고 알려져있다."
+  },
+  "135": {
+    "idx": "135",
+    "en_title": "Jogae",
+    "en_description": "Habitat: Aquatic City Serien\\nGunner of the Ukcu Pirates.\\nFights mostly as long-range\\nsupport and joined the crew\\nalongside Haebarage. Quiet and\\ninscrutable, unlike the bratty\\nHaebarage.\\n",
+    "kr_title": "죠개",
+    "kr_description": "출몰지역 : 수상도시 세리엔\\n욱크해적단의 포수를 맡고 있다.\\n주로 원거리에서 보조로 지원하며,\\n해바라게와는 동기이다.\\n조금은 심술쟁이인 해바라게와는 달리\\n조용하고 속을 알 수 없는 성격이다.\\n"
+  },
+  "136": {
+    "idx": "136",
+    "en_title": "Madoros Gal",
+    "en_description": "Habitat: Aquatic City Serien\\nMadoros Gal, the pirate closest\\nto first mate of the Ukcu crew.\\nThe post is still vacant, and he\\nfights harder and dirtier than\\nanyone to claim it.",
+    "kr_title": "마도로스갈",
+    "kr_description": "출몰지역 : 수상도시 세리엔\\n욱크해적단의 부선장에 가장 가까운\\n위치인 마도로스 갈. \\n현재 부선장의 자리는 아직 비워있고,\\n부선장이 되기위해 누구보다도 \\n난폭하고 적극적으로 임하고 있다."
+  },
+  "137": {
+    "idx": "137",
+    "en_title": "Vile Captain Ukcu",
+    "en_description": "Habitat: Aquatic City Serien\\nCaptain of the Ukcu Pirates.\\nNotorious for his vile cunning.\\nLegend says he was once an\\nordinary seal until a cursed\\npirate captain's ghost reforged\\nhim as a pirate.\\n",
+    "kr_title": "비열한 욱크선장",
+    "kr_description": "출몰지역 : 수상도시 세리엔\\n욱크 해적단의 선장.\\n비열하기로 소문이 자자하다.\\n소문에 의하면 평범한 바다표범이었지만\\n어느날 저주받은 해적선장의 유령을\\n만난 후 해적으로서 다시 태어났다고 한다.\\n"
+  },
+  "138": {
+    "idx": "138",
+    "en_title": "Serien Potion Merchant",
+    "en_description": null,
+    "kr_title": "세리엔포션상인",
+    "kr_description": null
+  },
+  "139": {
+    "idx": "139",
+    "en_title": "Kkokko",
+    "en_description": "Habitat: Popola\\nKkokko, the obese chicken.\\nGreedy for food since birth, it\\nwas finally kicked out of the\\ncoop and now lives in the woods.\\n",
+    "kr_title": "꼭꼬",
+    "kr_description": "출몰지역 : 포폴라\\n비만닭 꼭꼬.\\n태어날때 부터 너무나 음식을 밝혀\\n결국 닭장에서 쫓겨나 숲에 서식하게\\n되었다고 한다.\\n"
+  },
+  "140": {
+    "idx": "140",
+    "en_title": "Gwiwon Dolsoe",
+    "en_description": "Habitat: Mt. Ohaeng\\nGwiwon Dolsoe, said to be a\\ntitan of strength. Loves chaff\\nand meat. Too dim-witted to\\nhandle tools or weapons like\\nthe other Gwiwon.",
+    "kr_title": "귀원돌쇠",
+    "kr_description": "출몰지역 : 오행산\\n힘이 장사라는 귀원돌쇠.\\n씰밥과 고기를 좋아한다.\\n지능이 떨어져서 다른 귀원들처럼\\n도구나 무기를 사용할 줄 모른다."
+  },
+  "141": {
+    "idx": "141",
+    "en_title": "Steel Brownie",
+    "en_description": "Habitat: Balderan.\\nPet of the scientist who built\\nBalderan's scrap monsters.\\nA preliminary prototype with\\nno real intelligence, said to\\nhouse the soul of a puppy.",
+    "kr_title": "쇳누렁이",
+    "kr_description": "출몰지역 : 발데란.\\n발데란의 고철몬스터들을 만든\\n과학자의 애완동물. \\n본격적인 실험에 들어가기 앞서 만든\\n실험작으로 별다른 지능은 없다.\\n강아지의 영혼을 담았다고 한다."
+  },
+  "142": {
+    "idx": "142",
+    "en_title": "Screwroid",
+    "en_description": "Habitat: Balderan\\nAnother experiment by the scrap\\nscientist, and the first humanoid\\nmodel. Two-legged walking works,\\nbut like the rest it has no soul\\nbreathed into it.",
+    "kr_title": "나사로이드",
+    "kr_description": "출몰지역 : 발데란\\n발데란의 고철몬스터를 만든 과학자의\\n또다른 실험작으로 최초의 인간형 고철이다.\\n두발로 이족보행을 하는데는 성공하였으나,\\n다른 고철들과 마찬가지로 감정을 불어넣는덴\\n실패하였다."
+  },
+  "143": {
+    "idx": "143",
+    "en_title": "Tteokdukkeopo",
+    "en_description": null,
+    "kr_title": "떡두꺼포",
+    "kr_description": null
+  },
+  "144": {
+    "idx": "144",
+    "en_title": "Gwangsap",
+    "en_description": null,
+    "kr_title": "광삽이",
+    "kr_description": null
+  },
+  "145": {
+    "idx": "145",
+    "en_title": "Chickigeon",
+    "en_description": "Habitat: Popola\\nA common bird seen all over\\nthe Popola region.\\nIt flaps about clumsily and\\nmakes a nuisance of itself.\\n",
+    "kr_title": "닭둘기",
+    "kr_description": "출몰지역 : 포폴라\\n포폴라 지역에서 \\n흔히 볼 수 있는 새.\\n뒤뚱뒤뚱 날아다니며 \\n주위에 민폐를 끼친다.\\n"
+  },
+  "146": {
+    "idx": "146",
+    "en_title": "Arena Keeper Yeoppo",
+    "en_description": null,
+    "kr_title": "무투장지기 엽포",
+    "kr_description": null
+  },
+  "147": {
+    "idx": "147",
+    "en_title": "Event Herald",
+    "en_description": null,
+    "kr_title": "이벤트알림이",
+    "kr_description": null
+  },
+  "148": {
+    "idx": "148",
+    "en_title": "Crooked Merchant Dwineuke",
+    "en_description": null,
+    "kr_title": "악덕상인 뒤느께",
+    "kr_description": null
+  },
+  "149": {
+    "idx": "149",
+    "en_title": "Mighty Ratsman",
+    "en_description": null,
+    "kr_title": "마이티랫츠맨",
+    "kr_description": null
+  },
+  "150": {
+    "idx": "150",
+    "en_title": "Mole Strong",
+    "en_description": null,
+    "kr_title": "몰 스트롱",
+    "kr_description": null
+  },
+  "151": {
+    "idx": "151",
+    "en_title": "Lullurella",
+    "en_description": null,
+    "kr_title": "룰루렐라",
+    "kr_description": null
+  },
+  "152": {
+    "idx": "152",
+    "en_title": "Underground Cavern Potion Merchant",
+    "en_description": null,
+    "kr_title": "지하동굴포션상인",
+    "kr_description": null
+  },
+  "153": {
+    "idx": "153",
+    "en_title": "Foot-Ear",
+    "en_description": "Habitat: Serien Underground Cavern\\nA monster of the Serien caverns.\\nNoted for foot-like ears atop\\nits head — its ear attacks are\\nsurprisingly dangerous.",
+    "kr_title": "발톡귀",
+    "kr_description": "출몰지역 : 세리엔 지하동굴\\n세리엔 지하동굴의 몬스터.\\n머리에 마치 발처럼 생긴 귀가 특징이며,\\n귀를 이용한 공격이 위협적이다."
+  },
+  "154": {
+    "idx": "154",
+    "en_title": "Battapon",
+    "en_description": "Habitat: Serien Underground Cavern\\nA pig-shaped monster of the caverns.\\nLoves baseball and practices its\\nswing as a hobby. Dreams of\\nhitting a home run someday!",
+    "kr_title": "빳따돈",
+    "kr_description": "출몰지역 : 세리엔 지하동굴\\n세리엔 지하동굴의 돼지형 몬스터.\\n야구를 좋아해 배팅연습을 하는 것이\\n취미이다. 언젠가 홈런을 치는 것이 목표!"
+  },
+  "155": {
+    "idx": "155",
+    "en_title": "Boxinyang",
+    "en_description": "Habitat: Serien Underground Cavern\\nA cat that climbed into a box out\\nof curiosity, only for the lid\\nto slam shut — now box and cat\\nare one. Reach for it thinking\\nit's a treasure chest and you\\nmay end up eaten.",
+    "kr_title": "빡스냥",
+    "kr_description": "출몰지역 : 세리엔 지하동굴\\n호기심에 상자에 들어갔다가 \\n상자가 닫혀버리는 통에 결국 상자와\\n함께하게된 고양이과 몬스터.\\n보물상자인줄 알고 D불리 손을 댔다간\\n잡아먹힐 수 있다."
+  },
+  "156": {
+    "idx": "156",
+    "en_title": "Quartz Bat",
+    "en_description": "Habitat: Serien Underground Cavern\\nGuardian of the Serien caverns.\\nOnce a statue protecting this\\nancient kingdom, said to have\\nrisen again to guard its king.",
+    "kr_title": "차돌박쥐",
+    "kr_description": "출몰지역 : 세리엔 지하동굴\\n세리엔 지하동굴의 지킴이.\\n본래 고대의 왕국이었던 이곳을\\n수호하던 석상으로 자신의 왕을\\n지키기 위해 부활하였다고 한다."
+  },
+  "157": {
+    "idx": "157",
+    "en_title": "King Frog",
+    "en_description": "Habitat: Serien Underground Cavern\\nThe Serien caverns are said to\\nbe an ancient kingdom. When a\\nterrible curse fell on the once\\nglorious realm, its people\\nbecame monsters, and the three\\nprinces who guarded it in the\\nking's absence were transformed\\ninto giant frogs...",
+    "kr_title": "왕소개굴",
+    "kr_description": "출몰지역 : 세리엔 지하동굴\\n고대의 왕국이었다고 전해지는 \\n세리엔 지하동굴. 찬란한 왕국이었던 \\n그곳에 무시무시한 저주가 내려졌고, \\n백성들은 몬스터가 되어버렸고,\\n왕의 부재중에 왕국을 지키던 세명의 \\n왕자들은 거대 개구리가 되었다고 하는데..."
+  },
+  "158": {
+    "idx": "158",
+    "en_title": "Water Frog",
+    "en_description": "Habitat: Serien Underground Cavern\\nThe Serien caverns are said to\\nbe an ancient kingdom. When a\\nterrible curse fell on the once\\nglorious realm, its people\\nbecame monsters, and the three\\nprinces who guarded it in the\\nking's absence were transformed\\ninto giant frogs...",
+    "kr_title": "물소개굴",
+    "kr_description": "출몰지역 : 세리엔 지하동굴\\n고대의 왕국이었다고 전해지는 \\n세리엔 지하동굴. 찬란한 왕국이었던 \\n그곳에 무시무시한 저주가 내려졌고, \\n백성들은 몬스터가 되어버렸고,\\n왕의 부재중에 왕국을 지키던 세명의 \\n왕자들은 거대 개구리가 되었다고 하는데..."
+  },
+  "159": {
+    "idx": "159",
+    "en_title": "Fire Frog",
+    "en_description": "Habitat: Serien Underground Cavern\\nThe Serien caverns are said to\\nbe an ancient kingdom. When a\\nterrible curse fell on the once\\nglorious realm, its people\\nbecame monsters, and the three\\nprinces who guarded it in the\\nking's absence were transformed\\ninto giant frogs...",
+    "kr_title": "불소개굴",
+    "kr_description": "출몰지역 : 세리엔 지하동굴\\n고대의 왕국이었다고 전해지는 \\n세리엔 지하동굴. 찬란한 왕국이었던 \\n그곳에 무시무시한 저주가 내려졌고, \\n백성들은 몬스터가 되어버렸고,\\n왕의 부재중에 왕국을 지키던 세명의 \\n왕자들은 거대 개구리가 되었다고 하는데..."
+  },
+  "160": {
+    "idx": "160",
+    "en_title": "Kendori",
+    "en_description": "Habitat: Amakusa\\nKendori, one of the guardian\\ndolls watching over Amakusa\\nvillage. Once it picks a target,\\nit pursues relentlessly.",
+    "kr_title": "검도리",
+    "kr_description": "출몰지역 : 아마쿠사\\n아마쿠사 마을을 지키는\\n수호인형 중 하나인 검도리.\\n한번 목표를 노리면 집요하게 추적한다."
+  },
+  "161": {
+    "idx": "161",
+    "en_title": "Pyodori",
+    "en_description": "Habitat: Amakusa\\nPyodori, one of the guardian\\ndolls watching over Amakusa\\nvillage. A master of shuriken\\nand a serious nuisance.",
+    "kr_title": "표도리",
+    "kr_description": "출몰지역 : 아마쿠사\\n아마쿠사 마을을 지키는\\n수호인형 중 하나인 표도리.\\n표창의 달인으로 매우 성가시다."
+  },
+  "162": {
+    "idx": "162",
+    "en_title": "Fren Aiga",
+    "en_description": null,
+    "kr_title": "프렌아이가",
+    "kr_description": null
+  },
+  "163": {
+    "idx": "163",
+    "en_title": "Neonaga",
+    "en_description": null,
+    "kr_title": "너나가",
+    "kr_description": null
+  },
+  "164": {
+    "idx": "164",
+    "en_title": "Lorella",
+    "en_description": null,
+    "kr_title": "로렐라",
+    "kr_description": null
+  },
+  "165": {
+    "idx": "165",
+    "en_title": "Bobby Dick",
+    "en_description": null,
+    "kr_title": "바비 딕",
+    "kr_description": null
+  },
+  "166": {
+    "idx": "166",
+    "en_title": "Kolbaengi",
+    "en_description": "Habitat: Sunken Ancient City\\nKolbaengi, a specialty of the\\nsunken city. Ugly to behold,\\nbut connoisseurs swear it makes\\nthe perfect drinking snack.",
+    "kr_title": "콜뱅이",
+    "kr_description": "출몰지역:수중고대도시\\n수중고대도시의 명물 콜뱅이.\\n겉보기엔 징그러워 보이지만\\n맛을 아는 미식가들에게는\\n안주거리로 그만이라고 전해진다."
+  },
+  "167": {
+    "idx": "167",
+    "en_title": "Gaebugi",
+    "en_description": "Habitat: Sunken Ancient City\\nThought to be an underwater\\nscout-robot of the ancients.\\nAfter the city sank, it lost\\nits master and now roams the\\nsea making mischief.",
+    "kr_title": "개부기",
+    "kr_description": "출몰지역:수중고대도시\\n옛 고대인의 수중정찰용 로봇이라고 \\n추정된다. 고대도시가 물에 잠긴후 \\n주인을 잃고 바닷속을 떠돌아 다니며\\n활개를 치고 있다."
+  },
+  "168": {
+    "idx": "168",
+    "en_title": "Bbokbbok",
+    "en_description": "Habitat: Sunken Ancient City\\nA puffer-fish-like monster with\\na swollen body. Its innards are\\npoisonous, so only an expert can\\nprepare it safely. Naturally,\\nthe gourmets love it.",
+    "kr_title": "뽁뽁",
+    "kr_description": "출몰지역:수중고대도시\\n빵빵하게 생긴 복어류의 몬스터.\\n내장에는 독성이 있다고 전해져\\n반드시 전문가의 손을 빌려야만 \\n식용으로 사용할 수 있다고 한다.\\n역시 미식가들이 좋아한다."
+  },
+  "169": {
+    "idx": "169",
+    "en_title": "Shakjjing",
+    "en_description": "Habitat: Sunken Ancient City\\nAn undersea thug clad in a\\nfearsome iron helm. One of the\\ndeadliest threats beneath the\\nwaves — yet to gourmets, it's\\njust shark-fin material.\\n",
+    "kr_title": "샥찡",
+    "kr_description": "출몰지역:수중고대도시\\n무시무시한 철갑투구를 두른\\n바다속의 깡패. 바닷속에서 가장 \\n경계해야 할 대상 중 하나이다.\\n그러나 역시 미식가들에겐\\n샥스핀으로 통하고 있다.\\n"
+  },
+  "170": {
+    "idx": "170",
+    "en_title": "Blue Shark",
+    "en_description": "Habitat: Sunken Ancient City\\nKnown as the brute of the deep.\\nIt rules every fish and monster\\nin the sunken city, and for\\nreasons unknown attacks any\\nintruder on sight.",
+    "kr_title": "블루샥",
+    "kr_description": "출몰지역:수중고대도시\\n바닷속의 난폭자라 불리우고 있다.\\n수중고대도시 속 모든 어류 및 몬스터\\n들을 지배하고 있으며, 무슨 이유에서\\n인지 고대도시에 접근하는 이들을 \\n무차별 공격하고 있다."
+  },
+  "171": {
+    "idx": "171",
+    "en_title": "Playroom Keeper Nori",
+    "en_description": null,
+    "kr_title": "놀이방지기 노리",
+    "kr_description": null
+  },
+  "172": {
+    "idx": "172",
+    "en_title": "Aquatic City Potion Merchant",
+    "en_description": null,
+    "kr_title": "수중도시포션상인",
+    "kr_description": null
+  },
+  "173": {
+    "idx": "173",
+    "en_title": "Frank",
+    "en_description": null,
+    "kr_title": "프랭크",
+    "kr_description": null
+  },
+  "174": {
+    "idx": "174",
+    "en_title": "Candle Crow",
+    "en_description": null,
+    "kr_title": "캔들크로우",
+    "kr_description": null
+  },
+  "175": {
+    "idx": "175",
+    "en_title": "River Witch",
+    "en_description": null,
+    "kr_title": "리버위치",
+    "kr_description": null
+  },
+  "176": {
+    "idx": "176",
+    "en_title": "Stro Zolly",
+    "en_description": "Habitat: Cursed Riverside\\nA mutant strawberry monster\\nsteeped in the riverside's evil\\naura. It believes its thick lips\\nare its best feature.",
+    "kr_title": "스트로 졸리",
+    "kr_description": "출몰지역 : 저주받은강가\\n저주받은 강가의 사악한 기운을\\n받은 변종 딸기 몬스터.\\n두꺼운 입술이 매력포인트\\n라고 스스로 생각하고 있다."
+  },
+  "177": {
+    "idx": "177",
+    "en_title": "Plamoth",
+    "en_description": "Habitat: Cursed Riverside\\nA giant mutant moth warped by\\nthe riverside's malign influence.\\nIt seems to gather ominous pollen\\nfrom somewhere and scatter it.",
+    "kr_title": "플라방",
+    "kr_description": "출몰지역 : 저주받은강가\\n저주받은 강가의 사악한 영향을\\n받아 거대해진 변종 나방 몬스터.\\n어딘가로부터 불길한 꽃가루를\\n받아와 뿌리고 있는 것으로 보인다."
+  },
+  "178": {
+    "idx": "178",
+    "en_title": "Mud Hook",
+    "en_description": "Habitat: Cursed Riverside\\nA mud monster born of vengeful\\nthoughts tangled in the cursed\\nmud. Bristling its mud into\\nsharp points like a hedgehog,\\nit earned the name Mud Hook.",
+    "kr_title": "머드훅",
+    "kr_description": "출몰지역 : 저주받은강가\\n저주받은 강가의 저주받은 진흙에\\n사념이 엉켜 만들어진 진흙 몬스터.\\n진흙을 날카롭게 세우는 모습이\\n마치 고슴도치같아 머드훅이라고\\n불리우고 있다."
+  },
+  "179": {
+    "idx": "179",
+    "en_title": "Ureong Turtle",
+    "en_description": "Habitat: Cursed Riverside\\nA mutant turtle grown huge from\\nthe riverside's evil aura. To\\nbe exact, a vengeful spirit has\\ntaken the shell in place of\\nits true owner.",
+    "kr_title": "우렁거북",
+    "kr_description": "출몰지역 : 저주받은강가\\n저주받은강가의 사악한 기운을 받아\\n거대해진 변종 거북이. 정확히는\\n원래 거북껍질의 주인 대신 원령의\\n사념체가 자리잡고 있다."
+  },
+  "180": {
+    "idx": "180",
+    "en_title": "Hamugi",
+    "en_description": "Habitat: Cursed Riverside\\nA grotesque creature stalking the\\ncursed river. The face of the\\nmighty hippopotamus on the body\\nof a serpent. It devours the\\nriver's spirits and sows chaos.",
+    "kr_title": "하무기",
+    "kr_description": "출몰지역 : 저주받은강가\\n저주받은강가에 출몰한 괴생명체.\\n지상 최강이라고 불리우는 하마의\\n얼굴에 뱀의 몸을 하고 있다.\\n저주받은 강가의 혼령들을 먹어치워\\n큰 혼란을 초래하고 있다."
+  },
+  "181": {
+    "idx": "181",
+    "en_title": "Moiba",
+    "en_description": null,
+    "kr_title": "모이바",
+    "kr_description": null
+  },
+  "182": {
+    "idx": "182",
+    "en_title": "Picky",
+    "en_description": null,
+    "kr_title": "픽키",
+    "kr_description": null
+  },
+  "183": {
+    "idx": "183",
+    "en_title": "Uli",
+    "en_description": null,
+    "kr_title": "울리",
+    "kr_description": null
+  },
+  "184": {
+    "idx": "184",
+    "en_title": "Chikapuka",
+    "en_description": null,
+    "kr_title": "치카푸카",
+    "kr_description": null
+  },
+  "185": {
+    "idx": "185",
+    "en_title": "Guriguri",
+    "en_description": null,
+    "kr_title": "구리구리",
+    "kr_description": null
+  },
+  "186": {
+    "idx": "186",
+    "en_title": "Hidden Forest Clearing",
+    "en_description": "Hunt down the forest bullies tormenting the villagers of Popola.",
+    "kr_title": "숨겨진숲속빈터",
+    "kr_description": "포폴라 마을 사람들을 괴롭히는 숲속의 불량배를 찾아 혼내주자."
+  },
+  "187": {
+    "idx": "187",
+    "en_title": "Forest Bully (Dungeon)",
+    "en_description": "An unknown monster has appeared,\\nspreading dread through the village.\\nWhat truly is this creature called\\nthe Bully of the Woods?!..",
+    "kr_title": "인던숲속의불량배",
+    "kr_description": "마을을 불안에 떨게하고 있는 \\n정체불명 몬스터가 나타났다.\\n숲속의 불량배라 불리우는\\n그 몬스터의 정체는 과연?!.."
+  },
+  "188": {
+    "idx": "188",
+    "en_title": "Blue Stone",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "블루스톤",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "189": {
+    "idx": "189",
+    "en_title": "Red Stone",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "레드스톤",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "190": {
+    "idx": "190",
+    "en_title": "Green Stone",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "그린스톤",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "191": {
+    "idx": "191",
+    "en_title": "Purple Stone",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "퍼플스톤",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "192": {
+    "idx": "192",
+    "en_title": "???",
+    "en_description": null,
+    "kr_title": "#NAME?",
+    "kr_description": null
+  },
+  "193": {
+    "idx": "193",
+    "en_title": "???",
+    "en_description": "Habitat: Mt. Ohaeng\\nA heavenly peach seed that drifted\\ndown to Mt. Ohaeng and became a\\nBoing Peach. Said to taste awful.\\n",
+    "kr_title": "#NAME?",
+    "kr_description": "출몰지역 : 오행산\\n천상의 복숭아 씨앗이 오행\\n산에 오게 되어 보잉피치가 \\n되었다. 맛은 없다고 한다.\\n"
+  },
+  "194": {
+    "idx": "194",
+    "en_title": "???",
+    "en_description": "Habitat: Mt. Ohaeng\\nA grunt of the Gwiwon King. Has\\nbasic training and can handle\\nsimple weapons.",
+    "kr_title": "#NAME?",
+    "kr_description": "출몰지역 : 오행산\\n귀원왕의 졸개로서, 기본적인 \\n학습이 되어있고 간단한 무기\\n를 다룰 줄 안다."
+  },
+  "195": {
+    "idx": "195",
+    "en_title": "???",
+    "en_description": "Habitat: Mt. Ohaeng\\nA heavenly peach seed that drifted\\ndown to Mt. Ohaeng and became a\\nBoing Peach. Said to taste awful.\\n",
+    "kr_title": "#NAME?",
+    "kr_description": "출몰지역 : 오행산\\n천상의 복숭아 씨앗이 오행\\n산에 오게 되어 보잉피치가 \\n되었다. 맛은 없다고 한다.\\n"
+  },
+  "196": {
+    "idx": "196",
+    "en_title": "Mt. Hwangcheon Entrance",
+    "en_description": "Hunt down the forest bullies tormenting the villagers of Popola.",
+    "kr_title": "황천의산입구",
+    "kr_description": "포폴라 마을 사람들을 괴롭히는 숲속의 불량배를 찾아 혼내주자."
+  },
+  "197": {
+    "idx": "197",
+    "en_title": "King of the Gwiwon",
+    "en_description": "The lair of the Gwiwon King,\\nlord of the apes threatening\\nMt. Ohaeng. Uncover the truth\\nbehind the 500-year-old legend\\nof the Gwiwon King — and the\\nsorrowful tale hidden inside it!\\n",
+    "kr_title": "귀원들의왕",
+    "kr_description": "오행산을 위협하는 귀원들의\\n우두머리 귀원왕의 본거지.\\n500년 묵은 전설의 원숭이라\\n불리우는 귀원왕의 정체와\\n전설 속에 숨은 슬픈 진실을\\n파헤쳐라!\\n"
+  },
+  "198": {
+    "idx": "198",
+    "en_title": "Wooden Crate 1",
+    "en_description": "Habitat: Balderan\\nA scrap-metal monster built by a\\nlone scientist. Its rapid rolling\\ncharge is genuinely dangerous.",
+    "kr_title": "나무상자1",
+    "kr_description": "출몰지역 : 발데란\\n한 과학자에 의해 탄생된 고철\\n몬스터. 때굴때굴 빠른 속도로 \\n다가오는 것이 위협적이다."
+  },
+  "199": {
+    "idx": "199",
+    "en_title": "Wooden Crate 2",
+    "en_description": "Habitat: Balderan\\nThe Brian Ball, a refined version\\nof the Iron Ball. Watch out for\\nits biting attack.",
+    "kr_title": "나무상자2",
+    "kr_description": "출몰지역 : 발데란\\n아이언볼이 조금 개량되어 \\n만들어진 브라이언볼. \\n깨물기공격을 조심하자."
+  },
+  "200": {
+    "idx": "200",
+    "en_title": "Wooden Crate 3",
+    "en_description": "Habitat: Balderan\\nThe Radian Ball is highly aggressive.\\nApproach carelessly and you'll be\\nbattered in no time, so stay alert.",
+    "kr_title": "나무상자3",
+    "kr_description": "출몰지역 : 발데란\\n레디언볼은 매우 공격적이므로 \\nD불리 다가가면 괜히 얻어맞기 \\n쉽상이니 조심하자."
+  },
+  "201": {
+    "idx": "201",
+    "en_title": "???",
+    "en_description": null,
+    "kr_title": "#NAME?",
+    "kr_description": null
+  },
+  "202": {
+    "idx": "202",
+    "en_title": "???",
+    "en_description": "Habitat: Balderan\\nForged from extremely hard scrap.\\nThe crushing weight of its massive\\nbody is no joke.",
+    "kr_title": "#NAME?",
+    "kr_description": "출몰지역 : 발데란\\n매우 단단한 고철로 이루어져 \\n있으며, 육중한 몸으로 가해오\\n는 압박은 장난이 아니다."
+  },
+  "203": {
+    "idx": "203",
+    "en_title": "Crater Transport Machine",
+    "en_description": "Hunt down the forest bullies tormenting the villagers of Popola.",
+    "kr_title": "분화구운송머신",
+    "kr_description": "포폴라 마을 사람들을 괴롭히는 숲속의 불량배를 찾아 혼내주자."
+  },
+  "204": {
+    "idx": "204",
+    "en_title": "Destroy the Ultimate Weapon",
+    "en_description": "A rogue AI robot has escaped\\nand is building its own army\\non Steel Mountain.\\nFor the peace of Balderan,\\ndestroy the machine!",
+    "kr_title": "최종병기파괴",
+    "kr_description": "인공지능 로봇이 탈주해\\n강철산에서 자신의 군대를\\n만들고 있다.\\n발데란의 평화를 위해\\n로봇을 해치워라!"
+  },
+  "205": {
+    "idx": "205",
+    "en_title": "Lucky Cube",
+    "en_description": null,
+    "kr_title": "럭키큐브",
+    "kr_description": null
+  },
+  "206": {
+    "idx": "206",
+    "en_title": "Random Cube",
+    "en_description": null,
+    "kr_title": "랜덤큐브",
+    "kr_description": null
+  },
+  "207": {
+    "idx": "207",
+    "en_title": "Deathmatch Reward",
+    "en_description": null,
+    "kr_title": "데스전장보상",
+    "kr_description": null
+  },
+  "208": {
+    "idx": "208",
+    "en_title": "Flag Battle Reward",
+    "en_description": null,
+    "kr_title": "깃발전장보상",
+    "kr_description": null
+  },
+  "209": {
+    "idx": "209",
+    "en_title": "Gem Battle Reward",
+    "en_description": null,
+    "kr_title": "보석전장보상",
+    "kr_description": null
+  },
+  "210": {
+    "idx": "210",
+    "en_title": "Guild War Reward",
+    "en_description": null,
+    "kr_title": "길드전보상",
+    "kr_description": null
+  },
+  "211": {
+    "idx": "211",
+    "en_title": "Mailbox",
+    "en_description": null,
+    "kr_title": "우체통",
+    "kr_description": null
+  },
+  "212": {
+    "idx": "212",
+    "en_title": "Gregory",
+    "en_description": null,
+    "kr_title": "그레고리",
+    "kr_description": null
+  },
+  "213": {
+    "idx": "213",
+    "en_title": "Scullina",
+    "en_description": null,
+    "kr_title": "스컬리나",
+    "kr_description": null
+  },
+  "214": {
+    "idx": "214",
+    "en_title": "Duran Marco",
+    "en_description": null,
+    "kr_title": "듀란마르코",
+    "kr_description": null
+  },
+  "215": {
+    "idx": "215",
+    "en_title": "Goldegi",
+    "en_description": null,
+    "kr_title": "골데기",
+    "kr_description": null
+  },
+  "216": {
+    "idx": "216",
+    "en_title": "Big Nail",
+    "en_description": null,
+    "kr_title": "빅네일",
+    "kr_description": null
+  },
+  "217": {
+    "idx": "217",
+    "en_title": "Nat Drus",
+    "en_description": null,
+    "kr_title": "낫드러스",
+    "kr_description": null
+  },
+  "218": {
+    "idx": "218",
+    "en_title": "Skullpansy",
+    "en_description": null,
+    "kr_title": "골팬지",
+    "kr_description": null
+  },
+  "219": {
+    "idx": "219",
+    "en_title": "Skullgoliath",
+    "en_description": null,
+    "kr_title": "해골리앗",
+    "kr_description": null
+  },
+  "220": {
+    "idx": "220",
+    "en_title": "Howling Boulder",
+    "en_description": null,
+    "kr_title": "울부짖는 바위",
+    "kr_description": null
+  },
+  "221": {
+    "idx": "221",
+    "en_title": "Sealed Equipment Chest",
+    "en_description": null,
+    "kr_title": "봉인된 장비함",
+    "kr_description": null
+  },
+  "222": {
+    "idx": "222",
+    "en_title": "Sanctuary in the Dark",
+    "en_description": null,
+    "kr_title": "어둠속의 성지",
+    "kr_description": null
+  },
+  "223": {
+    "idx": "223",
+    "en_title": "Bandungi",
+    "en_description": null,
+    "kr_title": "밴둥이",
+    "kr_description": null
+  },
+  "224": {
+    "idx": "224",
+    "en_title": "Poming",
+    "en_description": null,
+    "kr_title": "포밍",
+    "kr_description": null
+  },
+  "225": {
+    "idx": "225",
+    "en_title": "Sharot",
+    "en_description": null,
+    "kr_title": "샤롯",
+    "kr_description": null
+  },
+  "226": {
+    "idx": "226",
+    "en_title": "Poly",
+    "en_description": null,
+    "kr_title": "폴리",
+    "kr_description": null
+  },
+  "227": {
+    "idx": "227",
+    "en_title": "Wooden Trap",
+    "en_description": null,
+    "kr_title": "나무함정",
+    "kr_description": null
+  },
+  "228": {
+    "idx": "228",
+    "en_title": "Barricade",
+    "en_description": null,
+    "kr_title": "바리케이트",
+    "kr_description": null
+  },
+  "229": {
+    "idx": "229",
+    "en_title": "Fountain of Eternity",
+    "en_description": null,
+    "kr_title": "영원의 분수",
+    "kr_description": null
+  },
+  "230": {
+    "idx": "230",
+    "en_title": "Halloween Cube",
+    "en_description": null,
+    "kr_title": "할로윈큐브",
+    "kr_description": null
+  },
+  "231": {
+    "idx": "231",
+    "en_title": "Shiryosoni II",
+    "en_description": null,
+    "kr_title": "시려소니2세",
+    "kr_description": null
+  },
+  "232": {
+    "idx": "232",
+    "en_title": "Hwangcheon Great Sage",
+    "en_description": null,
+    "kr_title": "황천대성",
+    "kr_description": null
+  },
+  "233": {
+    "idx": "233",
+    "en_title": "Poison Blanca",
+    "en_description": null,
+    "kr_title": "포이즌블랑카",
+    "kr_description": null
+  },
+  "234": {
+    "idx": "234",
+    "en_title": "Hyper Punch Ball",
+    "en_description": null,
+    "kr_title": "하이퍼펀치볼",
+    "kr_description": null
+  },
+  "235": {
+    "idx": "235",
+    "en_title": "Leowolf King",
+    "en_description": null,
+    "kr_title": "레오울프킹",
+    "kr_description": null
+  },
+  "236": {
+    "idx": "236",
+    "en_title": "Driller Dudak King",
+    "en_description": null,
+    "kr_title": "드릴러두덕킹",
+    "kr_description": null
+  },
+  "237": {
+    "idx": "237",
+    "en_title": "Returned Captain Ukcu",
+    "en_description": null,
+    "kr_title": "돌아온욱크선장",
+    "kr_description": null
+  },
+  "238": {
+    "idx": "238",
+    "en_title": "Gold Frog",
+    "en_description": null,
+    "kr_title": "금소개굴",
+    "kr_description": null
+  },
+  "239": {
+    "idx": "239",
+    "en_title": "Red Shark",
+    "en_description": null,
+    "kr_title": "레드샥",
+    "kr_description": null
+  },
+  "240": {
+    "idx": "240",
+    "en_title": "King Weapon",
+    "en_description": null,
+    "kr_title": "왕무기",
+    "kr_description": null
+  },
+  "241": {
+    "idx": "241",
+    "en_title": "Skullius",
+    "en_description": null,
+    "kr_title": "해골리우스",
+    "kr_description": null
+  },
+  "242": {
+    "idx": "242",
+    "en_title": "Yagor Earth Dragon",
+    "en_description": null,
+    "kr_title": "야고르지룡",
+    "kr_description": null
+  },
+  "243": {
+    "idx": "243",
+    "en_title": "Love Cube",
+    "en_description": null,
+    "kr_title": "러브 큐브",
+    "kr_description": null
+  },
+  "244": {
+    "idx": "244",
+    "en_title": "Gift Box",
+    "en_description": null,
+    "kr_title": "선물상자",
+    "kr_description": null
+  },
+  "245": {
+    "idx": "245",
+    "en_title": "Lucky Pouch",
+    "en_description": null,
+    "kr_title": "복주머니",
+    "kr_description": null
+  },
+  "246": {
+    "idx": "246",
+    "en_title": "Cursed Riverside Potion Merchant",
+    "en_description": null,
+    "kr_title": "저주강가포션상인",
+    "kr_description": null
+  },
+  "247": {
+    "idx": "247",
+    "en_title": "Boulder",
+    "en_description": null,
+    "kr_title": "바위",
+    "kr_description": null
+  },
+  "248": {
+    "idx": "248",
+    "en_title": "Misty Forest Shiryosoni",
+    "en_description": "Habitat: Popola\\nA fierce monster from cold lands\\nwho brought the Kamikaji with him\\nwhen he moved to Popola.",
+    "kr_title": "안개숲시려소니",
+    "kr_description": "출몰지역 : 포폴라\\n추운 지방에서 카미카쥐를 \\n데리고 포폴라지역으로 온 \\n성격사나운 몬스터이다."
+  },
+  "249": {
+    "idx": "249",
+    "en_title": "Soft Dung",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "무른응가",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "250": {
+    "idx": "250",
+    "en_title": "Blue Dung",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "파란응가",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "251": {
+    "idx": "251",
+    "en_title": "Hardened Dung",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "굳응가",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "252": {
+    "idx": "252",
+    "en_title": "Bloody Dung",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "피응가",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "253": {
+    "idx": "253",
+    "en_title": "Stone Dung",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "돌응가",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "254": {
+    "idx": "254",
+    "en_title": "Misty Forest Poko",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "안개숲포코",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "255": {
+    "idx": "255",
+    "en_title": "Misty Forest Suta",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "안개숲수타",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "256": {
+    "idx": "256",
+    "en_title": "Misty Forest Bbonyang",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "안개숲뽀냥",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "257": {
+    "idx": "257",
+    "en_title": "Misty Forest Redugi",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "안개숲레둘기",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "258": {
+    "idx": "258",
+    "en_title": "Misty Forest Kamikaji",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "안개숲카미카쥐",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "259": {
+    "idx": "259",
+    "en_title": "Enraged Shiryosoni",
+    "en_description": "Habitat: Popola\\nA fierce monster from cold lands\\nwho brought the Kamikaji with him\\nwhen he moved to Popola.",
+    "kr_title": "화가난시려소니",
+    "kr_description": "출몰지역 : 포폴라\\n추운 지방에서 카미카쥐를 \\n데리고 포폴라지역으로 온 \\n성격사나운 몬스터이다."
+  },
+  "260": {
+    "idx": "260",
+    "en_title": "Hard Stone Dung",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "단단한돌응가",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "261": {
+    "idx": "261",
+    "en_title": "Solid Stone Dung",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "딴딴한돌응가",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "262": {
+    "idx": "262",
+    "en_title": "Sturdy Stone Dung",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "탄탄한돌응가",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "263": {
+    "idx": "263",
+    "en_title": "Misty Forest Sirunyang",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "안개숲시르냥",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "264": {
+    "idx": "264",
+    "en_title": "Misty Forest Poburi",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "안개숲포부리",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "265": {
+    "idx": "265",
+    "en_title": "Enraged Kamikaji",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "화가난카미카쥐",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "266": {
+    "idx": "266",
+    "en_title": "Gwiwon Cannon (Right)",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "귀원화포(우)",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "267": {
+    "idx": "267",
+    "en_title": "Cave Torch",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "동굴횃불",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "268": {
+    "idx": "268",
+    "en_title": "Gwiwon Wall 3",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "귀원벽3",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "269": {
+    "idx": "269",
+    "en_title": "Gwiwon Cannon (Left)",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "귀원화포(좌)",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "270": {
+    "idx": "270",
+    "en_title": "Falling Rock Trap",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "돌낙하함정",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "271": {
+    "idx": "271",
+    "en_title": "Zombie Peach",
+    "en_description": "Habitat: Mt. Ohaeng\\nA heavenly peach seed that drifted\\ndown to Mt. Ohaeng and became a\\nBoing Peach. Said to taste awful.\\n",
+    "kr_title": "좀비피치",
+    "kr_description": "출몰지역 : 오행산\\n천상의 복숭아 씨앗이 오행\\n산에 오게 되어 보잉피치가 \\n되었다. 맛은 없다고 한다.\\n"
+  },
+  "272": {
+    "idx": "272",
+    "en_title": "Quick Peach",
+    "en_description": "Habitat: Mt. Ohaeng\\nA heavenly peach seed that drifted\\ndown to Mt. Ohaeng and became a\\nBoing Peach. Said to taste awful.\\n",
+    "kr_title": "퀵피치",
+    "kr_description": "출몰지역 : 오행산\\n천상의 복숭아 씨앗이 오행\\n산에 오게 되어 보잉피치가 \\n되었다. 맛은 없다고 한다.\\n"
+  },
+  "273": {
+    "idx": "273",
+    "en_title": "Zombie Dumpling",
+    "en_description": "Habitat: Mt. Ohaeng\\nA pig monster shaped like a dumpling.\\nGentle in nature, but its hefty bulk\\nis already a deadly weapon.",
+    "kr_title": "좀비만두",
+    "kr_description": "출몰지역 : 오행산\\n만두처럼 생긴 돼지몬스터이다.\\n성격은 온순하지만 푸짐한 덩치\\n가 이미 흉기다."
+  },
+  "274": {
+    "idx": "274",
+    "en_title": "Sichuan Dumpling",
+    "en_description": "Habitat: Mt. Ohaeng\\nA pig monster shaped like a dumpling.\\nGentle in nature, but its hefty bulk\\nis already a deadly weapon.",
+    "kr_title": "사천만두",
+    "kr_description": "출몰지역 : 오행산\\n만두처럼 생긴 돼지몬스터이다.\\n성격은 온순하지만 푸짐한 덩치\\n가 이미 흉기다."
+  },
+  "275": {
+    "idx": "275",
+    "en_title": "Suryeomdong Gwiwon Grunt",
+    "en_description": "Habitat: Mt. Ohaeng\\nA grunt of the Gwiwon King. Has\\nbasic training and can handle\\nsimple weapons.",
+    "kr_title": "수렴동귀원졸개",
+    "kr_description": "출몰지역 : 오행산\\n귀원왕의 졸개로서, 기본적인 \\n학습이 되어있고 간단한 무기\\n를 다룰 줄 안다."
+  },
+  "276": {
+    "idx": "276",
+    "en_title": "Suryeomdong Gwiwon Staff Fighter",
+    "en_description": "Habitat: Mt. Ohaeng\\nA grunt of the Gwiwon King. Has\\nbasic training and can handle\\nsimple weapons.",
+    "kr_title": "수렴동귀원봉술사",
+    "kr_description": "출몰지역 : 오행산\\n귀원왕의 졸개로서, 기본적인 \\n학습이 되어있고 간단한 무기\\n를 다룰 줄 안다."
+  },
+  "277": {
+    "idx": "277",
+    "en_title": "Suryeomdong Gwiwon Sergeant",
+    "en_description": "Habitat: Mt. Ohaeng\\nA Gwiwon Sergeant who picked up\\nShaolin martial arts by watching.\\nClumsy but quick.",
+    "kr_title": "수렴동귀원병장",
+    "kr_description": "출몰지역 : 오행산\\n소림사 정통 무술을 곁눈질로 \\n배운 귀윈병장. \\n어설프지만 민첩하다."
+  },
+  "278": {
+    "idx": "278",
+    "en_title": "Suryeomdong Gwiwon Acolyte",
+    "en_description": "Habitat: Mt. Ohaeng\\nA Gwiwon Sergeant who picked up\\nShaolin martial arts by watching.\\nClumsy but quick.",
+    "kr_title": "수렴동귀원동자",
+    "kr_description": "출몰지역 : 오행산\\n소림사 정통 무술을 곁눈질로 \\n배운 귀윈병장. \\n어설프지만 민첩하다."
+  },
+  "279": {
+    "idx": "279",
+    "en_title": "Suryeomdong Gwiwon Captain",
+    "en_description": "Habitat: Mt. Ohaeng\\nThe captain of the monkeys who\\ncommands the Gwiwon King's grunts.\\nNot the brightest of the bunch.",
+    "kr_title": "수렴동귀원대장",
+    "kr_description": "출몰지역 : 오행산\\n귀원왕 주변에서 졸개들을 \\n부리는 원숭이들의 대장. \\n머리는 썩 좋은 편이 아니다."
+  },
+  "280": {
+    "idx": "280",
+    "en_title": "Suryeomdong Gwiwon Wind General",
+    "en_description": "Habitat: Mt. Ohaeng\\nThe captain of the monkeys who\\ncommands the Gwiwon King's grunts.\\nNot the brightest of the bunch.",
+    "kr_title": "수렴동귀원풍장",
+    "kr_description": "출몰지역 : 오행산\\n귀원왕 주변에서 졸개들을 \\n부리는 원숭이들의 대장. \\n머리는 썩 좋은 편이 아니다."
+  },
+  "281": {
+    "idx": "281",
+    "en_title": "Suryeomdong Gwiwon Dolsoe",
+    "en_description": "Habitat: Mt. Ohaeng\\nGwiwon Dolsoe, said to be a\\ntitan of strength. Loves chaff\\nand meat. Too dim-witted to\\nhandle tools or weapons like\\nthe other Gwiwon.",
+    "kr_title": "수렴동귀원돌쇠",
+    "kr_description": "출몰지역 : 오행산\\n힘이 장사라는 귀원돌쇠.\\n씰밥과 고기를 좋아한다.\\n지능이 떨어져서 다른 귀원들처럼\\n도구나 무기를 사용할 줄 모른다."
+  },
+  "282": {
+    "idx": "282",
+    "en_title": "Suryeomdong Gwiwon Yardman",
+    "en_description": null,
+    "kr_title": "수렴동귀원마당쇠",
+    "kr_description": null
+  },
+  "283": {
+    "idx": "283",
+    "en_title": "Arcane Gwiwon King",
+    "en_description": "Habitat: Mt. Ohaeng\\nLord of the Gwiwon. Forced to\\nwear the golden headband by a\\nwicked rogue monk, he turned\\nferocious.",
+    "kr_title": "마력의 귀원왕",
+    "kr_description": "출몰지역 : 오행산\\n귀원들의 우두머리. 오행산에 갑자\\n기 나타난 나쁜 파계승에 의해 금고\\n아가 씌워지고 흉폭해졌다."
+  },
+  "284": {
+    "idx": "284",
+    "en_title": "Gwiwon King Clone",
+    "en_description": "Habitat: Mt. Ohaeng\\nLord of the Gwiwon. Forced to\\nwear the golden headband by a\\nwicked rogue monk, he turned\\nferocious.",
+    "kr_title": "귀원왕분신",
+    "kr_description": "출몰지역 : 오행산\\n귀원들의 우두머리. 오행산에 갑자\\n기 나타난 나쁜 파계승에 의해 금고\\n아가 씌워지고 흉폭해졌다."
+  },
+  "285": {
+    "idx": "285",
+    "en_title": "Arcane Device",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "마력장치",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "286": {
+    "idx": "286",
+    "en_title": "Dungeon Ana Johnson",
+    "en_description": null,
+    "kr_title": "인던아나 쟌슨",
+    "kr_description": null
+  },
+  "287": {
+    "idx": "287",
+    "en_title": "Gwiwon Wall 1",
+    "en_description": null,
+    "kr_title": "귀원벽1",
+    "kr_description": null
+  },
+  "288": {
+    "idx": "288",
+    "en_title": "Gwiwon Wall 2",
+    "en_description": null,
+    "kr_title": "귀원벽2",
+    "kr_description": null
+  },
+  "289": {
+    "idx": "289",
+    "en_title": "Steel Bulldog",
+    "en_description": "Habitat: Balderan.\\nPet of the scientist who built\\nBalderan's scrap monsters.\\nA preliminary prototype with\\nno real intelligence, said to\\nhouse the soul of a puppy.",
+    "kr_title": "쇳불독",
+    "kr_description": "출몰지역 : 발데란.\\n발데란의 고철몬스터들을 만든\\n과학자의 애완동물. \\n본격적인 실험에 들어가기 앞서 만든\\n실험작으로 별다른 지능은 없다.\\n강아지의 영혼을 담았다고 한다."
+  },
+  "290": {
+    "idx": "290",
+    "en_title": "Iron Ball MK2",
+    "en_description": "Habitat: Balderan\\nA scrap-metal monster built by a\\nlone scientist. Its rapid rolling\\ncharge is genuinely dangerous.",
+    "kr_title": "아이언볼MK2",
+    "kr_description": "출몰지역 : 발데란\\n한 과학자에 의해 탄생된 고철\\n몬스터. 때굴때굴 빠른 속도로 \\n다가오는 것이 위협적이다."
+  },
+  "291": {
+    "idx": "291",
+    "en_title": "Bolku",
+    "en_description": "Habitat: Balderan\\nThe Brian Ball, a refined version\\nof the Iron Ball. Watch out for\\nits biting attack.",
+    "kr_title": "볼쿠",
+    "kr_description": "출몰지역 : 발데란\\n아이언볼이 조금 개량되어 \\n만들어진 브라이언볼. \\n깨물기공격을 조심하자."
+  },
+  "292": {
+    "idx": "292",
+    "en_title": "Quaker Ball",
+    "en_description": "Habitat: Balderan\\nThe Radian Ball is highly aggressive.\\nApproach carelessly and you'll be\\nbattered in no time, so stay alert.",
+    "kr_title": "퀘이커볼",
+    "kr_description": "출몰지역 : 발데란\\n레디언볼은 매우 공격적이므로 \\nD불리 다가가면 괜히 얻어맞기 \\n쉽상이니 조심하자."
+  },
+  "293": {
+    "idx": "293",
+    "en_title": "Elecroid",
+    "en_description": null,
+    "kr_title": "일렉로이드",
+    "kr_description": null
+  },
+  "294": {
+    "idx": "294",
+    "en_title": "The King Golem",
+    "en_description": "Habitat: Balderan\\nForged from extremely hard scrap.\\nThe crushing weight of its massive\\nbody is no joke.",
+    "kr_title": "더킹골렘",
+    "kr_description": "출몰지역 : 발데란\\n매우 단단한 고철로 이루어져 \\n있으며, 육중한 몸으로 가해오\\n는 압박은 장난이 아니다."
+  },
+  "295": {
+    "idx": "295",
+    "en_title": "Electric Trap 1",
+    "en_description": null,
+    "kr_title": "전기함정1",
+    "kr_description": null
+  },
+  "296": {
+    "idx": "296",
+    "en_title": "Electric Trap 2",
+    "en_description": null,
+    "kr_title": "전기함정2",
+    "kr_description": null
+  },
+  "297": {
+    "idx": "297",
+    "en_title": "Short-Circuit Zone",
+    "en_description": null,
+    "kr_title": "누전지역",
+    "kr_description": null
+  },
+  "298": {
+    "idx": "298",
+    "en_title": "Improved Iron Ball",
+    "en_description": "Habitat: Balderan\\nA scrap-metal monster built by a\\nlone scientist. Its rapid rolling\\ncharge is genuinely dangerous.",
+    "kr_title": "개량된아이언볼",
+    "kr_description": "출몰지역 : 발데란\\n한 과학자에 의해 탄생된 고철\\n몬스터. 때굴때굴 빠른 속도로 \\n다가오는 것이 위협적이다."
+  },
+  "299": {
+    "idx": "299",
+    "en_title": "Improved Brian Ball",
+    "en_description": "Habitat: Balderan\\nThe Brian Ball, a refined version\\nof the Iron Ball. Watch out for\\nits biting attack.",
+    "kr_title": "개량된브라이언볼",
+    "kr_description": "출몰지역 : 발데란\\n아이언볼이 조금 개량되어 \\n만들어진 브라이언볼. \\n깨물기공격을 조심하자."
+  },
+  "300": {
+    "idx": "300",
+    "en_title": "Improved Radian Ball",
+    "en_description": "Habitat: Balderan\\nThe Radian Ball is highly aggressive.\\nApproach carelessly and you'll be\\nbattered in no time, so stay alert.",
+    "kr_title": "개량된레디언볼",
+    "kr_description": "출몰지역 : 발데란\\n레디언볼은 매우 공격적이므로 \\nD불리 다가가면 괜히 얻어맞기 \\n쉽상이니 조심하자."
+  },
+  "301": {
+    "idx": "301",
+    "en_title": "Improved Scrap Golem",
+    "en_description": "Habitat: Balderan\\nForged from extremely hard scrap.\\nThe crushing weight of its massive\\nbody is no joke.",
+    "kr_title": "개량된고철골램",
+    "kr_description": "출몰지역 : 발데란\\n매우 단단한 고철로 이루어져 \\n있으며, 육중한 몸으로 가해오\\n는 압박은 장난이 아니다."
+  },
+  "302": {
+    "idx": "302",
+    "en_title": "Improved Steel Brownie",
+    "en_description": "Habitat: Balderan.\\nPet of the scientist who built\\nBalderan's scrap monsters.\\nA preliminary prototype with\\nno real intelligence, said to\\nhouse the soul of a puppy.",
+    "kr_title": "개량된쇳누렁이",
+    "kr_description": "출몰지역 : 발데란.\\n발데란의 고철몬스터들을 만든\\n과학자의 애완동물. \\n본격적인 실험에 들어가기 앞서 만든\\n실험작으로 별다른 지능은 없다.\\n강아지의 영혼을 담았다고 한다."
+  },
+  "303": {
+    "idx": "303",
+    "en_title": "???",
+    "en_description": "Habitat: Balderan\\nThe scientist's final ultimate weapon.\\nFires cannon shots from its mouth\\nand strikes with brutal steel arms.",
+    "kr_title": "#NAME?",
+    "kr_description": "출몰지역 : 발데란\\n과학자의 마지막 최종병기로 입에선 \\n대포가 나가며, 무지막지한 강철팔로 \\n공격한다."
+  },
+  "304": {
+    "idx": "304",
+    "en_title": "Repaired Steel Bulldog",
+    "en_description": "Habitat: Balderan.\\nPet of the scientist who built\\nBalderan's scrap monsters.\\nA preliminary prototype with\\nno real intelligence, said to\\nhouse the soul of a puppy.",
+    "kr_title": "수리된쇳불독",
+    "kr_description": "출몰지역 : 발데란.\\n발데란의 고철몬스터들을 만든\\n과학자의 애완동물. \\n본격적인 실험에 들어가기 앞서 만든\\n실험작으로 별다른 지능은 없다.\\n강아지의 영혼을 담았다고 한다."
+  },
+  "305": {
+    "idx": "305",
+    "en_title": "Repaired Quaker Ball",
+    "en_description": "Habitat: Balderan\\nThe Radian Ball is highly aggressive.\\nApproach carelessly and you'll be\\nbattered in no time, so stay alert.",
+    "kr_title": "수리된퀘이커볼",
+    "kr_description": "출몰지역 : 발데란\\n레디언볼은 매우 공격적이므로 \\nD불리 다가가면 괜히 얻어맞기 \\n쉽상이니 조심하자."
+  },
+  "306": {
+    "idx": "306",
+    "en_title": "Land Net 1",
+    "en_description": "Habitat: Balderan\\nThe Radian Ball is highly aggressive.\\nApproach carelessly and you'll be\\nbattered in no time, so stay alert.",
+    "kr_title": "랜드넷1",
+    "kr_description": "출몰지역 : 발데란\\n레디언볼은 매우 공격적이므로 \\nD불리 다가가면 괜히 얻어맞기 \\n쉽상이니 조심하자."
+  },
+  "307": {
+    "idx": "307",
+    "en_title": "Land Net 2",
+    "en_description": "Habitat: Balderan\\nThe Radian Ball is highly aggressive.\\nApproach carelessly and you'll be\\nbattered in no time, so stay alert.",
+    "kr_title": "랜드넷2",
+    "kr_description": "출몰지역 : 발데란\\n레디언볼은 매우 공격적이므로 \\nD불리 다가가면 괜히 얻어맞기 \\n쉽상이니 조심하자."
+  },
+  "308": {
+    "idx": "308",
+    "en_title": "Security Device",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "보안장치",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "309": {
+    "idx": "309",
+    "en_title": "Balderan Cannon (Right)",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "발데라포(우)",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "310": {
+    "idx": "310",
+    "en_title": "Balderan Cannon (Left)",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "발데라포(좌)",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "311": {
+    "idx": "311",
+    "en_title": "Balderan Cannon (Top)",
+    "en_description": "Habitat: Popola\\nRumor says its true form is a seed\\nbound by a wicked mage's soul-binding spell.",
+    "kr_title": "발데라포(상)",
+    "kr_description": "출몰지역 : 포폴라\\n진짜 정체는 사악한 마법사에 \\n의해 소혼마법이 걸린 씨앗이\\n라는 소문이 있다."
+  },
+  "312": {
+    "idx": "312",
+    "en_title": "Gwiwon King",
+    "en_description": "Habitat: Mt. Ohaeng\\nLord of the Gwiwon. Forced to\\nwear the golden headband by a\\nwicked rogue monk, he turned\\nferocious.",
+    "kr_title": "귀원왕",
+    "kr_description": "출몰지역 : 오행산\\n귀원들의 우두머리. 오행산에 갑자\\n기 나타난 나쁜 파계승에 의해 금고\\n아가 씌워지고 흉폭해졌다."
+  },
+  "313": {
+    "idx": "313",
+    "en_title": "Mu-Poko",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "무포코",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "314": {
+    "idx": "314",
+    "en_title": "Half-Beaten Mu-Poko",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "덜맞은무포코",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "315": {
+    "idx": "315",
+    "en_title": "Gullible Steel Rabbit",
+    "en_description": "Habitat: Popola\\nPoko, rumored bully of the woods.\\nIn truth gentle and timid, but\\nmisjudged because of his looks.",
+    "kr_title": "귀얇은강토끼",
+    "kr_description": "출몰지역 : 포폴라\\n숲의 난폭꾼으로 소문난 포고. \\n사실은 착하고 여리지만 타고\\n난 외모때문에 오해를 받고 있다."
+  },
+  "316": {
+    "idx": "316",
+    "en_title": "Tutorial",
+    "en_description": "An unknown monster has appeared,\\nspreading dread through the village.\\nWhat truly is this creature called\\nthe Bully of the Woods?!..",
+    "kr_title": "뚜또리얼",
+    "kr_description": "마을을 불안에 떨게하고 있는 \\n정체불명 몬스터가 나타났다.\\n숲속의 불량배라 불리우는\\n그 몬스터의 정체는 과연?!.."
+  },
+  "317": {
+    "idx": "317",
+    "en_title": "Hidden Forest",
+    "en_description": "Hunt down the forest bullies tormenting the villagers of Popola.",
+    "kr_title": "숨겨진숲",
+    "kr_description": "포폴라 마을 사람들을 괴롭히는 숲속의 불량배를 찾아 혼내주자."
+  },
+  "318": {
+    "idx": "318",
+    "en_title": "Cute Soni",
+    "en_description": null,
+    "kr_title": "귀여소니",
+    "kr_description": null
+  },
+  "319": {
+    "idx": "319",
+    "en_title": "Insect Hat Cube",
+    "en_description": null,
+    "kr_title": "곤충모자큐브",
+    "kr_description": null
+  }
+}

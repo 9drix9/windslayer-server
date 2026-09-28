@@ -1,0 +1,1602 @@
+{
+  "2401": {
+    "en_title": "Dragon Kick",
+    "en_text": "Performs a flying dragon kick forward."
+  },
+  "2402": {
+    "en_title": "Dragon Kick",
+    "en_text": "Performs a flying dragon kick forward."
+  },
+  "2403": {
+    "en_title": "Dragon Kick",
+    "en_text": "Performs a flying dragon kick forward."
+  },
+  "2404": {
+    "en_title": "Dragon Kick",
+    "en_text": "Performs a flying dragon kick forward."
+  },
+  "2405": {
+    "en_title": "Dragon Kick",
+    "en_text": "Performs a flying dragon kick forward."
+  },
+  "2406": {
+    "en_title": "Dragon Kick",
+    "en_text": "Performs a flying dragon kick forward."
+  },
+  "2407": {
+    "en_title": "Dragon Kick",
+    "en_text": "Performs a flying dragon kick forward."
+  },
+  "2408": {
+    "en_title": "Dragon Kick",
+    "en_text": "Performs a flying dragon kick forward."
+  },
+  "2409": {
+    "en_title": "Dragon Kick",
+    "en_text": "Performs a flying dragon kick forward."
+  },
+  "2410": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration.\n\nFrom: Martial Artist Skill Master"
+  },
+  "2411": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2412": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2413": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2414": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2415": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2416": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2417": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2418": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2419": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2420": {
+    "en_title": "Iron Body",
+    "en_text": "Raises physical and elemental defense for a duration."
+  },
+  "2421": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks.\n\nFrom: Martial Artist Skill Master"
+  },
+  "2422": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2423": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2424": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2425": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2426": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2427": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2428": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2429": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2430": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2431": {
+    "en_title": "Estimation Kick",
+    "en_text": "A kick that ignores the target's ranged attacks."
+  },
+  "2432": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds.\n\nFrom: Martial Artist Skill Master"
+  },
+  "2433": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2434": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2435": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2436": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2437": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2438": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2439": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2440": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2441": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2442": {
+    "en_title": "Vital Point Strike",
+    "en_text": "Strikes a vital point. The target takes heavy damage after 5 seconds."
+  },
+  "2443": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels.\n\nFrom: Archer Skill Master"
+  },
+  "2444": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2445": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2446": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2447": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2448": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2449": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2450": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2451": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2452": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2453": {
+    "en_title": "Piercing Arrow",
+    "en_text": "Fires a powerful arrow that pierces through enemies. Pierces more targets at higher levels."
+  },
+  "2454": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy.\n\nFrom: Archer Skill Master"
+  },
+  "2455": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2456": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2457": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2458": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2459": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2460": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2461": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2462": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2463": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2464": {
+    "en_title": "Poison Arrow",
+    "en_text": "Fires a poisoned arrow, poisoning the enemy."
+  },
+  "2465": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin.\n\nFrom: Archer Skill Master"
+  },
+  "2466": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2467": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2468": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2469": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2470": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2471": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2472": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2473": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2474": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2475": {
+    "en_title": "Sniper Shot",
+    "en_text": "Fires an arrow that flies so far the enemy cannot trace its origin."
+  },
+  "2476": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead.\n\nFrom: Archer Skill Master"
+  },
+  "2477": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2478": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2479": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2480": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2481": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2482": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2483": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2484": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2485": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2486": {
+    "en_title": "Arrow Shower",
+    "en_text": "Rains arrows down upon the area ahead."
+  },
+  "2487": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it.\n\nFrom: Archer Skill Master"
+  },
+  "2488": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2489": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2490": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2491": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2492": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2493": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2494": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2495": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2496": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2497": {
+    "en_title": "Soul Shot",
+    "en_text": "Fires one mighty arrow with all of your soul behind it."
+  },
+  "2498": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time. Use Sic 'em! to activate.\n\nFrom: Archer Skill Master"
+  },
+  "2499": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time. Use Sic 'em! to activate."
+  },
+  "2500": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time."
+  },
+  "2501": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time."
+  },
+  "2502": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time."
+  },
+  "2503": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time."
+  },
+  "2504": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time."
+  },
+  "2505": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time."
+  },
+  "2506": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time."
+  },
+  "2507": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time."
+  },
+  "2508": {
+    "en_title": "Roar Dog",
+    "en_text": "Summons a Roar Dog. It bites the target, dealing damage over time."
+  },
+  "2509": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames. Use Sic 'em! to activate.\n\nFrom: Archer Skill Master"
+  },
+  "2510": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames. Use Sic 'em! to activate."
+  },
+  "2511": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames."
+  },
+  "2512": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames."
+  },
+  "2513": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames."
+  },
+  "2514": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames."
+  },
+  "2515": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames."
+  },
+  "2516": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames."
+  },
+  "2517": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames."
+  },
+  "2518": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames."
+  },
+  "2519": {
+    "en_title": "Burst Eagle",
+    "en_text": "Summons a Burst Eagle. It charges the target with blazing flames."
+  },
+  "2520": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed. Use Sic 'em! to activate.\n\nFrom: Archer Skill Master"
+  },
+  "2521": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed. Use Sic 'em! to activate."
+  },
+  "2522": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed."
+  },
+  "2523": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed."
+  },
+  "2524": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed."
+  },
+  "2525": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed."
+  },
+  "2526": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed."
+  },
+  "2527": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed."
+  },
+  "2528": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed."
+  },
+  "2529": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed."
+  },
+  "2530": {
+    "en_title": "Slothy",
+    "en_text": "Summons a Slothy. It clings to enemies, lowering their defense and movement speed."
+  },
+  "2531": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster. Use Sic 'em! to activate.\n\nFrom: Archer Skill Master"
+  },
+  "2532": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster. Use Sic 'em! to activate."
+  },
+  "2533": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster."
+  },
+  "2534": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster."
+  },
+  "2535": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster."
+  },
+  "2536": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster."
+  },
+  "2537": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster."
+  },
+  "2538": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster."
+  },
+  "2539": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster."
+  },
+  "2540": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster."
+  },
+  "2541": {
+    "en_title": "Tough Bear",
+    "en_text": "Summons a Tough Bear. It delivers a heavy blow in front of the Beastmaster."
+  },
+  "2542": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path. Use Sic 'em! to activate.\n\nFrom: Archer Skill Master"
+  },
+  "2543": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path. Use Sic 'em! to activate."
+  },
+  "2544": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path."
+  },
+  "2545": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path."
+  },
+  "2546": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path."
+  },
+  "2547": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path."
+  },
+  "2548": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path."
+  },
+  "2549": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path."
+  },
+  "2550": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path."
+  },
+  "2551": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path."
+  },
+  "2552": {
+    "en_title": "Cutie Phant",
+    "en_text": "Summons a Cutie Phant. It charges forward, attacking enemies in its path."
+  },
+  "2553": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed.\n\nFrom: Thief Skill Master"
+  },
+  "2554": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2555": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2556": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2557": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2558": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2559": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2560": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2561": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2562": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2563": {
+    "en_title": "Assassinate",
+    "en_text": "Slashes past the target at high speed."
+  },
+  "2564": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration.\n\nFrom: Thief Skill Master"
+  },
+  "2565": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2566": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2567": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2568": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2569": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2570": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2571": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2572": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2573": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2574": {
+    "en_title": "Blindfold",
+    "en_text": "Steals the target's sight, blinding them for a duration."
+  },
+  "2575": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker.\n\nFrom: Thief Skill Master"
+  },
+  "2576": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2577": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2578": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2579": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2580": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2581": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2582": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2583": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2584": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2585": {
+    "en_title": "Switch",
+    "en_text": "When attacked, swap with a wooden log and reappear behind the attacker."
+  },
+  "2586": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair.\n\nFrom: Thief Skill Master"
+  },
+  "2587": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2588": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2589": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2590": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2591": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2592": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2593": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2594": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2595": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2596": {
+    "en_title": "Aerial Shuriken",
+    "en_text": "Hurls shuriken in multiple directions from midair."
+  },
+  "2597": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust.\n\nFrom: Thief Skill Master"
+  },
+  "2598": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2599": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2600": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2601": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2602": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2603": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2604": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2605": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2606": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2607": {
+    "en_title": "Lightning Annihilation",
+    "en_text": "Dashes at the target with great speed and unleashes a powerful thrust."
+  },
+  "2608": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field.\n\nFrom: Thief Skill Master"
+  },
+  "2609": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2610": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2611": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2612": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2613": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2614": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2615": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2616": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2617": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2618": {
+    "en_title": "Booby Trap",
+    "en_text": "Plants an invisible bomb on the field."
+  },
+  "2619": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration.\n\nFrom: Thief Skill Master"
+  },
+  "2620": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2621": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2622": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2623": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2624": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2625": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2626": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2627": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2628": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2629": {
+    "en_title": "Puppet",
+    "en_text": "Turns the target into a puppet, forcing them to mimic the caster's movements for a duration."
+  },
+  "2630": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage.\n\nFrom: Thief Skill Master"
+  },
+  "2631": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2632": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2633": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2634": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2635": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2636": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2637": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2638": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2639": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2640": {
+    "en_title": "Time Bomb",
+    "en_text": "Plants a time bomb on the target. After a delay it explodes, dealing damage."
+  },
+  "2641": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration.\n\nFrom: Thief Skill Master"
+  },
+  "2642": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2643": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2644": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2645": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2646": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2647": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2648": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2649": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2650": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2651": {
+    "en_title": "Spider Web",
+    "en_text": "Throws a net forward, immobilizing the target for a duration."
+  },
+  "2652": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies.\n\nFrom: Thief Skill Master"
+  },
+  "2653": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2654": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2655": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2656": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2657": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2658": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2659": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2660": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2661": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2662": {
+    "en_title": "Poison Cloud",
+    "en_text": "Creates a poison cloud around you, poisoning nearby enemies."
+  },
+  "2663": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front.\n\nFrom: Mage Skill Master"
+  },
+  "2664": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2665": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2666": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2667": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2668": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2669": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2670": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2671": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2672": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2673": {
+    "en_title": "Stone Wave",
+    "en_text": "Raises three stone pillars in sequence to shield you from the front."
+  },
+  "2674": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away.\n\nFrom: Mage Skill Master"
+  },
+  "2675": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2676": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2677": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2678": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2679": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2680": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2681": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2682": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2683": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2684": {
+    "en_title": "Nova",
+    "en_text": "A burst of wind around you that knocks enemies away."
+  },
+  "2685": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you.\n\nFrom: Mage Skill Master"
+  },
+  "2686": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2687": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2688": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2689": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2690": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2691": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2692": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2693": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2694": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2695": {
+    "en_title": "Firewall",
+    "en_text": "Conjures a wall of searing flame ahead of you."
+  },
+  "2696": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you.\n\nFrom: Mage Skill Master"
+  },
+  "2697": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2698": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2699": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2700": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2701": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2702": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2703": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2704": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2705": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2706": {
+    "en_title": "Earthquake",
+    "en_text": "An advanced spell that triggers an earthquake around you."
+  },
+  "2707": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you.\n\nFrom: Mage Skill Master"
+  },
+  "2708": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2709": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2710": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2711": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2712": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2713": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2714": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2715": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2716": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2717": {
+    "en_title": "Blizzard",
+    "en_text": "Calls down a storm of sharp icicles ahead of you."
+  },
+  "2718": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power.\n\nFrom: Mage Skill Master"
+  },
+  "2719": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2720": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2721": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2722": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2723": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2724": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2725": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2726": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2727": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2728": {
+    "en_title": "Summon Wind Spirit",
+    "en_text": "Summons a wind spirit, raising your wind attack power."
+  },
+  "2729": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power.\n\nFrom: Mage Skill Master"
+  },
+  "2730": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2731": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2732": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2733": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2734": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2735": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2736": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2737": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2738": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2739": {
+    "en_title": "Summon Water Spirit",
+    "en_text": "Summons a water spirit, raising your water attack power."
+  },
+  "2740": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power.\n\nFrom: Mage Skill Master"
+  },
+  "2741": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2742": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2743": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2744": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2745": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2746": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2747": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2748": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2749": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2750": {
+    "en_title": "Summon Fire Spirit",
+    "en_text": "Summons a fire spirit, raising your fire attack power."
+  },
+  "2751": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power.\n\nFrom: Mage Skill Master"
+  },
+  "2752": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2753": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2754": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2755": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2756": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2757": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2758": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2759": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2760": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2761": {
+    "en_title": "Summon Earth Spirit",
+    "en_text": "Summons an earth spirit, raising your earth attack power."
+  },
+  "2762": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you.\n\nFrom: Mage Skill Master"
+  },
+  "2763": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2764": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2765": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2766": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2767": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2768": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2769": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2770": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2771": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2772": {
+    "en_title": "Meteor",
+    "en_text": "Summons a meteor to crash down ahead of you."
+  },
+  "2773": {
+    "en_title": "Spirit Attack (Unlearned)",
+    "en_text": "Launches all summoned spirits at once.\n\nFrom: Mage Skill Master"
+  },
+  "2774": {
+    "en_title": "Spirit Attack",
+    "en_text": "Launches all summoned spirits at once."
+  },
+  "2775": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members.\n\nFrom: Priest Skill Master"
+  },
+  "2776": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2777": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2778": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2779": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2780": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2781": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2782": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2783": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2784": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2785": {
+    "en_title": "Group Heal",
+    "en_text": "Restores HP to all party members."
+  },
+  "2786": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration.\n\nFrom: Priest Skill Master"
+  },
+  "2787": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2788": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2789": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2790": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2791": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2792": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2793": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2794": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2795": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2796": {
+    "en_title": "Group Defense Buff",
+    "en_text": "Raises the defense of all party members for a duration."
+  },
+  "2797": {
+    "en_title": "Breath of Vitality",
+    "en_text": "Raises the maximum HP of all party members for a duration.\n\nFrom: Priest Skill Master"
+  },
+  "2798": {
+    "en_title": "Breath of Vitality",
+    "en_text": "Raises the maximum HP of all party members for a duration."
+  },
+  "2799": {
+    "en_title": "Breath of Vitality",
+    "en_text": "Raises the maximum HP of all party members for a duration."
+  },
+  "2800": {
+    "en_title": "Breath of Vitality",
+    "en_text": "Raises the maximum HP of all party members for a duration."
+  }
+}

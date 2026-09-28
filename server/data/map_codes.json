@@ -1,0 +1,1592 @@
+{
+  "101": {
+    "xml_mapcode": 5,
+    "name": "모험의시작",
+    "file_name": "stage01_01"
+  },
+  "102": {
+    "xml_mapcode": 6,
+    "name": "초보용사냥터",
+    "file_name": "stage01_02"
+  },
+  "103": {
+    "xml_mapcode": 7,
+    "name": "낮은절벽",
+    "file_name": "stage01_03"
+  },
+  "104": {
+    "xml_mapcode": 8,
+    "name": "여행자의집",
+    "file_name": "stage01_04"
+  },
+  "105": {
+    "xml_mapcode": 9,
+    "name": "포폴라언덕1",
+    "file_name": "stage01_05"
+  },
+  "106": {
+    "xml_mapcode": 10,
+    "name": "포폴라언덕2",
+    "file_name": "stage01_06"
+  },
+  "201": {
+    "xml_mapcode": 13,
+    "name": "포폴라마을",
+    "file_name": "stage02_01"
+  },
+  "202": {
+    "xml_mapcode": 14,
+    "name": "포폴라마을대장간",
+    "file_name": "stage02_02"
+  },
+  "203": {
+    "xml_mapcode": 15,
+    "name": "포폴라마을포션상점",
+    "file_name": "stage02_03"
+  },
+  "204": {
+    "xml_mapcode": 16,
+    "name": "포폴라마을앞마당1",
+    "file_name": "stage02_04"
+  },
+  "205": {
+    "xml_mapcode": 17,
+    "name": "포폴라마을앞마당2",
+    "file_name": "stage02_05"
+  },
+  "206": {
+    "xml_mapcode": 18,
+    "name": "숲속빈터가는길",
+    "file_name": "stage02_06"
+  },
+  "207": {
+    "xml_mapcode": 19,
+    "name": "숲속빈터입구",
+    "file_name": "stage02_07"
+  },
+  "208": {
+    "xml_mapcode": 20,
+    "name": "숲속빈터",
+    "file_name": "stage02_08"
+  },
+  "301": {
+    "xml_mapcode": 281,
+    "name": "발데란인던",
+    "file_name": "indun03_01"
+  },
+  "302": {
+    "xml_mapcode": 281,
+    "name": "발데란인던",
+    "file_name": "indun03_02"
+  },
+  "303": {
+    "xml_mapcode": 281,
+    "name": "발데란인던",
+    "file_name": "indun03_03"
+  },
+  "304": {
+    "xml_mapcode": 281,
+    "name": "발데란인던",
+    "file_name": "indun03_04"
+  },
+  "305": {
+    "xml_mapcode": 281,
+    "name": "발데란인던",
+    "file_name": "indun03_05"
+  },
+  "400": {
+    "xml_mapcode": 403,
+    "name": "황천의 산 입구",
+    "file_name": "indun04_00"
+  },
+  "401": {
+    "xml_mapcode": 35,
+    "name": "오지촌",
+    "file_name": "stage04_01"
+  },
+  "402": {
+    "xml_mapcode": 36,
+    "name": "거친절벽",
+    "file_name": "stage04_02"
+  },
+  "403": {
+    "xml_mapcode": 37,
+    "name": "거친절벽중턱",
+    "file_name": "stage04_03"
+  },
+  "404": {
+    "xml_mapcode": 38,
+    "name": "오지촌대장간",
+    "file_name": "stage04_04"
+  },
+  "405": {
+    "xml_mapcode": 39,
+    "name": "오지촌포션상점",
+    "file_name": "stage04_05"
+  },
+  "406": {
+    "xml_mapcode": 40,
+    "name": "오지촌사잇길",
+    "file_name": "stage04_06"
+  },
+  "407": {
+    "xml_mapcode": 41,
+    "name": "수렴동가는길",
+    "file_name": "stage04_07"
+  },
+  "409": {
+    "xml_mapcode": 43,
+    "name": "수렴동",
+    "file_name": "stage04_09"
+  },
+  "700": {
+    "xml_mapcode": 393,
+    "name": "무너진 동굴 입구",
+    "file_name": "indun07_00"
+  },
+  "701": {
+    "xml_mapcode": 123,
+    "name": "발데란",
+    "file_name": "stage07_01"
+  },
+  "702": {
+    "xml_mapcode": 124,
+    "name": "발데란갈림길",
+    "file_name": "stage07_02"
+  },
+  "703": {
+    "xml_mapcode": 125,
+    "name": "발데란입구가는길",
+    "file_name": "stage07_03"
+  },
+  "704": {
+    "xml_mapcode": 126,
+    "name": "발데란입구",
+    "file_name": "stage07_04"
+  },
+  "705": {
+    "xml_mapcode": 127,
+    "name": "강철평야",
+    "file_name": "stage07_05"
+  },
+  "706": {
+    "xml_mapcode": 128,
+    "name": "강철무덤",
+    "file_name": "stage07_06"
+  },
+  "707": {
+    "xml_mapcode": 129,
+    "name": "강철기둥",
+    "file_name": "stage07_07"
+  },
+  "708": {
+    "xml_mapcode": 130,
+    "name": "강철언덕",
+    "file_name": "stage07_08"
+  },
+  "709": {
+    "xml_mapcode": 131,
+    "name": "강철절벽",
+    "file_name": "stage07_09"
+  },
+  "710": {
+    "xml_mapcode": 393,
+    "name": "무너진 동굴 입구",
+    "file_name": "indun07_10"
+  },
+  "711": {
+    "xml_mapcode": 132,
+    "name": "발데란포션상점",
+    "file_name": "stage07_11"
+  },
+  "712": {
+    "xml_mapcode": 133,
+    "name": "발데란앞폐허1",
+    "file_name": "stage07_12"
+  },
+  "713": {
+    "xml_mapcode": 134,
+    "name": "발데란앞폐허2",
+    "file_name": "stage07_13"
+  },
+  "714": {
+    "xml_mapcode": 135,
+    "name": "고철들판1",
+    "file_name": "stage07_14"
+  },
+  "5207": {
+    "xml_mapcode": 394,
+    "name": "무너진 동굴",
+    "file_name": "indun52_07"
+  },
+  "107": {
+    "xml_mapcode": 11,
+    "name": "포폴라샛길01",
+    "file_name": "stage01_07"
+  },
+  "108": {
+    "xml_mapcode": 12,
+    "name": "포폴라샛길02",
+    "file_name": "stage01_08"
+  },
+  "209": {
+    "xml_mapcode": 21,
+    "name": "오솔길01",
+    "file_name": "stage02_09"
+  },
+  "210": {
+    "xml_mapcode": 22,
+    "name": "오솔길02",
+    "file_name": "stage02_10"
+  },
+  "211": {
+    "xml_mapcode": 23,
+    "name": "숲속길1",
+    "file_name": "stage02_11"
+  },
+  "212": {
+    "xml_mapcode": 24,
+    "name": "숲속길2",
+    "file_name": "stage02_12"
+  },
+  "213": {
+    "xml_mapcode": 25,
+    "name": "숲속길3",
+    "file_name": "stage02_13"
+  },
+  "214": {
+    "xml_mapcode": 26,
+    "name": "숲속길4",
+    "file_name": "stage02_14"
+  },
+  "215": {
+    "xml_mapcode": 27,
+    "name": "언덕길1",
+    "file_name": "stage02_15"
+  },
+  "216": {
+    "xml_mapcode": 28,
+    "name": "언덕길2",
+    "file_name": "stage02_16"
+  },
+  "217": {
+    "xml_mapcode": 29,
+    "name": "언덕길3",
+    "file_name": "stage02_17"
+  },
+  "218": {
+    "xml_mapcode": 30,
+    "name": "언덕끝",
+    "file_name": "stage02_18"
+  },
+  "219": {
+    "xml_mapcode": 396,
+    "name": "안개숲의 입구",
+    "file_name": "stage02_19"
+  },
+  "408": {
+    "xml_mapcode": 42,
+    "name": "수렴동입구",
+    "file_name": "stage04_08"
+  },
+  "410": {
+    "xml_mapcode": 44,
+    "name": "바위계곡2",
+    "file_name": "stage04_10"
+  },
+  "411": {
+    "xml_mapcode": 45,
+    "name": "오행산기슭",
+    "file_name": "stage04_11"
+  },
+  "412": {
+    "xml_mapcode": 46,
+    "name": "오행산모퉁이",
+    "file_name": "stage04_12"
+  },
+  "413": {
+    "xml_mapcode": 47,
+    "name": "오행산자락",
+    "file_name": "stage04_13"
+  },
+  "414": {
+    "xml_mapcode": 48,
+    "name": "신선동입구",
+    "file_name": "stage04_14"
+  },
+  "415": {
+    "xml_mapcode": 49,
+    "name": "신선동",
+    "file_name": "stage04_15"
+  },
+  "416": {
+    "xml_mapcode": 50,
+    "name": "오지촌뒷산",
+    "file_name": "stage04_16"
+  },
+  "417": {
+    "xml_mapcode": 51,
+    "name": "바위계곡1",
+    "file_name": "stage04_17"
+  },
+  "418": {
+    "xml_mapcode": 52,
+    "name": "오행산가는길",
+    "file_name": "stage04_18"
+  },
+  "419": {
+    "xml_mapcode": 53,
+    "name": "오행산입구",
+    "file_name": "stage04_19"
+  },
+  "420": {
+    "xml_mapcode": 54,
+    "name": "오지촌가는길",
+    "file_name": "stage04_20"
+  },
+  "421": {
+    "xml_mapcode": 55,
+    "name": "오지촌샛길1",
+    "file_name": "stage04_21"
+  },
+  "422": {
+    "xml_mapcode": 56,
+    "name": "오지촌샛길2",
+    "file_name": "stage04_22"
+  },
+  "423": {
+    "xml_mapcode": 406,
+    "name": "수렴동 동굴 입구",
+    "file_name": "stage04_23"
+  },
+  "424": {
+    "xml_mapcode": 58,
+    "name": "무림사",
+    "file_name": "stage04_24"
+  },
+  "425": {
+    "xml_mapcode": 291,
+    "name": "매지션타워",
+    "file_name": "stage04_25"
+  },
+  "426": {
+    "xml_mapcode": 292,
+    "name": "섀도우케이브",
+    "file_name": "stage04_26"
+  },
+  "427": {
+    "xml_mapcode": 61,
+    "name": "록슬린우드",
+    "file_name": "stage04_27"
+  },
+  "428": {
+    "xml_mapcode": 62,
+    "name": "세인트바슈라",
+    "file_name": "stage04_28"
+  },
+  "429": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage04_29"
+  },
+  "430": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage04_30"
+  },
+  "431": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage04_31"
+  },
+  "432": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage04_32"
+  },
+  "433": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage04_33"
+  },
+  "434": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage04_34"
+  },
+  "501": {
+    "xml_mapcode": 73,
+    "name": "아마쿠사",
+    "file_name": "stage05_01"
+  },
+  "502": {
+    "xml_mapcode": 74,
+    "name": "아마쿠사가도",
+    "file_name": "stage05_02"
+  },
+  "503": {
+    "xml_mapcode": 75,
+    "name": "아마쿠사작은부락",
+    "file_name": "stage05_03"
+  },
+  "504": {
+    "xml_mapcode": 76,
+    "name": "아마쿠사입구가는길",
+    "file_name": "stage05_04"
+  },
+  "505": {
+    "xml_mapcode": 77,
+    "name": "아마쿠사입구",
+    "file_name": "stage05_05"
+  },
+  "506": {
+    "xml_mapcode": 78,
+    "name": "쌍둥이 부락",
+    "file_name": "stage05_06"
+  },
+  "507": {
+    "xml_mapcode": 79,
+    "name": "무사촌",
+    "file_name": "stage05_07"
+  },
+  "508": {
+    "xml_mapcode": 80,
+    "name": "아마쿠사 언덕",
+    "file_name": "stage05_08"
+  },
+  "509": {
+    "xml_mapcode": 81,
+    "name": "아마쿠사 대교 가는길",
+    "file_name": "stage05_09"
+  },
+  "510": {
+    "xml_mapcode": 82,
+    "name": "아마쿠사 대교 입구",
+    "file_name": "stage05_10"
+  },
+  "511": {
+    "xml_mapcode": 83,
+    "name": "아마쿠사 대교",
+    "file_name": "stage05_11"
+  },
+  "512": {
+    "xml_mapcode": 84,
+    "name": "아마쿠사 외곽",
+    "file_name": "stage05_12"
+  },
+  "513": {
+    "xml_mapcode": 85,
+    "name": "아마쿠사 경계",
+    "file_name": "stage05_13"
+  },
+  "514": {
+    "xml_mapcode": 86,
+    "name": "벚꽃나무 마을",
+    "file_name": "stage05_14"
+  },
+  "515": {
+    "xml_mapcode": 87,
+    "name": "아마쿠사 성벽길1",
+    "file_name": "stage05_15"
+  },
+  "516": {
+    "xml_mapcode": 88,
+    "name": "아마쿠사 성벽길2",
+    "file_name": "stage05_16"
+  },
+  "517": {
+    "xml_mapcode": 89,
+    "name": "아마쿠사고원",
+    "file_name": "stage05_17"
+  },
+  "518": {
+    "xml_mapcode": 90,
+    "name": "벚꽃다리가는길",
+    "file_name": "stage05_18"
+  },
+  "519": {
+    "xml_mapcode": 91,
+    "name": "벚꽃다리",
+    "file_name": "stage05_19"
+  },
+  "520": {
+    "xml_mapcode": 92,
+    "name": "아마쿠사달동네",
+    "file_name": "stage05_20"
+  },
+  "522": {
+    "xml_mapcode": 93,
+    "name": "아마쿠사포션상점",
+    "file_name": "stage05_22"
+  },
+  "523": {
+    "xml_mapcode": 57,
+    "name": "천정도관",
+    "file_name": "stage05_23"
+  },
+  "529": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage05_29"
+  },
+  "601": {
+    "xml_mapcode": 98,
+    "name": "아타조쿠나부락",
+    "file_name": "stage06_01"
+  },
+  "602": {
+    "xml_mapcode": 99,
+    "name": "세렌초원입구",
+    "file_name": "stage06_02"
+  },
+  "603": {
+    "xml_mapcode": 100,
+    "name": "무타카의길",
+    "file_name": "stage06_03"
+  },
+  "604": {
+    "xml_mapcode": 101,
+    "name": "왈라카나언덕",
+    "file_name": "stage06_04"
+  },
+  "605": {
+    "xml_mapcode": 102,
+    "name": "카타파하의구역",
+    "file_name": "stage06_05"
+  },
+  "606": {
+    "xml_mapcode": 103,
+    "name": "아타조쿠나가는길",
+    "file_name": "stage06_06"
+  },
+  "607": {
+    "xml_mapcode": 104,
+    "name": "아타조쿠나입구",
+    "file_name": "stage06_07"
+  },
+  "608": {
+    "xml_mapcode": 105,
+    "name": "세렌사파리1",
+    "file_name": "stage06_08"
+  },
+  "609": {
+    "xml_mapcode": 106,
+    "name": "세렌사파리2",
+    "file_name": "stage06_09"
+  },
+  "610": {
+    "xml_mapcode": 107,
+    "name": "세렌사파리3",
+    "file_name": "stage06_10"
+  },
+  "611": {
+    "xml_mapcode": 108,
+    "name": "프리카들판1",
+    "file_name": "stage06_11"
+  },
+  "612": {
+    "xml_mapcode": 109,
+    "name": "프리카들판2",
+    "file_name": "stage06_12"
+  },
+  "613": {
+    "xml_mapcode": 110,
+    "name": "밀리미의지대",
+    "file_name": "stage06_13"
+  },
+  "614": {
+    "xml_mapcode": 111,
+    "name": "쿠나마타다리가는길",
+    "file_name": "stage06_14"
+  },
+  "615": {
+    "xml_mapcode": 112,
+    "name": "야나타의길",
+    "file_name": "stage06_15"
+  },
+  "616": {
+    "xml_mapcode": 113,
+    "name": "야나타의들판1",
+    "file_name": "stage06_16"
+  },
+  "617": {
+    "xml_mapcode": 114,
+    "name": "야나타의들판2",
+    "file_name": "stage06_17"
+  },
+  "618": {
+    "xml_mapcode": 115,
+    "name": "야나타의초원",
+    "file_name": "stage06_18"
+  },
+  "619": {
+    "xml_mapcode": 116,
+    "name": "야나타의금지구역",
+    "file_name": "stage06_19"
+  },
+  "620": {
+    "xml_mapcode": 117,
+    "name": "쿠나마타다리",
+    "file_name": "stage06_20"
+  },
+  "621": {
+    "xml_mapcode": 118,
+    "name": "세렌포션상점",
+    "file_name": "stage06_21"
+  },
+  "627": {
+    "xml_mapcode": 61,
+    "name": "록슬린우드",
+    "file_name": "stage06_27"
+  },
+  "633": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage06_33"
+  },
+  "715": {
+    "xml_mapcode": 136,
+    "name": "고철들판2",
+    "file_name": "stage07_15"
+  },
+  "716": {
+    "xml_mapcode": 137,
+    "name": "강철언덕입구",
+    "file_name": "stage07_16"
+  },
+  "717": {
+    "xml_mapcode": 138,
+    "name": "철거지대1",
+    "file_name": "stage07_17"
+  },
+  "718": {
+    "xml_mapcode": 139,
+    "name": "철거지대2",
+    "file_name": "stage07_18"
+  },
+  "719": {
+    "xml_mapcode": 140,
+    "name": "철거지대3",
+    "file_name": "stage07_19"
+  },
+  "720": {
+    "xml_mapcode": 141,
+    "name": "발데란가는길",
+    "file_name": "stage07_20"
+  },
+  "721": {
+    "xml_mapcode": 388,
+    "name": "숨겨진숲속빈터",
+    "file_name": "stage07_21"
+  },
+  "725": {
+    "xml_mapcode": 291,
+    "name": "매지션타워",
+    "file_name": "stage07_25"
+  },
+  "731": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage07_31"
+  },
+  "801": {
+    "xml_mapcode": 146,
+    "name": "발데란광산마을",
+    "file_name": "stage08_01"
+  },
+  "802": {
+    "xml_mapcode": 147,
+    "name": "아오지아들판",
+    "file_name": "stage08_02"
+  },
+  "803": {
+    "xml_mapcode": 148,
+    "name": "발데란광산가는길",
+    "file_name": "stage08_03"
+  },
+  "804": {
+    "xml_mapcode": 149,
+    "name": "철마의무덤1",
+    "file_name": "stage08_04"
+  },
+  "805": {
+    "xml_mapcode": 150,
+    "name": "발데란광산언덕길",
+    "file_name": "stage08_05"
+  },
+  "806": {
+    "xml_mapcode": 151,
+    "name": "철마의무덤2",
+    "file_name": "stage08_06"
+  },
+  "807": {
+    "xml_mapcode": 152,
+    "name": "광산마을입구",
+    "file_name": "stage08_07"
+  },
+  "808": {
+    "xml_mapcode": 153,
+    "name": "붉은바위산입구",
+    "file_name": "stage08_08"
+  },
+  "809": {
+    "xml_mapcode": 154,
+    "name": "바위산중턱",
+    "file_name": "stage08_09"
+  },
+  "810": {
+    "xml_mapcode": 155,
+    "name": "붉은바위산정상",
+    "file_name": "stage08_10"
+  },
+  "811": {
+    "xml_mapcode": 156,
+    "name": "바위산내리막길",
+    "file_name": "stage08_11"
+  },
+  "812": {
+    "xml_mapcode": 157,
+    "name": "붉은바위계곡",
+    "file_name": "stage08_12"
+  },
+  "813": {
+    "xml_mapcode": 158,
+    "name": "배걱단아지트가는길",
+    "file_name": "stage08_13"
+  },
+  "814": {
+    "xml_mapcode": 159,
+    "name": "배걱단아지트1",
+    "file_name": "stage08_14"
+  },
+  "815": {
+    "xml_mapcode": 160,
+    "name": "배걱단아지트2",
+    "file_name": "stage08_15"
+  },
+  "816": {
+    "xml_mapcode": 161,
+    "name": "아오지아들판가는길",
+    "file_name": "stage08_16"
+  },
+  "817": {
+    "xml_mapcode": 162,
+    "name": "지하갱도상층",
+    "file_name": "stage08_17"
+  },
+  "818": {
+    "xml_mapcode": 163,
+    "name": "지하갱도입구",
+    "file_name": "stage08_18"
+  },
+  "819": {
+    "xml_mapcode": 164,
+    "name": "오래된탄광역",
+    "file_name": "stage08_19"
+  },
+  "821": {
+    "xml_mapcode": 165,
+    "name": "광산포션상점",
+    "file_name": "stage08_21"
+  },
+  "826": {
+    "xml_mapcode": 292,
+    "name": "섀도우케이브",
+    "file_name": "stage08_26"
+  },
+  "832": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage08_32"
+  },
+  "901": {
+    "xml_mapcode": 170,
+    "name": "수상도시세리엔",
+    "file_name": "stage09_01"
+  },
+  "902": {
+    "xml_mapcode": 171,
+    "name": "세리엔가는길",
+    "file_name": "stage09_02"
+  },
+  "903": {
+    "xml_mapcode": 172,
+    "name": "마이웨이",
+    "file_name": "stage09_03"
+  },
+  "904": {
+    "xml_mapcode": 173,
+    "name": "꽃게와바다",
+    "file_name": "stage09_04"
+  },
+  "905": {
+    "xml_mapcode": 174,
+    "name": "크로스본즈",
+    "file_name": "stage09_05"
+  },
+  "906": {
+    "xml_mapcode": 175,
+    "name": "세리엔입구",
+    "file_name": "stage09_06"
+  },
+  "907": {
+    "xml_mapcode": 176,
+    "name": "세리엔포트1",
+    "file_name": "stage09_07"
+  },
+  "908": {
+    "xml_mapcode": 177,
+    "name": "세리엔포트2",
+    "file_name": "stage09_08"
+  },
+  "909": {
+    "xml_mapcode": 178,
+    "name": "스카이게이트",
+    "file_name": "stage09_09"
+  },
+  "910": {
+    "xml_mapcode": 179,
+    "name": "노스웨스트힐",
+    "file_name": "stage09_10"
+  },
+  "911": {
+    "xml_mapcode": 180,
+    "name": "스카이번지",
+    "file_name": "stage09_11"
+  },
+  "912": {
+    "xml_mapcode": 181,
+    "name": "스카이라운지",
+    "file_name": "stage09_12"
+  },
+  "913": {
+    "xml_mapcode": 182,
+    "name": "노스이스트힐",
+    "file_name": "stage09_13"
+  },
+  "914": {
+    "xml_mapcode": 183,
+    "name": "스쿠버게이트",
+    "file_name": "stage09_14"
+  },
+  "915": {
+    "xml_mapcode": 184,
+    "name": "사우스웨스트플레인",
+    "file_name": "stage09_15"
+  },
+  "916": {
+    "xml_mapcode": 185,
+    "name": "세리엔크로스웨이",
+    "file_name": "stage09_16"
+  },
+  "917": {
+    "xml_mapcode": 186,
+    "name": "사우스이스트플레인",
+    "file_name": "stage09_17"
+  },
+  "918": {
+    "xml_mapcode": 187,
+    "name": "스쿠버밸리1",
+    "file_name": "stage09_18"
+  },
+  "919": {
+    "xml_mapcode": 188,
+    "name": "스쿠버밸리2",
+    "file_name": "stage09_19"
+  },
+  "920": {
+    "xml_mapcode": 189,
+    "name": "씨엔드",
+    "file_name": "stage09_20"
+  },
+  "921": {
+    "xml_mapcode": 190,
+    "name": "세리엔포션상점",
+    "file_name": "stage09_21"
+  },
+  "922": {
+    "xml_mapcode": 191,
+    "name": "지하동굴 가는길",
+    "file_name": "stage09_22"
+  },
+  "928": {
+    "xml_mapcode": 62,
+    "name": "세인트바슈라",
+    "file_name": "stage09_28"
+  },
+  "929": {
+    "xml_mapcode": 386,
+    "name": "스타치스 언덕",
+    "file_name": "stage09_29"
+  },
+  "934": {
+    "xml_mapcode": 63,
+    "name": "그랜드마스터대장간",
+    "file_name": "stage09_34"
+  },
+  "1001": {
+    "xml_mapcode": 196,
+    "name": "세리엔 지하마을",
+    "file_name": "stage10_01"
+  },
+  "1002": {
+    "xml_mapcode": 197,
+    "name": "지하동굴입구",
+    "file_name": "stage10_02"
+  },
+  "1003": {
+    "xml_mapcode": 198,
+    "name": "선택의 방",
+    "file_name": "stage10_03"
+  },
+  "1004": {
+    "xml_mapcode": 199,
+    "name": "서쪽의 토끼굴",
+    "file_name": "stage10_04"
+  },
+  "1005": {
+    "xml_mapcode": 200,
+    "name": "후회의 길1",
+    "file_name": "stage10_05"
+  },
+  "1006": {
+    "xml_mapcode": 201,
+    "name": "후회의 길2",
+    "file_name": "stage10_06"
+  },
+  "1007": {
+    "xml_mapcode": 202,
+    "name": "북쪽의 돼지우리",
+    "file_name": "stage10_07"
+  },
+  "1008": {
+    "xml_mapcode": 203,
+    "name": "답답한 동굴",
+    "file_name": "stage10_08"
+  },
+  "1009": {
+    "xml_mapcode": 204,
+    "name": "남쪽의 박쥐소굴",
+    "file_name": "stage10_09"
+  },
+  "1010": {
+    "xml_mapcode": 205,
+    "name": "동쪽의 고양이집",
+    "file_name": "stage10_10"
+  },
+  "1011": {
+    "xml_mapcode": 206,
+    "name": "어둠네그려 동굴",
+    "file_name": "stage10_11"
+  },
+  "1012": {
+    "xml_mapcode": 207,
+    "name": "각오의 방2",
+    "file_name": "stage10_12"
+  },
+  "1013": {
+    "xml_mapcode": 208,
+    "name": "알카트나이스동굴1",
+    "file_name": "stage10_13"
+  },
+  "1014": {
+    "xml_mapcode": 209,
+    "name": "알카트나이스동굴2",
+    "file_name": "stage10_14"
+  },
+  "1015": {
+    "xml_mapcode": 210,
+    "name": "소생구 탈출",
+    "file_name": "stage10_15"
+  },
+  "1016": {
+    "xml_mapcode": 211,
+    "name": "각오의 방1",
+    "file_name": "stage10_16"
+  },
+  "1017": {
+    "xml_mapcode": 212,
+    "name": "숨겨진지하감옥1",
+    "file_name": "stage10_17"
+  },
+  "1018": {
+    "xml_mapcode": 213,
+    "name": "숨겨진지하감옥2",
+    "file_name": "stage10_18"
+  },
+  "1019": {
+    "xml_mapcode": 214,
+    "name": "어디지여긴 동굴",
+    "file_name": "stage10_19"
+  },
+  "1020": {
+    "xml_mapcode": 215,
+    "name": "각오의 방3",
+    "file_name": "stage10_20"
+  },
+  "1021": {
+    "xml_mapcode": 216,
+    "name": "숨겨진지하감옥3",
+    "file_name": "stage10_21"
+  },
+  "1022": {
+    "xml_mapcode": 217,
+    "name": "지하동굴포션상점",
+    "file_name": "stage10_22"
+  },
+  "1101": {
+    "xml_mapcode": 222,
+    "name": "수중도시 에레이",
+    "file_name": "stage11_01"
+  },
+  "1102": {
+    "xml_mapcode": 223,
+    "name": "워터게이트",
+    "file_name": "stage11_02"
+  },
+  "1103": {
+    "xml_mapcode": 224,
+    "name": "렛츠씨푸드",
+    "file_name": "stage11_03"
+  },
+  "1104": {
+    "xml_mapcode": 225,
+    "name": "갤리포니아1",
+    "file_name": "stage11_04"
+  },
+  "1105": {
+    "xml_mapcode": 226,
+    "name": "갤리포니아2",
+    "file_name": "stage11_05"
+  },
+  "1106": {
+    "xml_mapcode": 227,
+    "name": "나스베갈스",
+    "file_name": "stage11_06"
+  },
+  "1107": {
+    "xml_mapcode": 228,
+    "name": "멀리우드1",
+    "file_name": "stage11_07"
+  },
+  "1108": {
+    "xml_mapcode": 229,
+    "name": "멀리우드2",
+    "file_name": "stage11_08"
+  },
+  "1109": {
+    "xml_mapcode": 230,
+    "name": "쿨럼가1",
+    "file_name": "stage11_09"
+  },
+  "1110": {
+    "xml_mapcode": 231,
+    "name": "쿨럼가2",
+    "file_name": "stage11_10"
+  },
+  "1111": {
+    "xml_mapcode": 232,
+    "name": "버발로",
+    "file_name": "stage11_11"
+  },
+  "1112": {
+    "xml_mapcode": 233,
+    "name": "뇩시티1",
+    "file_name": "stage11_12"
+  },
+  "1113": {
+    "xml_mapcode": 234,
+    "name": "뇩시티2",
+    "file_name": "stage11_13"
+  },
+  "1114": {
+    "xml_mapcode": 235,
+    "name": "풀놀이다",
+    "file_name": "stage11_14"
+  },
+  "1115": {
+    "xml_mapcode": 236,
+    "name": "센프란체스카1",
+    "file_name": "stage11_15"
+  },
+  "1116": {
+    "xml_mapcode": 237,
+    "name": "센프란체스카2",
+    "file_name": "stage11_16"
+  },
+  "1117": {
+    "xml_mapcode": 238,
+    "name": "센트럴시티1",
+    "file_name": "stage11_17"
+  },
+  "1118": {
+    "xml_mapcode": 239,
+    "name": "센트럴시티2",
+    "file_name": "stage11_18"
+  },
+  "1119": {
+    "xml_mapcode": 240,
+    "name": "텍삼스",
+    "file_name": "stage11_19"
+  },
+  "1120": {
+    "xml_mapcode": 241,
+    "name": "빌라델피아",
+    "file_name": "stage11_20"
+  },
+  "1121": {
+    "xml_mapcode": 242,
+    "name": "수중도시포션상점",
+    "file_name": "stage11_21"
+  },
+  "1201": {
+    "xml_mapcode": 254,
+    "name": "에레보스 마을",
+    "file_name": "stage12_01"
+  },
+  "1202": {
+    "xml_mapcode": 255,
+    "name": "아케론 입구",
+    "file_name": "stage12_02"
+  },
+  "1203": {
+    "xml_mapcode": 256,
+    "name": "아케론 하류1",
+    "file_name": "stage12_03"
+  },
+  "1204": {
+    "xml_mapcode": 257,
+    "name": "슬픔의 강 아케론",
+    "file_name": "stage12_04"
+  },
+  "1205": {
+    "xml_mapcode": 258,
+    "name": "아케론 상류",
+    "file_name": "stage12_05"
+  },
+  "1206": {
+    "xml_mapcode": 259,
+    "name": "아케론 하류2",
+    "file_name": "stage12_06"
+  },
+  "1207": {
+    "xml_mapcode": 260,
+    "name": "코퀴토스 하류",
+    "file_name": "stage12_07"
+  },
+  "1208": {
+    "xml_mapcode": 261,
+    "name": "코퀴토스 가는길",
+    "file_name": "stage12_08"
+  },
+  "1209": {
+    "xml_mapcode": 262,
+    "name": "통곡의 강 코퀴토스",
+    "file_name": "stage12_09"
+  },
+  "1210": {
+    "xml_mapcode": 263,
+    "name": "코퀴토스 상류",
+    "file_name": "stage12_10"
+  },
+  "1211": {
+    "xml_mapcode": 264,
+    "name": "스틱스 입구",
+    "file_name": "stage12_11"
+  },
+  "1212": {
+    "xml_mapcode": 265,
+    "name": "증오의 강 스틱스",
+    "file_name": "stage12_12"
+  },
+  "1213": {
+    "xml_mapcode": 266,
+    "name": "플레게톤 가는길",
+    "file_name": "stage12_13"
+  },
+  "1214": {
+    "xml_mapcode": 267,
+    "name": "불길의 강 플레게톤",
+    "file_name": "stage12_14"
+  },
+  "1215": {
+    "xml_mapcode": 268,
+    "name": "플레게톤 상류",
+    "file_name": "stage12_15"
+  },
+  "1216": {
+    "xml_mapcode": 269,
+    "name": "에리다누스 입구",
+    "file_name": "stage12_16"
+  },
+  "1217": {
+    "xml_mapcode": 270,
+    "name": "죽음의 강 에리다누스",
+    "file_name": "stage12_17"
+  },
+  "1218": {
+    "xml_mapcode": 271,
+    "name": "레테 입구",
+    "file_name": "stage12_18"
+  },
+  "1219": {
+    "xml_mapcode": 272,
+    "name": "망각의 강 레테",
+    "file_name": "stage12_19"
+  },
+  "1220": {
+    "xml_mapcode": 273,
+    "name": "타르타노스",
+    "file_name": "stage12_20"
+  },
+  "1221": {
+    "xml_mapcode": 351,
+    "name": "저주받은포션상점",
+    "file_name": "stage12_21"
+  },
+  "1301": {
+    "xml_mapcode": 333,
+    "name": "유령도시 잔다",
+    "file_name": "stage13_01"
+  },
+  "1302": {
+    "xml_mapcode": 334,
+    "name": "슬럼가",
+    "file_name": "stage13_02"
+  },
+  "1303": {
+    "xml_mapcode": 335,
+    "name": "다운타운",
+    "file_name": "stage13_03"
+  },
+  "1304": {
+    "xml_mapcode": 336,
+    "name": "언더 힐",
+    "file_name": "stage13_04"
+  },
+  "1305": {
+    "xml_mapcode": 337,
+    "name": "구 시가지",
+    "file_name": "stage13_05"
+  },
+  "1306": {
+    "xml_mapcode": 338,
+    "name": "구 도로",
+    "file_name": "stage13_06"
+  },
+  "1307": {
+    "xml_mapcode": 339,
+    "name": "중앙로",
+    "file_name": "stage13_07"
+  },
+  "1308": {
+    "xml_mapcode": 340,
+    "name": "신 시가지 입구",
+    "file_name": "stage13_08"
+  },
+  "1309": {
+    "xml_mapcode": 341,
+    "name": "신 시가지 1",
+    "file_name": "stage13_09"
+  },
+  "1310": {
+    "xml_mapcode": 342,
+    "name": "신 시가지 2",
+    "file_name": "stage13_10"
+  },
+  "1311": {
+    "xml_mapcode": 352,
+    "name": "유령도시포션상점",
+    "file_name": "stage13_11"
+  },
+  "1401": {
+    "xml_mapcode": 353,
+    "name": "유령마을 깬다",
+    "file_name": "stage14_01"
+  },
+  "1402": {
+    "xml_mapcode": 329,
+    "name": "업 타운",
+    "file_name": "stage14_02"
+  },
+  "1403": {
+    "xml_mapcode": 328,
+    "name": "뉴 타운",
+    "file_name": "stage14_03"
+  },
+  "1404": {
+    "xml_mapcode": 327,
+    "name": "도시외곽1",
+    "file_name": "stage14_04"
+  },
+  "1405": {
+    "xml_mapcode": 326,
+    "name": "도시외곽2",
+    "file_name": "stage14_05"
+  },
+  "1406": {
+    "xml_mapcode": 325,
+    "name": "도시외곽3",
+    "file_name": "stage14_06"
+  },
+  "1407": {
+    "xml_mapcode": 324,
+    "name": "유령 쉼터 입구",
+    "file_name": "stage14_07"
+  },
+  "1408": {
+    "xml_mapcode": 323,
+    "name": "유령 쉼터",
+    "file_name": "stage14_08"
+  },
+  "1409": {
+    "xml_mapcode": 322,
+    "name": "해골언덕 입구",
+    "file_name": "stage14_09"
+  },
+  "1410": {
+    "xml_mapcode": 321,
+    "name": "해골언덕",
+    "file_name": "stage14_10"
+  },
+  "1501": {
+    "xml_mapcode": 289,
+    "name": "채광장 지하1층",
+    "file_name": "stage15_01"
+  },
+  "1502": {
+    "xml_mapcode": 290,
+    "name": "채광장 지하2층",
+    "file_name": "stage15_02"
+  },
+  "1601": {
+    "xml_mapcode": 287,
+    "name": "채집장 1층",
+    "file_name": "stage16_01"
+  },
+  "1602": {
+    "xml_mapcode": 288,
+    "name": "채집장 2층",
+    "file_name": "stage16_02"
+  },
+  "1701": {
+    "xml_mapcode": 363,
+    "name": "암갠마을",
+    "file_name": "stage17_01"
+  },
+  "1702": {
+    "xml_mapcode": 332,
+    "name": "불타는언덕입구",
+    "file_name": "stage17_02"
+  },
+  "1703": {
+    "xml_mapcode": 365,
+    "name": "불타는 언덕 아랫길",
+    "file_name": "stage17_03"
+  },
+  "1704": {
+    "xml_mapcode": 364,
+    "name": "불타는 언덕 사잇길",
+    "file_name": "stage17_04"
+  },
+  "1705": {
+    "xml_mapcode": 366,
+    "name": "파이로단:운명의산",
+    "file_name": "stage17_05"
+  },
+  "1706": {
+    "xml_mapcode": 346,
+    "name": "파이로단기슭",
+    "file_name": "stage17_06"
+  },
+  "1707": {
+    "xml_mapcode": 348,
+    "name": "용암지대1",
+    "file_name": "stage17_07"
+  },
+  "1708": {
+    "xml_mapcode": 349,
+    "name": "용암지대2",
+    "file_name": "stage17_08"
+  },
+  "1709": {
+    "xml_mapcode": 344,
+    "name": "파이로단사잇길",
+    "file_name": "stage17_09"
+  },
+  "1710": {
+    "xml_mapcode": 367,
+    "name": "화염의 정원:절벽",
+    "file_name": "stage17_10"
+  },
+  "1711": {
+    "xml_mapcode": 368,
+    "name": "운명의 길",
+    "file_name": "stage17_11"
+  },
+  "1712": {
+    "xml_mapcode": 369,
+    "name": "화염의 강 하류:1",
+    "file_name": "stage17_12"
+  },
+  "1713": {
+    "xml_mapcode": 370,
+    "name": "화염의 강 하류:2",
+    "file_name": "stage17_13"
+  },
+  "1714": {
+    "xml_mapcode": 371,
+    "name": "외로운 섬",
+    "file_name": "stage17_14"
+  },
+  "1715": {
+    "xml_mapcode": 373,
+    "name": "잿빛 고원 입구",
+    "file_name": "stage17_15"
+  },
+  "1801": {
+    "xml_mapcode": 362,
+    "name": "잿빛마을",
+    "file_name": "stage18_01"
+  },
+  "1802": {
+    "xml_mapcode": 374,
+    "name": "잿빛 고원 출구",
+    "file_name": "stage18_02"
+  },
+  "1803": {
+    "xml_mapcode": 375,
+    "name": "해골 절벽",
+    "file_name": "stage18_03"
+  },
+  "1804": {
+    "xml_mapcode": 378,
+    "name": "해골 계곡:1",
+    "file_name": "stage18_04"
+  },
+  "1805": {
+    "xml_mapcode": 377,
+    "name": "해골 계곡:2",
+    "file_name": "stage18_05"
+  },
+  "1806": {
+    "xml_mapcode": 379,
+    "name": "화염의 강 중류:1",
+    "file_name": "stage18_06"
+  },
+  "1807": {
+    "xml_mapcode": 380,
+    "name": "화염의 강 중류:2",
+    "file_name": "stage18_07"
+  },
+  "1808": {
+    "xml_mapcode": 381,
+    "name": "용암 호수",
+    "file_name": "stage18_08"
+  },
+  "1809": {
+    "xml_mapcode": 382,
+    "name": "드레이크 케이브 입구",
+    "file_name": "stage18_09"
+  },
+  "1810": {
+    "xml_mapcode": 383,
+    "name": "드레이크 케이브",
+    "file_name": "stage18_10"
+  },
+  "1811": {
+    "xml_mapcode": 384,
+    "name": "드레이크 케이브 출구",
+    "file_name": "stage18_11"
+  },
+  "1812": {
+    "xml_mapcode": 385,
+    "name": "화염의 강 상류",
+    "file_name": "stage18_12"
+  },
+  "1813": {
+    "xml_mapcode": 359,
+    "name": "용의길",
+    "file_name": "stage18_13"
+  },
+  "1814": {
+    "xml_mapcode": 358,
+    "name": "용의둥지입구",
+    "file_name": "stage18_14"
+  },
+  "1815": {
+    "xml_mapcode": 357,
+    "name": "용의둥지",
+    "file_name": "stage18_15"
+  },
+  "9701": {
+    "xml_mapcode": 247,
+    "name": "벼룩시장",
+    "file_name": "stage97_01"
+  },
+  "9702": {
+    "xml_mapcode": 277,
+    "name": "길드광장",
+    "file_name": "stage97_02"
+  },
+  "9801": {
+    "xml_mapcode": 248,
+    "name": "포폴라무투장",
+    "file_name": "stage98_01"
+  },
+  "9802": {
+    "xml_mapcode": 249,
+    "name": "오행산무투장",
+    "file_name": "stage98_02"
+  },
+  "9803": {
+    "xml_mapcode": 250,
+    "name": "아마쿠사무투장",
+    "file_name": "stage98_03"
+  },
+  "9804": {
+    "xml_mapcode": 123,
+    "name": "발데란",
+    "file_name": "stage98_04"
+  },
+  "9901": {
+    "xml_mapcode": 252,
+    "name": "전장대기실",
+    "file_name": "stage99_01"
+  },
+  "9902": {
+    "xml_mapcode": 253,
+    "name": "광산지역전장",
+    "file_name": "stage99_02"
+  },
+  "9903": {
+    "xml_mapcode": 1,
+    "name": "인형놀이방",
+    "file_name": "stage99_03"
+  },
+  "9904": {
+    "xml_mapcode": 309,
+    "name": "깃발뺏기",
+    "file_name": "stage99_04"
+  },
+  "9905": {
+    "xml_mapcode": 354,
+    "name": "보석쟁탈전",
+    "file_name": "stage99_05"
+  },
+  "9906": {
+    "xml_mapcode": 356,
+    "name": "팀오브더힐",
+    "file_name": "stage99_06"
+  },
+  "9907": {
+    "xml_mapcode": 343,
+    "name": "킹오브더힐",
+    "file_name": "stage99_07"
+  },
+  "9908": {
+    "xml_mapcode": 389,
+    "name": "얼음놀이방",
+    "file_name": "stage99_08"
+  }
+}

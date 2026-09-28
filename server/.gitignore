@@ -1,0 +1,23 @@
+# local dev repo for the live server dir (baseline + diffs/rollback during implementation)
+*.png
+*.pkl
+*.log
+__pycache__/
+_dbg_attack
+*Name clash*
+*.snapshot.*.py
+kr_capture_*.txt
+probe_*_run*.txt
+
+# store.py atomic-write temp files and the one-time pre-P1 migration backup (user data)
+*.tmp
+accounts.json.bak-*
+
+# trade-audit-log: the append-only trade journal next to accounts.json (user data)
+trade_log.jsonl
+
+# stall audit (P7 stage 2): the append-only stall journal next to accounts.json (user data)
+stall_log.jsonl
+
+# player reports (P7 stage 3, reputation.py): the append-only report journal for GMs (user data)
+reports.jsonl

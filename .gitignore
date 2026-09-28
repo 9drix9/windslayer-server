@@ -45,3 +45,12 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Screenshots and archives (may contain game art); git add -f an image that is meant to be published
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.zip
+*.7z
+*.rar

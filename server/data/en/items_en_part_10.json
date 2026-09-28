@@ -1,0 +1,1602 @@
+{
+  "3601": {
+    "en_title": "Battle God Set Boots (F) S",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3602": {
+    "en_title": "Sacrifice Top (M) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3603": {
+    "en_title": "Sacrifice Pants (M) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3604": {
+    "en_title": "Sacrifice Gloves (M) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3605": {
+    "en_title": "Sacrifice Boots (M) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3606": {
+    "en_title": "Sacrifice Top (F) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3607": {
+    "en_title": "Sacrifice Pants (F) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3608": {
+    "en_title": "Sacrifice Gloves (F) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3609": {
+    "en_title": "Sacrifice Boots (F) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3610": {
+    "en_title": "Holy Cross Top (M) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3611": {
+    "en_title": "Holy Cross Pants (M) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3612": {
+    "en_title": "Holy Cross Gloves (M) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3613": {
+    "en_title": "Holy Cross Boots (M) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3614": {
+    "en_title": "Holy Cross Top (F) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3615": {
+    "en_title": "Holy Cross Pants (F) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3616": {
+    "en_title": "Holy Cross Gloves (F) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3617": {
+    "en_title": "Holy Cross Boots (F) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3618": {
+    "en_title": "Saint Top (M) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3619": {
+    "en_title": "Saint Pants (M) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3620": {
+    "en_title": "Saint Gloves (M) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3621": {
+    "en_title": "Saint Boots (M) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3622": {
+    "en_title": "Saint Top (F) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3623": {
+    "en_title": "Saint Pants (F) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3624": {
+    "en_title": "Saint Gloves (F) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3625": {
+    "en_title": "Saint Boots (F) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3626": {
+    "en_title": "Maria Set Top (M) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3627": {
+    "en_title": "Maria Set Pants (M) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3628": {
+    "en_title": "Maria Set Gloves (M) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3629": {
+    "en_title": "Maria Set Boots (M) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3630": {
+    "en_title": "Maria Set Top (F) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3631": {
+    "en_title": "Maria Set Pants (F) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3632": {
+    "en_title": "Maria Set Gloves (F) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3633": {
+    "en_title": "Maria Set Boots (F) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3634": {
+    "en_title": "Heavens Door Top (M) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3635": {
+    "en_title": "Heavens Door Pants (M) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3636": {
+    "en_title": "Heavens Door Gloves (M) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3637": {
+    "en_title": "Heavens Door Boots (M) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3638": {
+    "en_title": "Heavens Door Top (F) S",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3639": {
+    "en_title": "Heavens Door Pants (F) S",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3640": {
+    "en_title": "Heavens Door Gloves (F) S",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3641": {
+    "en_title": "Heavens Door Boots (F) S",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3642": {
+    "en_title": "Cassiopeia Top (M) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3643": {
+    "en_title": "Cassiopeia Pants (M) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3644": {
+    "en_title": "Cassiopeia Gloves (M) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3645": {
+    "en_title": "Cassiopeia Boots (M) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3646": {
+    "en_title": "Cassiopeia Top (F) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3647": {
+    "en_title": "Cassiopeia Pants (F) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3648": {
+    "en_title": "Cassiopeia Gloves (F) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3649": {
+    "en_title": "Cassiopeia Boots (F) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3650": {
+    "en_title": "Presti Top (M) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3651": {
+    "en_title": "Presti Pants (M) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3652": {
+    "en_title": "Presti Gloves (M) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3653": {
+    "en_title": "Presti Boots (M) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3654": {
+    "en_title": "Presti Top (F) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3655": {
+    "en_title": "Presti Pants (F) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3656": {
+    "en_title": "Presti Gloves (F) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3657": {
+    "en_title": "Presti Boots (F) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3658": {
+    "en_title": "Rosanna Set Top (M) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3659": {
+    "en_title": "Rosanna Set Pants (M) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3660": {
+    "en_title": "Rosanna Set Gloves (M) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3661": {
+    "en_title": "Rosanna Set Boots (M) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3662": {
+    "en_title": "Rosanna Set Top (F) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3663": {
+    "en_title": "Rosanna Set Pants (F) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3664": {
+    "en_title": "Rosanna Set Gloves (F) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3665": {
+    "en_title": "Rosanna Set Boots (F) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3666": {
+    "en_title": "Aqua Blue Top (M) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3667": {
+    "en_title": "Aqua Blue Pants (M) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3668": {
+    "en_title": "Aqua Blue Gloves (M) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3669": {
+    "en_title": "Aqua Blue Boots (M) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3670": {
+    "en_title": "Aqua Blue Top (F) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3671": {
+    "en_title": "Aqua Blue Pants (F) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3672": {
+    "en_title": "Aqua Blue Gloves (F) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3673": {
+    "en_title": "Aqua Blue Boots (F) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3674": {
+    "en_title": "Wizardry Top (M) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3675": {
+    "en_title": "Wizardry Pants (M) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3676": {
+    "en_title": "Wizardry Gloves (M) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3677": {
+    "en_title": "Wizardry Boots (M) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3678": {
+    "en_title": "Wizardry Top (F) S",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3679": {
+    "en_title": "Wizardry Pants (F) S",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3680": {
+    "en_title": "Wizardry Gloves (F) S",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3681": {
+    "en_title": "Wizardry Boots (F) S",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3682": {
+    "en_title": "Lowest-Grade Heroes Top (M)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3683": {
+    "en_title": "Lowest-Grade Heroes Pants (M)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3684": {
+    "en_title": "Lowest-Grade Heroes Boots (M)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3685": {
+    "en_title": "Lowest-Grade Heroes Gloves",
+    "en_text": "Heroes superalloy armor gloves."
+  },
+  "3686": {
+    "en_title": "Lowest-Grade Heroes Top (F)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3687": {
+    "en_title": "Lowest-Grade Heroes Pants (F)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3688": {
+    "en_title": "Lowest-Grade Heroes Boots (F)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3689": {
+    "en_title": "Lower-Grade Heroes Top (M)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3690": {
+    "en_title": "Lower-Grade Heroes Pants (M)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3691": {
+    "en_title": "Lower-Grade Heroes Boots (M)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3692": {
+    "en_title": "Lower-Grade Heroes Gloves",
+    "en_text": "Heroes superalloy armor gloves."
+  },
+  "3693": {
+    "en_title": "Lower-Grade Heroes Top (F)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3694": {
+    "en_title": "Lower-Grade Heroes Pants (F)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3695": {
+    "en_title": "Lower-Grade Heroes Boots (F)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3696": {
+    "en_title": "Mid-Grade Heroes Top (M)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3697": {
+    "en_title": "Mid-Grade Heroes Pants (M)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3698": {
+    "en_title": "Mid-Grade Heroes Boots (M)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3699": {
+    "en_title": "Mid-Grade Heroes Gloves",
+    "en_text": "Heroes superalloy armor gloves."
+  },
+  "3700": {
+    "en_title": "Mid-Grade Heroes Top (F)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3701": {
+    "en_title": "Mid-Grade Heroes Pants (F)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3702": {
+    "en_title": "Mid-Grade Heroes Boots (F)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3703": {
+    "en_title": "Upper-Grade Heroes Top (M)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3704": {
+    "en_title": "Upper-Grade Heroes Pants (M)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3705": {
+    "en_title": "Upper-Grade Heroes Boots (M)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3706": {
+    "en_title": "Upper-Grade Heroes Gloves",
+    "en_text": "Heroes superalloy armor gloves."
+  },
+  "3707": {
+    "en_title": "Upper-Grade Heroes Top (F)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3708": {
+    "en_title": "Upper-Grade Heroes Pants (F)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3709": {
+    "en_title": "Upper-Grade Heroes Boots (F)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3710": {
+    "en_title": "Top-Grade Heroes Top (M)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3711": {
+    "en_title": "Top-Grade Heroes Pants (M)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3712": {
+    "en_title": "Top-Grade Heroes Boots (M)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3713": {
+    "en_title": "Top-Grade Heroes Gloves",
+    "en_text": "Heroes superalloy armor gloves."
+  },
+  "3714": {
+    "en_title": "Top-Grade Heroes Top (F)",
+    "en_text": "Heroes superalloy armor top."
+  },
+  "3715": {
+    "en_title": "Top-Grade Heroes Pants (F)",
+    "en_text": "Heroes superalloy armor pants."
+  },
+  "3716": {
+    "en_title": "Top-Grade Heroes Boots (F)",
+    "en_text": "Heroes superalloy armor boots."
+  },
+  "3717": {
+    "en_title": "Lowest-Grade Shinobi Top (M)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3718": {
+    "en_title": "Lowest-Grade Shinobi Pants (M)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3719": {
+    "en_title": "Lowest-Grade Shinobi Boots (M)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3720": {
+    "en_title": "Lowest-Grade Shinobi Gloves",
+    "en_text": "Gloves favored by Shinobi."
+  },
+  "3721": {
+    "en_title": "Lowest-Grade Shinobi Top (F)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3722": {
+    "en_title": "Lowest-Grade Shinobi Pants (F)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3723": {
+    "en_title": "Lowest-Grade Shinobi Boots (F)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3724": {
+    "en_title": "Lower-Grade Shinobi Top (M)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3725": {
+    "en_title": "Lower-Grade Shinobi Pants (M)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3726": {
+    "en_title": "Lower-Grade Shinobi Boots (M)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3727": {
+    "en_title": "Lower-Grade Shinobi Gloves",
+    "en_text": "Gloves favored by Shinobi."
+  },
+  "3728": {
+    "en_title": "Lower-Grade Shinobi Top (F)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3729": {
+    "en_title": "Lower-Grade Shinobi Pants (F)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3730": {
+    "en_title": "Lower-Grade Shinobi Boots (F)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3731": {
+    "en_title": "Mid-Grade Shinobi Top (M)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3732": {
+    "en_title": "Mid-Grade Shinobi Pants (M)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3733": {
+    "en_title": "Mid-Grade Shinobi Boots (M)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3734": {
+    "en_title": "Mid-Grade Shinobi Gloves",
+    "en_text": "Gloves favored by Shinobi."
+  },
+  "3735": {
+    "en_title": "Mid-Grade Shinobi Top (F)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3736": {
+    "en_title": "Mid-Grade Shinobi Pants (F)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3737": {
+    "en_title": "Mid-Grade Shinobi Boots (F)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3738": {
+    "en_title": "Upper-Grade Shinobi Top (M)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3739": {
+    "en_title": "Upper-Grade Shinobi Pants (M)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3740": {
+    "en_title": "Upper-Grade Shinobi Boots (M)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3741": {
+    "en_title": "Upper-Grade Shinobi Gloves",
+    "en_text": "Gloves favored by Shinobi."
+  },
+  "3742": {
+    "en_title": "Upper-Grade Shinobi Top (F)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3743": {
+    "en_title": "Upper-Grade Shinobi Pants (F)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3744": {
+    "en_title": "Upper-Grade Shinobi Boots (F)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3745": {
+    "en_title": "Top-Grade Shinobi Top (M)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3746": {
+    "en_title": "Top-Grade Shinobi Pants (M)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3747": {
+    "en_title": "Top-Grade Shinobi Boots (M)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3748": {
+    "en_title": "Top-Grade Shinobi Gloves",
+    "en_text": "Gloves favored by Shinobi."
+  },
+  "3749": {
+    "en_title": "Top-Grade Shinobi Top (F)",
+    "en_text": "An upper garment favored by Shinobi."
+  },
+  "3750": {
+    "en_title": "Top-Grade Shinobi Pants (F)",
+    "en_text": "Lower garments favored by Shinobi."
+  },
+  "3751": {
+    "en_title": "Top-Grade Shinobi Boots (F)",
+    "en_text": "Boots favored by Shinobi."
+  },
+  "3752": {
+    "en_title": "Lowest-Grade Master Hunter Top (M)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3753": {
+    "en_title": "Lowest-Grade Master Hunter Pants (M)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3754": {
+    "en_title": "Lowest-Grade Master Hunter Boots",
+    "en_text": "Boots favored by Master Hunters."
+  },
+  "3755": {
+    "en_title": "Lowest-Grade Master Hunter Gloves",
+    "en_text": "Gloves favored by Master Hunters."
+  },
+  "3756": {
+    "en_title": "Lowest-Grade Master Hunter Top (F)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3757": {
+    "en_title": "Lowest-Grade Master Hunter Pants (F)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3758": {
+    "en_title": "Lower-Grade Master Hunter Top (M)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3759": {
+    "en_title": "Lower-Grade Master Hunter Pants (M)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3760": {
+    "en_title": "Lower-Grade Master Hunter Boots",
+    "en_text": "Boots favored by Master Hunters."
+  },
+  "3761": {
+    "en_title": "Lower-Grade Master Hunter Gloves",
+    "en_text": "Gloves favored by Master Hunters."
+  },
+  "3762": {
+    "en_title": "Lower-Grade Master Hunter Top (F)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3763": {
+    "en_title": "Lower-Grade Master Hunter Pants (F)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3764": {
+    "en_title": "Mid-Grade Master Hunter Top (M)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3765": {
+    "en_title": "Mid-Grade Master Hunter Pants (M)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3766": {
+    "en_title": "Mid-Grade Master Hunter Boots",
+    "en_text": "Boots favored by Master Hunters."
+  },
+  "3767": {
+    "en_title": "Mid-Grade Master Hunter Gloves",
+    "en_text": "Gloves favored by Master Hunters."
+  },
+  "3768": {
+    "en_title": "Mid-Grade Master Hunter Top (F)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3769": {
+    "en_title": "Mid-Grade Master Hunter Pants (F)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3770": {
+    "en_title": "Upper-Grade Master Hunter Top (M)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3771": {
+    "en_title": "Upper-Grade Master Hunter Pants (M)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3772": {
+    "en_title": "Upper-Grade Master Hunter Boots",
+    "en_text": "Boots favored by Master Hunters."
+  },
+  "3773": {
+    "en_title": "Upper-Grade Master Hunter Gloves",
+    "en_text": "Gloves favored by Master Hunters."
+  },
+  "3774": {
+    "en_title": "Upper-Grade Master Hunter Top (F)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3775": {
+    "en_title": "Upper-Grade Master Hunter Pants (F)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3776": {
+    "en_title": "Top-Grade Master Hunter Top (M)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3777": {
+    "en_title": "Top-Grade Master Hunter Pants (M)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3778": {
+    "en_title": "Top-Grade Master Hunter Boots",
+    "en_text": "Boots favored by Master Hunters."
+  },
+  "3779": {
+    "en_title": "Top-Grade Master Hunter Gloves",
+    "en_text": "Gloves favored by Master Hunters."
+  },
+  "3780": {
+    "en_title": "Top-Grade Master Hunter Top (F)",
+    "en_text": "An upper garment favored by Master Hunters."
+  },
+  "3781": {
+    "en_title": "Top-Grade Master Hunter Pants (F)",
+    "en_text": "Lower garments favored by Master Hunters."
+  },
+  "3782": {
+    "en_title": "Lowest-Grade Fist Emperor Top (M)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3783": {
+    "en_title": "Lowest-Grade Fist Emperor Pants (M)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3784": {
+    "en_title": "Lowest-Grade Fist Emperor Gloves (M)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3785": {
+    "en_title": "Lowest-Grade Fist Emperor Boots (M)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3786": {
+    "en_title": "Lowest-Grade Fist Emperor Top (F)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3787": {
+    "en_title": "Lowest-Grade Fist Emperor Pants (F)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3788": {
+    "en_title": "Lowest-Grade Fist Emperor Gloves (F)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3789": {
+    "en_title": "Lowest-Grade Fist Emperor Boots (F)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3790": {
+    "en_title": "Lower-Grade Fist Emperor Top (M)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3791": {
+    "en_title": "Lower-Grade Fist Emperor Pants (M)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3792": {
+    "en_title": "Lower-Grade Fist Emperor Gloves (M)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3793": {
+    "en_title": "Lower-Grade Fist Emperor Boots (M)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3794": {
+    "en_title": "Lower-Grade Fist Emperor Top (F)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3795": {
+    "en_title": "Lower-Grade Fist Emperor Pants (F)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3796": {
+    "en_title": "Lower-Grade Fist Emperor Gloves (F)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3797": {
+    "en_title": "Lower-Grade Fist Emperor Boots (F)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3798": {
+    "en_title": "Mid-Grade Fist Emperor Top (M)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3799": {
+    "en_title": "Mid-Grade Fist Emperor Pants (M)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3800": {
+    "en_title": "Mid-Grade Fist Emperor Gloves (M)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3801": {
+    "en_title": "Mid-Grade Fist Emperor Boots (M)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3802": {
+    "en_title": "Mid-Grade Fist Emperor Top (F)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3803": {
+    "en_title": "Mid-Grade Fist Emperor Pants (F)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3804": {
+    "en_title": "Mid-Grade Fist Emperor Gloves (F)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3805": {
+    "en_title": "Mid-Grade Fist Emperor Boots (F)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3806": {
+    "en_title": "Upper-Grade Fist Emperor Top (M)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3807": {
+    "en_title": "Upper-Grade Fist Emperor Pants (M)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3808": {
+    "en_title": "Upper-Grade Fist Emperor Gloves (M)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3809": {
+    "en_title": "Upper-Grade Fist Emperor Boots (M)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3810": {
+    "en_title": "Upper-Grade Fist Emperor Top (F)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3811": {
+    "en_title": "Upper-Grade Fist Emperor Pants (F)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3812": {
+    "en_title": "Upper-Grade Fist Emperor Gloves (F)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3813": {
+    "en_title": "Upper-Grade Fist Emperor Boots (F)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3814": {
+    "en_title": "Top-Grade Fist Emperor Top (M)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3815": {
+    "en_title": "Top-Grade Fist Emperor Pants (M)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3816": {
+    "en_title": "Top-Grade Fist Emperor Gloves (M)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3817": {
+    "en_title": "Top-Grade Fist Emperor Boots (M)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3818": {
+    "en_title": "Top-Grade Fist Emperor Top (F)",
+    "en_text": "An upper garment favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3819": {
+    "en_title": "Top-Grade Fist Emperor Pants (F)",
+    "en_text": "Lower garments favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3820": {
+    "en_title": "Top-Grade Fist Emperor Gloves (F)",
+    "en_text": "Gloves favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3821": {
+    "en_title": "Top-Grade Fist Emperor Boots (F)",
+    "en_text": "Boots favored by the Fist Emperor who has mastered the way of the fist."
+  },
+  "3822": {
+    "en_title": "Lowest-Grade Oracle Top (M)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3823": {
+    "en_title": "Lowest-Grade Oracle Pants (M)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3824": {
+    "en_title": "Lowest-Grade Oracle Gloves (M)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3825": {
+    "en_title": "Lowest-Grade Oracle Boots (M)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3826": {
+    "en_title": "Lowest-Grade Oracle Top (F)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3827": {
+    "en_title": "Lowest-Grade Oracle Pants (F)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3828": {
+    "en_title": "Lowest-Grade Oracle Gloves (F)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3829": {
+    "en_title": "Lowest-Grade Oracle Boots (F)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3830": {
+    "en_title": "Lower-Grade Oracle Top (M)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3831": {
+    "en_title": "Lower-Grade Oracle Pants (M)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3832": {
+    "en_title": "Lower-Grade Oracle Gloves (M)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3833": {
+    "en_title": "Lower-Grade Oracle Boots (M)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3834": {
+    "en_title": "Lower-Grade Oracle Top (F)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3835": {
+    "en_title": "Lower-Grade Oracle Pants (F)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3836": {
+    "en_title": "Lower-Grade Oracle Gloves (F)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3837": {
+    "en_title": "Lower-Grade Oracle Boots (F)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3838": {
+    "en_title": "Mid-Grade Oracle Top (M)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3839": {
+    "en_title": "Mid-Grade Oracle Pants (M)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3840": {
+    "en_title": "Mid-Grade Oracle Gloves (M)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3841": {
+    "en_title": "Mid-Grade Oracle Boots (M)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3842": {
+    "en_title": "Mid-Grade Oracle Top (F)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3843": {
+    "en_title": "Mid-Grade Oracle Pants (F)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3844": {
+    "en_title": "Mid-Grade Oracle Gloves (F)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3845": {
+    "en_title": "Mid-Grade Oracle Boots (F)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3846": {
+    "en_title": "Upper-Grade Oracle Top (M)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3847": {
+    "en_title": "Upper-Grade Oracle Pants (M)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3848": {
+    "en_title": "Upper-Grade Oracle Gloves (M)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3849": {
+    "en_title": "Upper-Grade Oracle Boots (M)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3850": {
+    "en_title": "Upper-Grade Oracle Top (F)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3851": {
+    "en_title": "Upper-Grade Oracle Pants (F)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3852": {
+    "en_title": "Upper-Grade Oracle Gloves (F)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3853": {
+    "en_title": "Upper-Grade Oracle Boots (F)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3854": {
+    "en_title": "Top-Grade Oracle Top (M)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3855": {
+    "en_title": "Top-Grade Oracle Pants (M)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3856": {
+    "en_title": "Top-Grade Oracle Gloves (M)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3857": {
+    "en_title": "Top-Grade Oracle Boots (M)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3858": {
+    "en_title": "Top-Grade Oracle Top (F)",
+    "en_text": "An upper garment favored by Oracle priests."
+  },
+  "3859": {
+    "en_title": "Top-Grade Oracle Pants (F)",
+    "en_text": "Lower garments favored by Oracle priests."
+  },
+  "3860": {
+    "en_title": "Top-Grade Oracle Gloves (F)",
+    "en_text": "Gloves favored by Oracle priests."
+  },
+  "3861": {
+    "en_title": "Top-Grade Oracle Boots (F)",
+    "en_text": "Boots favored by Oracle priests."
+  },
+  "3862": {
+    "en_title": "Lowest-Grade Archmage Top (M)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3863": {
+    "en_title": "Lowest-Grade Archmage Pants (M)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3864": {
+    "en_title": "Lowest-Grade Archmage Gloves (M)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3865": {
+    "en_title": "Lowest-Grade Archmage Boots (M)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3866": {
+    "en_title": "Lowest-Grade Archmage Top (F)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3867": {
+    "en_title": "Lowest-Grade Archmage Pants (F)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3868": {
+    "en_title": "Lowest-Grade Archmage Gloves (F)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3869": {
+    "en_title": "Lowest-Grade Archmage Boots (F)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3870": {
+    "en_title": "Lower-Grade Archmage Top (M)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3871": {
+    "en_title": "Lower-Grade Archmage Pants (M)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3872": {
+    "en_title": "Lower-Grade Archmage Gloves (M)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3873": {
+    "en_title": "Lower-Grade Archmage Boots (M)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3874": {
+    "en_title": "Lower-Grade Archmage Top (F)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3875": {
+    "en_title": "Lower-Grade Archmage Pants (F)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3876": {
+    "en_title": "Lower-Grade Archmage Gloves (F)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3877": {
+    "en_title": "Lower-Grade Archmage Boots (F)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3878": {
+    "en_title": "Mid-Grade Archmage Top (M)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3879": {
+    "en_title": "Mid-Grade Archmage Pants (M)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3880": {
+    "en_title": "Mid-Grade Archmage Gloves (M)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3881": {
+    "en_title": "Mid-Grade Archmage Boots (M)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3882": {
+    "en_title": "Mid-Grade Archmage Top (F)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3883": {
+    "en_title": "Mid-Grade Archmage Pants (F)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3884": {
+    "en_title": "Mid-Grade Archmage Gloves (F)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3885": {
+    "en_title": "Mid-Grade Archmage Boots (F)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3886": {
+    "en_title": "Upper-Grade Archmage Top (M)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3887": {
+    "en_title": "Upper-Grade Archmage Pants (M)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3888": {
+    "en_title": "Upper-Grade Archmage Gloves (M)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3889": {
+    "en_title": "Upper-Grade Archmage Boots (M)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3890": {
+    "en_title": "Upper-Grade Archmage Top (F)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3891": {
+    "en_title": "Upper-Grade Archmage Pants (F)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3892": {
+    "en_title": "Upper-Grade Archmage Gloves (F)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3893": {
+    "en_title": "Upper-Grade Archmage Boots (F)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3894": {
+    "en_title": "Top-Grade Archmage Top (M)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3895": {
+    "en_title": "Top-Grade Archmage Pants (M)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3896": {
+    "en_title": "Top-Grade Archmage Gloves (M)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3897": {
+    "en_title": "Top-Grade Archmage Boots (M)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3898": {
+    "en_title": "Top-Grade Archmage Top (F)",
+    "en_text": "An upper garment favored by Archmages."
+  },
+  "3899": {
+    "en_title": "Top-Grade Archmage Pants (F)",
+    "en_text": "Lower garments favored by Archmages."
+  },
+  "3900": {
+    "en_title": "Top-Grade Archmage Gloves (F)",
+    "en_text": "Gloves favored by Archmages."
+  },
+  "3901": {
+    "en_title": "Top-Grade Archmage Boots (F)",
+    "en_text": "Boots favored by Archmages."
+  },
+  "3902": {
+    "en_title": "Diamond Sword",
+    "en_text": "An unbreakable sword forged from the eternal gem, diamond."
+  },
+  "3903": {
+    "en_title": "Bloodia",
+    "en_text": "Bloodia, where a chilling aura lingers."
+  },
+  "3904": {
+    "en_title": "Sword of Legend",
+    "en_text": "A legendary blade said to have been passed down for 100 years."
+  },
+  "3905": {
+    "en_title": "Dragon Slayer",
+    "en_text": "The ultimate sword, Dragon Slayer, capable of piercing a dragon's thick hide."
+  },
+  "3906": {
+    "en_title": "Bow of Mother Nature",
+    "en_text": "A bow imbued with the energy of nature."
+  },
+  "3907": {
+    "en_title": "Lightning Jujube Bow",
+    "en_text": "A spiritual bow crafted from a jujube tree struck by lightning."
+  },
+  "3908": {
+    "en_title": "Dragon Eye",
+    "en_text": "Take aim with the eye of a dragon."
+  },
+  "3909": {
+    "en_title": "Bow of the Dragon",
+    "en_text": "The ultimate bow, imbued with the dragon's aura."
+  },
+  "3910": {
+    "en_title": "Wand of Blessing",
+    "en_text": "A wand granted holy blessing."
+  },
+  "3911": {
+    "en_title": "Wand of Judgment",
+    "en_text": "It is time to render judgment upon the evil that disturbs this world."
+  },
+  "3912": {
+    "en_title": "Wand of Penance",
+    "en_text": "May your faith remain unshaken through all suffering."
+  },
+  "3913": {
+    "en_title": "Wand of God",
+    "en_text": "O Lord..."
+  },
+  "3914": {
+    "en_title": "Staff of Enlightenment",
+    "en_text": "Through the awakening of magic, you have attained nirvana."
+  },
+  "3915": {
+    "en_title": "Staff of Truth",
+    "en_text": "Young mage, have you grasped the truth?"
+  },
+  "3916": {
+    "en_title": "Staff of Destruction",
+    "en_text": "I shall destroy all that exists in this world."
+  },
+  "3917": {
+    "en_title": "Staff of Verity",
+    "en_text": "Though pitch-black darkness lies layered before your eyes, the truth always remains in its place."
+  },
+  "3918": {
+    "en_title": "Bloody Death",
+    "en_text": "If this one strikes you, mere pain will not be the end of it."
+  },
+  "3919": {
+    "en_title": "Darkness Dagger",
+    "en_text": "A dagger that embraces the darkness."
+  },
+  "3920": {
+    "en_title": "Shadow Master",
+    "en_text": "How much can you truly trust the shadow at your feet?"
+  },
+  "3921": {
+    "en_title": "Lord of Darkness",
+    "en_text": "If you wish to live, stay always where there is light. But he turned even the light into darkness."
+  },
+  "3922": {
+    "en_title": "Knuckles of Agony",
+    "en_text": "Endure the pain, and endure it again."
+  },
+  "3923": {
+    "en_title": "Knuckles of Patience",
+    "en_text": "Challenge the strongest with the virtue of endurance."
+  },
+  "3924": {
+    "en_title": "Ultimate Knuckles",
+    "en_text": "The ultimate blow. 'Strong' is not enough to describe it."
+  },
+  "3925": {
+    "en_title": "Supreme Knuckles",
+    "en_text": "The greatest knuckles in history."
+  },
+  "3926": {
+    "en_title": "Diamond Sword S",
+    "en_text": "An unbreakable sword forged from the eternal gem, diamond."
+  },
+  "3927": {
+    "en_title": "Bloodia S",
+    "en_text": "Bloodia, where a chilling aura lingers."
+  },
+  "3928": {
+    "en_title": "Sword of Legend S",
+    "en_text": "A legendary blade said to have been passed down for 100 years."
+  },
+  "3929": {
+    "en_title": "Dragon Slayer S",
+    "en_text": "The ultimate sword, Dragon Slayer, capable of piercing a dragon's thick hide."
+  },
+  "3930": {
+    "en_title": "Bow of Mother Nature S",
+    "en_text": "A bow imbued with the energy of nature."
+  },
+  "3931": {
+    "en_title": "Lightning Jujube Bow S",
+    "en_text": "A spiritual bow crafted from a jujube tree struck by lightning."
+  },
+  "3932": {
+    "en_title": "Dragon Eye S",
+    "en_text": "Take aim with the eye of a dragon."
+  },
+  "3933": {
+    "en_title": "Bow of the Dragon S",
+    "en_text": "The ultimate bow, imbued with the dragon's aura."
+  },
+  "3934": {
+    "en_title": "Wand of Blessing S",
+    "en_text": "A wand granted holy blessing."
+  },
+  "3935": {
+    "en_title": "Wand of Judgment S",
+    "en_text": "It is time to render judgment upon the evil that disturbs this world."
+  },
+  "3936": {
+    "en_title": "Wand of Penance S",
+    "en_text": "May your faith remain unshaken through all suffering."
+  },
+  "3937": {
+    "en_title": "Wand of God S",
+    "en_text": "O Lord..."
+  },
+  "3938": {
+    "en_title": "Staff of Enlightenment S",
+    "en_text": "Through the awakening of magic, you have attained nirvana."
+  },
+  "3939": {
+    "en_title": "Staff of Truth S",
+    "en_text": "Young mage, have you grasped the truth?"
+  },
+  "3940": {
+    "en_title": "Staff of Destruction S",
+    "en_text": "I shall destroy all that exists in this world."
+  },
+  "3941": {
+    "en_title": "Staff of Verity S",
+    "en_text": "Though pitch-black darkness lies layered before your eyes, the truth always remains in its place."
+  },
+  "3942": {
+    "en_title": "Bloody Death S",
+    "en_text": "If this one strikes you, mere pain will not be the end of it."
+  },
+  "3943": {
+    "en_title": "Darkness Dagger S",
+    "en_text": "A dagger that embraces the darkness."
+  },
+  "3944": {
+    "en_title": "Shadow Master S",
+    "en_text": "How much can you truly trust the shadow at your feet?"
+  },
+  "3945": {
+    "en_title": "Lord of Darkness S",
+    "en_text": "If you wish to live, stay always where there is light. But he turned even the light into darkness."
+  },
+  "3946": {
+    "en_title": "Knuckles of Agony S",
+    "en_text": "Endure the pain, and endure it again."
+  },
+  "3947": {
+    "en_title": "Knuckles of Patience S",
+    "en_text": "Challenge the strongest with the virtue of endurance."
+  },
+  "3948": {
+    "en_title": "Ultimate Knuckles S",
+    "en_text": "The ultimate blow. 'Strong' is not enough to describe it."
+  },
+  "3949": {
+    "en_title": "Supreme Knuckles S",
+    "en_text": "The greatest knuckles in history."
+  },
+  "3950": {
+    "en_title": "Underwater City Return Stone",
+    "en_text": "A return stone that takes you back to the underwater ancient city of Erei. Single-use."
+  },
+  "3951": {
+    "en_title": "Random Element Extraction x1",
+    "en_text": "Randomly removes one enchanted element stone from a piece of equipment."
+  },
+  "3952": {
+    "en_title": "Selective Element Extraction x1",
+    "en_text": "Lets you choose and remove one enchanted element stone from a piece of equipment."
+  },
+  "3953": {
+    "en_title": "Vermilion Bird Glove",
+    "en_text": "Glove of the Vermilion Bird, one of the four guardian deities of the cardinal directions."
+  },
+  "3954": {
+    "en_title": "Azure Dragon Claw",
+    "en_text": "Knuckles forged from the claw of the Azure Dragon, master of water and lightning."
+  },
+  "3955": {
+    "en_title": "Stylish Parasol",
+    "en_text": "When you want to escape the sun, reach for the stylish parasol!"
+  },
+  "3956": {
+    "en_title": "Tasty Carrot",
+    "en_text": "Carrots are packed with good nutrition, so chew them well!"
+  },
+  "3957": {
+    "en_title": "Birdwing Wand",
+    "en_text": "Soar like a bird and chant your spells!"
+  },
+  "3958": {
+    "en_title": "Magic Broomstick",
+    "en_text": "I am not a cleaning tool, I am a magic broomstick! (Sorry, no flying.)"
+  },
+  "3959": {
+    "en_title": "Dragonwing Bow",
+    "en_text": "A bow shaped like a dragon's wing."
+  },
+  "3960": {
+    "en_title": "Thorns of Dragon",
+    "en_text": "A bow made from the sharp thorns of a dragon."
+  },
+  "3961": {
+    "en_title": "Fire Dragon Sword",
+    "en_text": "Hwaryong Bido, a blade carrying the essence of fire."
+  },
+  "3962": {
+    "en_title": "Holy Rapier",
+    "en_text": "A rapier infused with holy energy."
+  },
+  "3963": {
+    "en_title": "Red Nail Shield",
+    "en_text": "A crimson shield whose color drains the will to fight from enemies."
+  },
+  "3964": {
+    "en_title": "Dragon Eye Shield",
+    "en_text": "A shield shaped like the eye of a dragon."
+  },
+  "3965": {
+    "en_title": "Lion's Mane Knuckles",
+    "en_text": "Legend has it the golden lion has a blue mane."
+  },
+  "3966": {
+    "en_title": "Poo Stick",
+    "en_text": "Step too close and you'll regret it. Hehe."
+  },
+  "3967": {
+    "en_title": "Sunflower Staff",
+    "en_text": "I will always be looking only at you."
+  },
+  "3968": {
+    "en_title": "Bow of Mother Nature",
+    "en_text": "A bow imbued with the fresh, green energy of nature."
+  },
+  "3969": {
+    "en_title": "Red Feather Scimitar",
+    "en_text": "A scimitar whose red feathers strike fear into enemies."
+  },
+  "3970": {
+    "en_title": "Golden Guardian Shield",
+    "en_text": "Carrying a shield of pure gold? You must be incredibly wealthy!"
+  },
+  "3971": {
+    "en_title": "Erei Whelk - Consumable",
+    "en_text": "A delicacy of the underwater city Erei. Restores HP."
+  },
+  "3972": {
+    "en_title": "Gaebugi Shell - Consumable",
+    "en_text": "Shell of a Gaebugi. Edible, with a savory taste. Restores MP."
+  },
+  "3973": {
+    "en_title": "Pop-Pop Sushi - Consumable",
+    "en_text": "Delicious pop-pop sushi. Restores HP and MP."
+  },
+  "3974": {
+    "en_title": "Shark Fin - Consumable",
+    "en_text": "Shark fin delicacy. Restores HP and MP."
+  },
+  "3975": {
+    "en_title": "Lip-Beak",
+    "en_text": "The lip-beak of a Strozolly."
+  },
+  "3976": {
+    "en_title": "Zolly's Leg",
+    "en_text": "The leg of a Strozolly."
+  },
+  "3977": {
+    "en_title": "Flabang's Antenna",
+    "en_text": "The creepy antenna of a Flabang."
+  },
+  "3978": {
+    "en_title": "Flabang's Wing",
+    "en_text": "The pink wing of a Flabang."
+  },
+  "3979": {
+    "en_title": "Mud Clump",
+    "en_text": "A clump of mud commonly found in the marshlands."
+  },
+  "3980": {
+    "en_title": "Mud Pack",
+    "en_text": "A mud pack said to be good for the skin."
+  },
+  "3981": {
+    "en_title": "Conch Turtle Shell",
+    "en_text": "Shell of a Conch Turtle. Watch out for its sharp spikes."
+  },
+  "3982": {
+    "en_title": "Conch Turtle Spike",
+    "en_text": "The sharp spike of a Conch Turtle."
+  },
+  "3983": {
+    "en_title": "Hamuki's Molar",
+    "en_text": "The sturdy molar of a Hamuki."
+  },
+  "3984": {
+    "en_title": "Cursed Heart",
+    "en_text": "The cursed heart of the cursed riverside monsters."
+  },
+  "3985": {
+    "en_title": "Tombstone Fragment",
+    "en_text": "A fragment from a nameless tombstone."
+  },
+  "3986": {
+    "en_title": "Scary Tree Fragment",
+    "en_text": "A fragment of a scary tree with glaring eyes."
+  },
+  "3987": {
+    "en_title": "King Strawberry",
+    "en_text": "Not the tastiest, but a generous helping of strawberry."
+  },
+  "3988": {
+    "en_title": "Pupa",
+    "en_text": "The white pupa of a Flabang."
+  },
+  "3989": {
+    "en_title": "Monster Card <Strozolly>",
+    "en_text": "A card depicting the monster <Strozolly>. Double-click to register it in the encyclopedia and gain bonus EXP from defeating <Strozolly>."
+  },
+  "3990": {
+    "en_title": "Monster Card <Flabang>",
+    "en_text": "A card depicting the monster <Flabang>. Double-click to register it in the encyclopedia and gain bonus EXP from defeating <Flabang>."
+  },
+  "3991": {
+    "en_title": "Monster Card <Mud Hook>",
+    "en_text": "A card depicting the monster <Mud Hook>. Double-click to register it in the encyclopedia and gain bonus EXP from defeating <Mud Hook>."
+  },
+  "3992": {
+    "en_title": "Monster Card <Conch Turtle>",
+    "en_text": "A card depicting the monster <Conch Turtle>. Double-click to register it in the encyclopedia and gain bonus EXP from defeating <Conch Turtle>."
+  },
+  "3993": {
+    "en_title": "Monster Card <Hamuki>",
+    "en_text": "A card depicting the monster <Hamuki>. Double-click to register it in the encyclopedia and gain bonus EXP from defeating <Hamuki>."
+  },
+  "3994": {
+    "en_title": "Party Boots - Pearl",
+    "en_text": "Ladies' party boots, perfect for noble galas!"
+  },
+  "3995": {
+    "en_title": "Party Boots - Black",
+    "en_text": "Ladies' party boots, perfect for noble galas!"
+  },
+  "3996": {
+    "en_title": "Party Boots - Blue",
+    "en_text": "Ladies' party boots, perfect for noble galas!"
+  },
+  "3997": {
+    "en_title": "Party Boots - Purple",
+    "en_text": "Ladies' party boots, perfect for noble galas!"
+  },
+  "3998": {
+    "en_title": "Colombo Boots - Blue",
+    "en_text": "Designer Colombo's luxury boots, renowned worldwide."
+  },
+  "3999": {
+    "en_title": "Colombo Boots - Red",
+    "en_text": "Designer Colombo's luxury boots, renowned worldwide."
+  },
+  "4000": {
+    "en_title": "Colombo Boots - Pink",
+    "en_text": "Designer Colombo's luxury boots, renowned worldwide."
+  }
+}

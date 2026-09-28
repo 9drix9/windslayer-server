@@ -1,0 +1,73 @@
+{
+  "_comment": "Server configuration (roadmap 1.12 F12, arch-config). Every key is optional; config.py holds the defaults and validates types. Restart the server after editing.",
+
+  "_client_comment": "client-2009-login: CLIENT_BUILD \"2008\" (WindSlayer2Game client, the default) or \"2009\" (EN Outspark v1.04 Build 14, data in CLIENT_DIR_2009): version code 14, channel entries carry GAME_PORT, login is the launcher field -<account> <password> -x -x (WindSlayer2009/play_2009.bat).",
+  "CLIENT_BUILD": "2008",
+  "CLIENT_DIR_2009": "../../WindSlayer2009",
+
+  "BIND_HOST": "0.0.0.0",
+  "VERSION_PORT": 7011,
+  "GAME_PORT": 7022,
+  "ADMIN_PORT": 7099,
+  "UDP_ROOM_PORT_BASE": 10000,
+
+  "PUBLIC_IP": "127.0.0.1",
+  "WORLD_NAME": "WindSlayer",
+  "CHANNELS": [
+    {"no": 1, "name": "Channel 1"}
+  ],
+
+  "_version_comment": "lc-version-config: NOTICE is the S2C 0x01 announcement (<=1000 bytes; the launcher shows its first line). MAINTENANCE sends version_code 0xEA61 instead of 3 - the client shows the notice and closes itself 5 s later - and answers every login with 0x02 result 0x0E.",
+  "NOTICE": "Press start button to start the game.\n\n© 2009 OUTSPARK.com. All rights reserved.",
+  "MAINTENANCE": false,
+  "MAX_ONLINE": 100,
+  "AUTO_REGISTER": false,
+  "HASH_PASSWORDS": true,
+
+  "ACCOUNTS_FILE": "accounts.json",
+  "SAVE_DEBOUNCE_SECS": 2.0,
+  "AUTOSAVE_SECS": 60.0,
+
+  "START_MAP": 101,
+  "START_X": 700.0,
+  "START_Y": 812.0,
+  "DELETE_MIN_AGE_HOURS": 0.0,
+  "STARTER_WEAPON": 0,
+
+  "_mob_comment": "world-1a-defaults: MOB_SPAWN_EFFECT_ID 0 sends no S2C 0x1A effect entry (live T-1A-1: idle mobs render without one; 2875 restores the old Mutation entry). MOB_SERVER_CONTROLLED false lets the client wander AI walk mobs (retail); hits come from the client's own 61 B C2S 0x0D reports, so the server needs no mob position. true keeps them idle where the server put them.",
+  "MOB_SPAWN_EFFECT_ID": 0,
+  "MOB_SERVER_CONTROLLED": false,
+
+  "_ground_comment": "item_inventory-ground-loot-pickup (P4 stage 2): GROUND_LOOT true drops monster loot on the ground (S2C 0x12) for the pickup key (C2S 0x1F -> S2C 0x13); false restores the P0 loot-into-the-bag path until the ground flow is live-verified. Unpicked items despawn after GROUND_ITEM_SECS; a map holds at most GROUND_ITEMS_PER_MAP (the oldest goes first).",
+  "GROUND_LOOT": true,
+  "GROUND_ITEM_SECS": 60.0,
+  "GROUND_ITEMS_PER_MAP": 100,
+
+  "_crafting_comment": "P4 stage 3 (item_inventory-crafting / -reinforcement / -gathering): Concoction and Mineral Refining roll the client's own success table (no key). REINFORCE_SUCCESS_PCT is the reinforcement success chance (retail unknown; a failure consumes nothing). GATHER_RATE_DIVISOR is the unit of a gather node's hni Drop column (100000: ~65% of gathers find something; 0: every gather yields a reward, weighted by the column). The tool is used up on every gather result.",
+  "REINFORCE_SUCCESS_PCT": 70,
+  "GATHER_RATE_DIVISOR": 100000,
+
+  "_cards_comment": "P4 stage 4 (quest_cards_misc-card-exp-bonus / -system-notice-0x99): CARD_EXP_BONUS gives +10% exp (at least 1) for kills of a monster whose Monster Card is registered in the Card Deck (the card tooltip; retail unproven). CHANNEL_NOTICE sends S2C 0x99 sub 8 'In channel N.' once per connection, after the enter-world burst (on the client's first C2S 0x63).",
+  "CARD_EXP_BONUS": true,
+  "CHANNEL_NOTICE": true,
+
+  "_aggro_comment": "monster aggro (MONSTER_AGGRO_RE_2026-09-23): MOB_AGGRO true = a hit monster turns on its attacker - the server keeps the hate list and drives it with command nodes (walk/jump/drop/attack by the client's own chase rules) until the target dies or leaves, the mob is MOB_LEASH_PX from where the chase began or 15 s pass without a hit, then S2C 0x9E hands it back. false = the old behaviour. MOB_AI_COMMAND \"2A\" (the 16-byte 0x2A self-form, default) or \"1B\" (0x1B {hold 300} nodes after the 0x2A release) - the live test decides which one the client honours. MOB_CONTACT_DAMAGE: the victim's own C2S 0x0D monster-hit reports damage the player (S2C 0x28, 0x3E at 0); MOB_CONTACT_AGGRO_ONLY: only from a monster that is after him (un-hit wandering mobs are harmless, as in retail).",
+  "MOB_AGGRO": true,
+  "MOB_AI_COMMAND": "2A",
+  "MOB_CONTACT_DAMAGE": true,
+  "MOB_CONTACT_AGGRO_ONLY": true,
+
+  "_damage_comment": "damage-formula: DAMAGE_FORMULA \"client\" (default) computes every hit with the client's own formula (damage.py: FUN_0041b830 stat derivation + FUN_004194f0 level scale, skill and element terms) - the number under the client's damage digit before its grade roll; \"placeholder\" restores the old STR + W_Att - Def / Body_Atk - Def rules for rollback.",
+  "DAMAGE_FORMULA": "client",
+
+  "_shared_mobs_comment": "P5 stage 3 (world-shared-monsters): one set of monsters per map, the same uids on every client there; kills, corpses, respawns, chase words (0x2A per receiver) and hand-backs (0x9E) reach everyone on the map. A map nobody stands on keeps its monsters (dead ones stay dead) for MOB_MAP_KEEP_SECS, then they are rebuilt fresh on the next arrival; 0 = at once. GM !mobs lists them.",
+  "MOB_MAP_KEEP_SECS": 300.0,
+
+  "_reputation_comment": "P7 stage 3 (social_friend-compliment): popup Praise gives the target account COMPLIMENT_DELTA manner points. A giver compliments once per day; the same target account again only after COMPLIMENT_REPEAT_DAYS days (0 = no such rule); an account receives at most COMPLIMENT_DAILY_CAP a day. The report fee is the client's own ceil(level/10)*100 (not configurable: the client pre-checks it).",
+  "COMPLIMENT_DELTA": 1,
+  "COMPLIMENT_DAILY_CAP": 5,
+  "COMPLIMENT_REPEAT_DAYS": 7,
+
+  "DEV_MEMORY_COMBAT": true,
+  "CREATE_REPLY_0x02": false
+}

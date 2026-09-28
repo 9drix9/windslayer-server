@@ -1,0 +1,1107 @@
+{
+ "meta": {
+  "title": "WindSlayer EN 2008 -> EN 2009 (Outspark v1.04 build 14) client memory/patch map",
+  "exe_2008": "re_tools\\WindSlayer.exe (sha1 f751f3d1...)",
+  "exe_2009": "re_tools\\corpus_2009\\WindSlayer_2009.exe (sha1 2e1a98c1...)",
+  "image_base": "0x400000 both (no ASLR); file_off = VA - 0x400000 for .text/.rdata in both builds",
+  "item_schema": "2008, 2009, meaning, evidence, verification, diff_vs_2008, confidence"
+ },
+ "globals": {
+  "game_state": {
+   "2008": "0x70EA00",
+   "2009": "0x54EBD0",
+   "meaning": "static CD3DApplication/game object (vtable at +0; everything else hangs off it)",
+   "evidence": "2009 FUN_00487d00 (WinMain body, 2008 FUN_00475840): MOV EDI,0x54ebd0 at 0x487D74 before FUN_0042b2b0 (subsystem allocation, 2008 FUN_00429b50); MOV ECX,0x54ebd0 at 0x487E0B -> FUN_0040c140 ('Failed to Create d3dApp.'), 0x487E47 -> FUN_0043f140 ('Failed to InitializeGame.'), 0x487E7F -> FUN_0040e370 (main loop). 2008: MOV ECX,0x70ea00 at 0x4758E1/0x475943, PUSH 0x70ea00 at 0x475912. Frame fn 0x40E440 uses it as this (CS at this+0x368).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "moved (different .data layout); same role",
+   "confidence": "high"
+  },
+  "scene_ptr": {
+   "2008": "0x70EECC (game_state+0x4CC)",
+   "2009": "0x54F0C0 (game_state+0x4F0)",
+   "meaning": "pointer to the scene/session object (local uid, entity list, scene mode, clocks)",
+   "evidence": "2009 0x487D96 MOV ECX,[0x54f0c0]; CMP [ECX+0xf18],EBX (2008 0x475875 MOV ECX,[0x70eecc]; CMP [ECX+0xf00],0). Per-tick FUN_0042c920 reads [this+0x4f0] for every scene access (2008 FUN_0042b260 [this+0x4cc]); 0x02 handler 0x4525F1 MOV EDX,[ESI+0x4f0]; MOV EAX,[EDX+0x224] (2008 0x44DFDA [ESI+0x4cc]/[EDX+0x220]).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "game_state offset +0x4CC -> +0x4F0 (+0x24)",
+   "confidence": "high"
+  },
+  "anim_container_ptr": {
+   "2008": "0x70EEE0 (game_state+0x4E0)",
+   "2009": "0x54F0D4 (game_state+0x504)",
+   "meaning": "anim/template record container (list: head +0x10, count +0x18, cursor +0x1C; node.next=[node], payload=[node+8]); looked up by 1-based entity+anim_index",
+   "evidence": "0x1A handler 2009 0x456B73 MOV EDX,[ECX+0x504]; CALL 0x409EF0 (2008 0x451E41 MOV EDX,[EDX+0x4e0]; CALL 0x409770 RosterLookupByIndex). Render 2009 0x433512/0x4335C9 MOV EDX,[EBX+0x504]; CALL 0x409F30 (2008 0x431B78/0x431C2F [EDI+0x4e0]; CALL 0x4097B0). Allocation FUN_0042b2b0 stores FUN_00408ba0 (0x130-byte object) at +0x504 and copies it to scene+0xFA8 (2008 FUN_00429b50: FUN_00408450, 0x128 bytes, +0x4E0, scene+0xF7C).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair; both lookup functions (0x409EF0, 0x409F30) are byte-identical to 2008 0x409770/0x4097B0, so the list layout is unchanged",
+   "diff_vs_2008": "game_state offset +0x4E0 -> +0x504; container object 0x128 -> 0x130 bytes; RECORD layout changed: name +0 same, anim block +0x250 -> +0x254 (10 -> 13 dwords), +0x63C->+0x64C, level +0x640->+0x650, class +0x644->+0x654, max HP +0x648->+0x658, +0x650..+0x66C -> +0x660..+0x67C, +0x67C/+0x680 -> +0x68C/+0x690 (enum_container.py must read class at +0x654, sub at +0x658)",
+   "confidence": "high"
+  },
+  "map_object_ptr": {
+   "2008": "0x70EED8 (game_state+0x4D8)",
+   "2009": "0x54F0CC (game_state+0x4FC)",
+   "meaning": "map/room object (room mode flag, room number); also copied to scene+0xF88/+0xFB4",
+   "evidence": "FUN_0042b2b0 allocates 0x470 bytes (FUN_004052f0) into +0x4FC and copies it to scene+0xFB4 (2008 FUN_00429b50: 0x3E0 bytes, FUN_00405180, +0x4D8, scene+0xF88). Per-tick 2009 0x42C920 tests [[this+0x4fc]+0x7c]==0 (2008 [[this+0x4d8]+0x70]==0). UDP handler 2009 compares [[gs+0x4fc]+0x1c4] with the snapshot room number (2008 +0x1b8).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "game_state +0x4D8 -> +0x4FC; object 0x3E0 -> 0x470 bytes; room-mode field +0x70 -> +0x7C; room number +0x1B8 -> +0x1C4; new +0x2E0 flag used by per-tick in room mode (FUN_0042a300)",
+   "confidence": "high"
+  },
+  "g_sock_game": {
+   "2008": "0x70E6F4",
+   "2009": "0x54E828",
+   "meaning": "CSNSocket* for the game TCP connection (all S2C GetDataFromPacket and C2S Add/Send)",
+   "evidence": "CreateSockets 2009 FUN_00440640: first CSNSocket::Create(0,1) stored to 0x54E828 (2008 CreateSockets 0x440150 -> g_sock_game 0x70E6F4); copied to scene+0xFC0 (2008 scene+0xF94). Every OnReceive read uses MOV ECX,[0x54e828] (e.g. 0x452225, 0x456B1F..0x4570AC).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "moved",
+   "confidence": "high"
+  },
+  "g_sock_version": {
+   "2008": "0x70E6F8",
+   "2009": "0x54E82C",
+   "meaning": "CSNSocket* for the version-server TCP connection",
+   "evidence": "ConnectToVersionServer 2009 FUN_00440880 at 0x4409BD MOV ECX,[0x54e82c]; PUSH 0x1b63; PUSH 0x52dd54; CALL Connect (2008 0x44048D MOV ECX,[0x70e6f8]; PUSH 0x1b63; PUSH 0x6f79f8). FUN_00440640 second Create(0,1) stores to 0x54E82C.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "moved",
+   "confidence": "high"
+  },
+  "g_sock_udp": {
+   "2008": "0x70E6FC (g_sock_map)",
+   "2009": "0x54E830",
+   "meaning": "UDP CSNSocket* bound to 42907 (0xA79B): loopback input, LAN probe, room snapshots; copied to scene+0xFBC",
+   "evidence": "FUN_00440640: Create(0xA79B, 2) at 0x4407F9.. stored to 0x54E830 and scene+0xFBC (2008 Create(0xa79b,2) at 0x4402D0 -> 0x70E6FC, scene+0xF90). LAN probe in S2C 0x02 uses [0x54e830] at 0x4525D3..0x452627 (2008 [0x70e6fc] 0x44DFBC..0x44E010).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "moved",
+   "confidence": "high"
+  },
+  "g_sock_extra_tcp": {
+   "2008": null,
+   "2009": "0x54E834",
+   "meaning": "NEW in 2009: a third TCP CSNSocket (Create(0,1)) created between the version and UDP sockets",
+   "evidence": "FUN_00440640 stores it at 0x440785 (MOV [0x54e834],ECX). No other code reference to 0x54E834 exists in the 2009 asm corpus.",
+   "verification": "asm grep over corpus_2009/asm for 0x54e834",
+   "diff_vs_2008": "new (no 2008 counterpart); apparently unused",
+   "confidence": "medium"
+  },
+  "socket_listeners": {
+   "2008": "0x70E700 (TCP listener), 0x70E704 (UDP listener)",
+   "2009": "0x54E838 (TCP listener), 0x54E83C (UDP listener)",
+   "meaning": "CSNSockMyListener objects (vftable + game_state) passed to CSNSocket ctor",
+   "evidence": "FUN_00440640 decomp: DAT_0054e838 = new listener before the TCP sockets, DAT_0054e83c before the UDP socket (2008 DAT_0070e700 / DAT_0070e704).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "moved",
+   "confidence": "high"
+  },
+  "frame_critical_section": {
+   "2008": "0x70ED68 (game_state+0x368)",
+   "2009": "0x54EF38 (game_state+0x368)",
+   "meaning": "CRITICAL_SECTION held by the frame function across tick+FrameMove+Render+Present and taken by OnReceive / UDP handler / WM_TIMER",
+   "evidence": "Frame 2009 0x40E61C LEA EBP,[ESI+0x368]; 0x40E623 CALL [EnterCriticalSection 0x4C7294] (2008 0x40DCFC/0x40DD03). OnReceive 0x45199A LEA EAX,[ESI+0x368] + EnterCS 0x4519A5 (2008 0x44D60A/0x44D615). UDP handler 0x45E26A/0x45E275 (2008 0x458688). WndProc WM_TIMER 0x43EB79 LEA EAX,[EBX+0x368] + EnterCS 0x43EB80.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "offset unchanged; absolute address follows game_state",
+   "confidence": "high"
+  },
+  "receive_busy_flag": {
+   "2008": "0x70EE08 (game_state+0x408)",
+   "2009": "0x54EFE8 (game_state+0x418)",
+   "meaning": "OnReceive/UDP handler skip all processing while this is non-zero (wsdev GS_FLAG; NOT an in-world flag)",
+   "evidence": "2009 OnReceive 0x451985 CMP dword ptr [ESI+0x418],0x0; JNZ -> skip (2008 0x44D5F5 CMP [ESI+0x408],0). UDP handler 0x45E251 CMP [EBX+0x418],0 (2008 FUN_00458640 param_2+0x408).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "game_state offset +0x408 -> +0x418",
+   "confidence": "high"
+  },
+  "frame_time_ms": {
+   "2008": "0x70ED64 (game_state+0x364)",
+   "2009": "0x54EF34 (game_state+0x364)",
+   "meaning": "timeGetTime() of the current frame; per-tick copies it to scene logic-time fields",
+   "evidence": "Frame 2009 0x40E670 MOV [ESI+0x364],EAX after timeGetTime (2008 in_EAX[0xd9]); per-tick 2009 copies [this+0x364] into scene+0xF38 at the end (2008 scene+0xF20).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "unchanged offset",
+   "confidence": "high"
+  },
+  "tick_step_ms": {
+   "2008": null,
+   "2009": "0x54A284 (DAT_0054a284, initial value 30)",
+   "meaning": "NEW: logic-tick step in ms passed to the wander/AI tick and used by the movement/hit code; per-tick toggles it between 30 and 0 while scene+0xF3C (new time-scale mode) is set",
+   "evidence": "per-tick 0x42C97E/0x42C9A6 (DAT_0054a284 = (DAT!=30)?30:0 when scene+0xF3C!=0); passed as arg 2 of FUN_004185b0 (wander AI) which adds it to scene+0xF34 at 0x4185C7 (2008 FUN_00417e10 0x417E23 ADD [scene+0xf1c],0x1e constant). Read by FUN_004129f0/0x414210/0x415F80/0x416AB0.",
+   "verification": "decomp + asm of FUN_0042c920 and FUN_004185b0; initial value read from the .data image",
+   "diff_vs_2008": "new (2008 hard-coded 30)",
+   "confidence": "high"
+  },
+  "ui_root": {
+   "2008": "0x70E710 (g_ui_root)",
+   "2009": "0x54E848",
+   "meaning": "UI root object (windows list +0x5C0, chat mode +0x44, ...)",
+   "evidence": "FUN_0042b2b0 0x42B4F8 MOV [0x54e848],EAX (result of FUN_0048f590, 0xA84-byte object) vs 2008 FUN_00429b50 0x429D9C MOV [0x70e710],EAX (FUN_0047cab0, 0xA84 bytes). WM_TIMER case 2 passes [0x54e848] (2009 0x43EB99) where 2008 passes [0x70e710] (0x43E851).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "moved",
+   "confidence": "high"
+  },
+  "sprite_control": {
+   "2008": "0x70E70C",
+   "2009": "0x54E844",
+   "meaning": "CSpriteControl* (Play_Sound etc.); also game_state+0x4C4 (2008) / +0x4E8 (2009)",
+   "evidence": "FUN_0042b2b0: DAT_0054e844 = new CSpriteControl; *(this+0x4e8) = it (2008 DAT_0070e70c, this+0x4c4).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "moved; game_state +0x4C4 -> +0x4E8",
+   "confidence": "high"
+  },
+  "hinstance": {
+   "2008": "0x70E6E8",
+   "2009": "0x54E818",
+   "meaning": "HINSTANCE saved by WinMain",
+   "evidence": "FUN_00487d00 0x487D36 MOV [0x54e818],ESI (2008 FUN_00475840 0x475850 MOV [0x70e6e8],ESI); used as DialogBoxParamA hInstance.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "moved",
+   "confidence": "high"
+  },
+  "d3d_present_params": {
+   "2008": "0x70EAA8 (game_state+0xA8); Windowed BOOL at 0x70EAC8 (+0xC8)",
+   "2009": "0x54EC78 (game_state+0xA8); Windowed BOOL at 0x54EC98 (+0xC8)",
+   "meaning": "embedded D3DPRESENT_PARAMETERS filled by the PresentParams builder",
+   "evidence": "2009 FUN_0040d990 is byte-for-byte identical (412 bytes) to 2008 FUN_0040d070 (MOVZX ECX,[EAX+0x30]; MOV [EAX+0xc8],ECX ...), EAX = game_state.",
+   "verification": "byte comparison of the two functions",
+   "diff_vs_2008": "unchanged offsets",
+   "confidence": "high"
+  },
+  "screen_size": {
+   "2008": "0x70ED4C / 0x70ED50 (game_state+0x34C/+0x350)",
+   "2009": "0x54EF1C / 0x54EF20 (game_state+0x34C/+0x350)",
+   "meaning": "back-buffer width/height (800/600) written at init",
+   "evidence": "2009 MOV [0x54ef1c],0x320 at 0x40C091 and 0x42B01D; MOV [0x54ef20],0x258 at 0x40C09B and 0x42B027 (2008 0x40B771/0x40B77B and 0x4298EF/0x4298F9 on 0x70ED4C/0x70ED50).",
+   "verification": "byte-pattern search of both .text sections",
+   "diff_vs_2008": "unchanged offsets",
+   "confidence": "high"
+  },
+  "game_state_vtable": {
+   "2008": "0x6F7ECC (+0x04 0x40DEA0, +0x18 per-tick 0x42B260, +0x1C 0x42AA10, +0x20 frame-render 0x43E1A0)",
+   "2009": "0x52E1A4 (+0x04 0x40E7B0, +0x18 per-tick 0x42C920, +0x1C 0x42C150, +0x20 frame-render 0x43E480)",
+   "meaning": "game_state vtable; the frame function calls +0x18 (30 ms logic tick), +0x1C, +0x04 and +0x20 (render) through it",
+   "evidence": "pointer to 0x42C920 found at 0x52E1BC (.rdata) = vtable+0x18 (2008 pointer to 0x42B260 at 0x6F7EE4); frame fn calls [vtbl+0x18] at 0x40E690 (2008 0x40DD70).",
+   "verification": "raw .rdata scan + frame function asm",
+   "diff_vs_2008": "moved",
+   "confidence": "medium"
+  }
+ },
+ "scene_fields": {
+  "+0x0C entity_list_head": {
+   "2008": "+0x0C",
+   "2009": "+0x0C",
+   "meaning": "singly linked entity list: node.next=[node], payload entity=[node+8]",
+   "evidence": "2009 per-tick FUN_0042c920 walks *(scene+0xc) with payload puVar2[2] and next *puVar2 (2008 FUN_0042b260 identical); snapshot sender 0x424500 and FUN_004510a0 walk the same list.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "unchanged",
+   "confidence": "high"
+  },
+  "+0x220 local_uid": {
+   "2008": "+0x220",
+   "2009": "+0x224",
+   "meaning": "this client's own uid (from S2C 0x02); RegisterLocalPlayer gate compares entity uid with it",
+   "evidence": "S2C 0x02 handler 2009 0x452217 ADD ECX,0x224; GetDataFromPacket(u32) 0x452225 (2008 0x44DBA4 ADD ECX,0x220; 0x44DBB2). RLP gate 2009 0x423043 CMP ECX,[EAX+0x224] (2008 0x42219C CMP EAX,[EBP+0x220]). LAN probe 0x4525F7 (2008 0x44DFE0). Snapshot sender Add(u32 scene+0x224) (2008 +0x220).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+4",
+   "confidence": "high"
+  },
+  "+0x244 own_udp_port": {
+   "2008": "+0x244",
+   "2009": "+0x248",
+   "meaning": "client's own UDP P2P port (42907); loopback input datagrams go to 127.0.0.1:[scene+port]",
+   "evidence": "2009 FUN_004405b0 0x4405C9 MOV [EAX+0x248],0xa79b (2008 FUN_004400c0 0x4400D9 MOV [EAX+0x244],0xa79b); also 0x45F194 and 0x488C3C (2008 0x459BAB, 0x476526); snapshot sender SendTo(\"127.0.0.1\", [scene+0x248]) (2008 [scene+0x244]); 0x02 handler 0x4520EB reads [EDX+0x248].",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+4",
+   "confidence": "high"
+  },
+  "+0xF00 scene_mode": {
+   "2008": "+0xF00",
+   "2009": "+0xF18",
+   "meaning": "scene state: 5 = character select, 6 = field, 4 = other in-game mode (values unchanged); render/tick only run for 4/5/6",
+   "evidence": "setter 2009 FUN_004405b0 writes scene+0xF18 = EDI (2008 FUN_004400c0 scene+0xF00); 0x02 handler calls it with EDI=5 at 0x4521E4 (2008 0x44DB71); startup 0x487D9C CMP [ECX+0xf18] (2008 0x47587B [ECX+0xf00]); per-tick 0x42CA9A MOV EAX,[EDX+0xf18]; CMP EAX,6 (2008 0x42B34A [ECX+0xf00]); render 0x433303 [ECX+0xf18] (2008 0x431975).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x18",
+   "confidence": "high"
+  },
+  "+0xF1C logic_clock": {
+   "2008": "+0xF1C",
+   "2009": "+0xF34",
+   "meaning": "map/logic clock in ms: seeded by S2C 0x03 game_clock_ms and 0x08 game_time_ms, advanced by the tick step every 30 ms logic tick; copied into entity +0x95C/+0x9EC by RegisterLocalPlayer",
+   "evidence": "advance: 2009 FUN_004185b0 0x4185C7 ADD [EAX+0xf34],ECX (ECX = tick step, default 30) vs 2008 FUN_00417e10 0x417E23 ADD [EAX+0xf1c],0x1e. Seed: S2C 0x03 0x452AD0 ADD EAX,0xf34 (2008 0x44E41A ADD ECX,0xf1c); S2C 0x08 0x455371 (2008 0x4508E0). RLP 0x423060 MOV EAX,[ESI+0xf34] (2008 0x4221B9 [EBP+0xf1c]). Snapshot sender uses it for the room time field.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x18; increment is now the variable DAT_0054a284 (30 normally, 0/30 alternating in the new scene+0xF3C mode) instead of the constant 30",
+   "confidence": "high"
+  },
+  "+0xF24 host_flag": {
+   "2008": "+0xF24",
+   "2009": "+0xF40",
+   "meaning": "room host/transition flag; RegisterLocalPlayer only registers the local player when it is 0; host path of the snapshot sender",
+   "evidence": "RLP gate 2009 0x423029 CMP [ESI+0xf40],EBP (2008 0x422189 CMP [EBP+0xf24],ESI); snapshot sender FUN_00424500 branches on scene+0xF40 (2008 FUN_00423260 scene+0xF24); RLP 0x4236DE (2008 0x4227E2).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x1C (a new dword was inserted at 2009 +0xF3C, see notes)",
+   "confidence": "high"
+  },
+  "+0xF88 map_object": {
+   "2008": "+0xF88",
+   "2009": "+0xFB4",
+   "meaning": "copy of game_state map/room object pointer (+0x4D8/+0x4FC); [..+0x70/+0x7C] = room mode",
+   "evidence": "FUN_0042b2b0: *(scene+0xfb4) = *(gs+0x4fc) (2008 FUN_00429b50: *(scene+0xf88) = *(gs+0x4d8)); RLP / snapshot sender test [[scene+0xfb4]+0x7c] (2008 [[scene+0xf88]+0x70]).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x2C (scene+0xF78..0xF8C block moved to +0xFA4..+0xFB8)",
+   "confidence": "high"
+  },
+  "+0xF90 udp_socket": {
+   "2008": "+0xF90",
+   "2009": "+0xFBC",
+   "meaning": "UDP CSNSocket* used by the snapshot/input sender (followed by +0xF94/+0xFC0 game socket, +0xF98/+0xFC4 = 0)",
+   "evidence": "FUN_00440640 tail: *(scene+0xfbc) = [0x54e830]; *(scene+0xfc4) = 0; *(scene+0xfc0) = [0x54e828] (2008 CreateSockets tail +0xF90/+0xF98/+0xF94). Snapshot sender 2009 returns early when scene+0xFBC == 0 and uses it for every Add/SendTo (2008 +0xF90).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x2C",
+   "confidence": "high"
+  },
+  "+0x970 local_player": {
+   "2008": "+0x970",
+   "2009": "+0x988",
+   "meaning": "local player entity pointer written by the RegisterLocalPlayer gate (renderer/input/HP handlers dereference it); +0xEE8 -> +0xF00 is written with it (camera target)",
+   "evidence": "RLP 2009 0x42304F MOV [EAX+0x988],EDI (2008 0x4221A8 MOV [EBP+0x970],EDI); S2C 0x28 HP 0x459756 MOV EAX,[ECX+0x988] (2008 0x454984 [EAX+0x970]); per-tick HP<20% check reads scene+0x988.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x18 (+0xEE8 -> +0xF00 also +0x18)",
+   "confidence": "high"
+  },
+  "other scene offsets seen while matching": {
+   "2008": "+0x254..+0x257 key bytes, +0x25C party uid[5], +0x96D, +0xEEC/+0xEF0/+0xEF4 snapshot words, +0xF04 room team, +0xF08 datagram counter, +0xF0C last room send, +0xF18 SetTimer(7) flag, +0xF20 last tick time, +0xF38 host ip str, +0xF48 room no (u16), +0xF68, +0xF78..+0xF8C subsystem copies",
+   "2009": "+0x258..+0x25B, +0x264, +0x985, +0xF04/+0xF08/+0xF0C, +0xF1C, +0xF20, +0xF24, +0xF30, +0xF38, +0xF54, +0xF64, +0xF84, +0xFA4..+0xFB8; NEW +0xF3C (time-scale mode, suppresses 'Timer Error')",
+   "meaning": "secondary scene fields (for tools that decode snapshots / room state)",
+   "evidence": "snapshot sender 0x424500 vs 0x423260 (room SendTo(scene+0xf54, [scene+0xf64]+10000) vs (scene+0xf38, [scene+0xf48]+10000)); per-tick end writes scene+0xF38 and tests +0xF30 (2008 +0xF20/+0xF18); UDP handler increments scene+0xF20 (2008 +0xF08); RLP +0x985/+0x264 (2008 +0x96D/+0x25C); FUN_0042b2b0 +0xFA4..+0xFB8 (2008 +0xF78..+0xF8C).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "piecewise shifts: +4 below ~0x250, +8 around 0x25C, +0x18 for 0x96D..0xF20, +0x1C for 0xF24..0xF68, +0x2C for 0xF78..0xF98",
+   "confidence": "medium"
+  }
+ },
+ "entity_fields": {
+  "+0x84 uid": {
+   "2008": "+0x84",
+   "2009": "+0x88",
+   "meaning": "entity uid (must equal scene local uid for the local player)",
+   "evidence": "0x1A 2009 0x456B45 LEA EAX,[EDI+0x88] -> GetDataFromPacket(u32) (2008 0x451E0D LEA ECX,[ESI+0x84]); 0x07 2009 0x453612 (2008 0x44EFF5); RLP gate 0x42303B MOV ECX,[EDI+0x88] (2008 0x422196).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+4",
+   "confidence": "high"
+  },
+  "+0x98 type": {
+   "2008": "+0x98",
+   "2009": "+0x9C",
+   "meaning": "entity type/alive byte: 4 = spawned by 0x1A (local/monster), 3 = remote player (0x07/0x04)",
+   "evidence": "0x1A 2009 0x456B56 MOV byte [EDI+0x9c],0x4 (2008 0x451E24 [ESI+0x98],0x4); 0x07 2009 0x4535F9 MOV byte [EDI+0x9c],0x3 (2008 0x44EFE1 [ESI+0x98],0x3); RLP 0x422FE4 CMP byte [EDI+0x9c],0x4 (2008 0x422144).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+4",
+   "confidence": "high"
+  },
+  "+0x9C hp": {
+   "2008": "+0x9C",
+   "2009": "+0xA0",
+   "meaning": "current HP (u32; 0 = corpse)",
+   "evidence": "0x1A 2009 0x457062 MOV [EDI+0xa0],ECX (u16 from wire) (2008 0x452330 [ESI+0x9c]); S2C 0x28 2009 0x459768 MOV [EAX+0xa0],EDX (2008 0x454996 [EAX+0x9c]); RLP 0x423383 HP=maxHP (2008 0x4224BD); per-tick 2009 HP/maxHP<0.2 check reads +0xA0/+0x11AC.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+4",
+   "confidence": "high"
+  },
+  "+0x110C max_hp": {
+   "2008": "+0x110C",
+   "2009": "+0x11AC",
+   "meaning": "max HP (copied from the template record)",
+   "evidence": "0x1A 2009 0x456BC2/0x456BC8 MOV ECX,[EAX+0x658]; MOV [EDI+0x11ac],ECX (2008 0x451E90/0x451E96 [EAX+0x648] -> [ESI+0x110c]); RLP 0x423377 (2008 0x4224B1); per-tick 2009 HP ratio uses +0x11AC.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0xA0 (template source field +0x648 -> +0x658)",
+   "confidence": "high"
+  },
+  "+0xE60 anim_index": {
+   "2008": "+0xE60",
+   "2009": "+0xEFC",
+   "meaning": "1-based anim/template container index (u32 from 0x1A); resolved via the container lookups",
+   "evidence": "0x1A 2009 0x456B2A LEA EAX,[EDI+0xefc] -> GetDataFromPacket(u32); 0x456B6D MOV EAX,[EDI+0xefc]; CALL 0x409EF0 (2008 0x451DF8 LEA EAX,[ESI+0xe60]; 0x451E3B; CALL 0x409770). End of 0x1A: 0x4570B6 MOV EAX,[EDI+0xefc]; CALL 0x409F30 (2008 0x452390 CALL 0x4097B0). FUN_0042e790 5 aligned uses.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x9C",
+   "confidence": "high"
+  },
+  "+0x11F8/+0x1288 pos_f64": {
+   "2008": "+0x11F8 (x f64) / +0x1288 (y f64)",
+   "2009": "+0x1298 (x f64) / +0x1328 (y f64)",
+   "meaning": "logic position (double)",
+   "evidence": "0x1A 2009 0x456D65 LEA EAX,[EDI+0x1298] / 0x456D7F LEA EDX,[EDI+0x1328] -> GetDataFromPacket(f64) (2008 0x4521D5 [ESI+0x11f8] / 0x4521EF [ESI+0x1288]); 0x07 2009 0x453A9E/0x453AB8 (2008 0x44F4DC/0x44F4F0); snapshot sender/FUN_004510a0 read *(double*)(e+0x1298)/(e+0x1328).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0xA0. Wire order changed: in 2009 0x1A and 0x07 read the two f64 positions BEFORE RegisterLocalPlayer (0x456D99 / 0x453AD2); 2008 read them after",
+   "confidence": "high"
+  },
+  "+0x904 action_state": {
+   "2008": "+0x904",
+   "2009": "+0x994",
+   "meaning": "action/animation state (8 = idle, 0x16 = dead, 3/0x17 attack, ...)",
+   "evidence": "0x1A 2009 0x456EE7 LEA ECX,[EDI+0x994] -> GetDataFromPacket(i32) (2008 0x452187 [ESI+0x904]); RLP 2009 0x42328A MOV [EDI+0x994],EBX(8) (2008 0x4223DE); FUN_004249e0 switch on +0x994 (2008 inline in 0x423260 on +0x904); 112 aligned uses across 9 matched functions.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x90",
+   "confidence": "high"
+  },
+  "+0x94C/+0x950 interact": {
+   "2008": "+0x94C (hit/interact state of victim) / +0x950 (attacker interact event, sent in C2S 0x0D state bits 16-19)",
+   "2009": "+0x9DC / +0x9E0",
+   "meaning": "hit-detection interaction state pair",
+   "evidence": "hit detection 2009 0x416D6E CMP [ESI+0x9dc],0 / 0x416D86 MOV [EBP+0x9e0],1 / 0x417188 MOV [ESI+0x9dc],3 (2008 0x41662F / 0x416647 / 0x416A30 on +0x94c/+0x950); RLP 2009 0x423290/0x423296 zero both (2008 0x4223ED/0x4223F3).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x90",
+   "confidence": "high"
+  },
+  "+0x8B3/+0x8B4 input_bytes": {
+   "2008": "+0x8B3 / +0x8B4 (first bytes of the 8-byte input/motion array +0x8B3..+0x8BA)",
+   "2009": "+0x93F / +0x940 (array +0x93F..+0x946)",
+   "meaning": "idle input/motion bytes (0x1A wire fields; RLP sets +0x8B3=8)",
+   "evidence": "0x1A 2009 0x456F55 LEA EAX,[EDI+0x93f] / 0x456F6F LEA EDX,[EDI+0x940] -> GetDataFromPacket(u8) (2008 0x452223 [ESI+0x8b3] / 0x45223D [ESI+0x8b4]); RLP 2009 0x423247 MOV [EDI+0x93f],BL / 0x423260 MOV [EDI+0x940],0 (2008 0x422383 / 0x42239C); input handler FUN_0042e1b0 compares the same 4 bytes (0x42E1D1..0x42E225 vs 2008 0x42C961..0x42C9B5).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x8C",
+   "confidence": "high"
+  },
+  "+0x8B8 swing_flag": {
+   "2008": "+0x8B8",
+   "2009": "+0x944",
+   "meaning": "action/swing key flag (1 while an action key is active; server memory driver reads it together with render state == 4)",
+   "evidence": "only 3 accesses in each build, 1:1: RLP 2009 0x423275 MOV byte [EDI+0x944],0 (2008 0x4223B1 [EDI+0x8b8]); input handler 2009 FUN_0042e1b0 0x42E1D7 CMP DL,[ECX+0x944] and 0x42E72F MOV [EAX+0x944],CL (2008 FUN_0042c940 0x42C967 / 0x42CEBF).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair; exhaustive grep of both asm corpora for the displacement",
+   "diff_vs_2008": "+0x8C",
+   "confidence": "high"
+  },
+  "+0x15A4/+0x15A8 drawn_pos": {
+   "2008": "+0x15A4 (x i32) / +0x15A8 (y i32)",
+   "2009": "+0x165C (x i32) / +0x1660 (y i32)",
+   "meaning": "drawn (render) position",
+   "evidence": "2009 FUN_004511b0 (new state-apply helper) writes *(e+0x165c)=x, *(e+0x1660)=y at entry (called per logic tick from FUN_004510a0 and from the UDP handler); RLP 2009 0x4233E9/0x423420 MOV [EDI+0x165c]/[EDI+0x1660] (2008 0x422523/0x42255A [EDI+0x15a4]/[EDI+0x15a8]); ~365 aligned uses across matched functions.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0xB8. Also +0x1598/+0x159C (interp. origin) -> +0x1650/+0x1654, +0x15A0 -> +0x1658, +0x15B0 facing -> +0x1668. IMPORTANT behaviour change: in 2009 field maps this is fed directly on the main thread (FUN_004510a0 -> FUN_004511b0), not via the UDP type-4 loopback snapshot",
+   "confidence": "high"
+  },
+  "+0x15B4 render_state": {
+   "2008": "+0x15B4",
+   "2009": "+0x166C",
+   "meaning": "render/animation state (4 = attack swing, 8 = idle, 0x16 = dead/skip)",
+   "evidence": "RLP 2009 0x4233A0 MOV [EDI+0x166c],EBX (2008 0x4224DA [EDI+0x15b4]); render 2009 0x433BD6 / 0x437878 CMP [EDI+0x166c],0x16 (2008 0x4378B7 CMP [EBX+0x15b4],0x16); FUN_004511b0 compares *(e+0x166c) with the new state.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0xB8",
+   "confidence": "high"
+  },
+  "+0x8E2 hit_lock": {
+   "2008": "+0x8E2",
+   "2009": "+0x96E",
+   "meaning": "victim hit-lock set by local hit detection, cleared by S2C 0x2A/0x29",
+   "evidence": "hit detection: 7 writes MOV byte [reg+0x96e],1 in 2009 FUN_00416ab0 (0x4170F8, 0x41720D, 0x417A67, 0x417BE3, 0x417FDC, 0x41813A, 0x418469) vs 7 writes of +0x8e2 in 2008 FUN_00416380 (0x4169A0, 0x416AA3, ...). Clears: 2009 0x459B4A / 0x459F04 MOV byte [..+0x96e],0 (2008 0x454D7E / 0x455136).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x8C",
+   "confidence": "high"
+  },
+  "+0x8E4 server_controlled": {
+   "2008": "+0x8E4",
+   "2009": "+0x971",
+   "meaning": "0x1A 'server controlled' bool; when set, a u32 hold time follows on the wire into +0xE48/+0xEE4",
+   "evidence": "0x1A 2009 0x457081 LEA EAX,[EDI+0x971] -> GetDataFromPacket(bool); 0x45708F CMP byte [EDI+0x971],0 (2008 0x45234F / 0x45235D on +0x8e4); 4 more aligned uses (hit detection, wander AI, 0x414210, 0x415F80).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x8D (note: one extra byte appears in this region; +0x8E0 -> +0x96C, +0x8E1 -> +0x96D, +0x8E2 -> +0x96E, +0x8E3 -> +0x96F, +0x8E4 -> +0x971)",
+   "confidence": "high"
+  },
+  "+0xE48 hold_time": {
+   "2008": "+0xE48",
+   "2009": "+0xEE4",
+   "meaning": "hold/idle time for server-controlled mobs (read only when +0x8E4/+0x971 != 0); RLP zeroes it",
+   "evidence": "0x1A 2009 0x4570A5 LEA EAX,[EDI+0xee4] -> GetDataFromPacket(u32) (2008 0x452373 [ESI+0xe48]); RLP 2009 0x423241 MOV [EDI+0xee4],EBP (2008 0x42237D); 18 aligned uses.",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "+0x9C",
+   "confidence": "high"
+  },
+  "other entity offsets (for tools)": {
+   "2008": "+0 name, +0x99 level, +0xA0 MP, +0x1110 max MP, +0x1114 client damage estimate, +0x11DC template record/nameplate ptr, +0x8BB/+0x8BC, +0x8BD, +0x8CF, +0x8D9, +0x8DA..+0x8DF, +0x954, +0xD94, +0xDB8/+0xDBC, +0xE00, +0xE50, +0xE5C, +0x1318/+0x1320, +0x135C, +0x14EB; alloc size 0x15F0",
+   "2009": "+0 name, +0x9D level, +0xA4 MP, +0x11B0 max MP, +0x11B4 damage estimate, +0x127C record ptr, +0x947/+0x948, +0x949, +0x95B, +0x965, +0x966..+0x96B, +0x9E4, +0xE24, +0xE48/+0xE4C, +0xE9C, +0xEEC, +0xEF8, +0x13B8/+0x13C0, +0x13FC, +0x158B; alloc size 0x16B8",
+   "meaning": "secondary entity fields (0x1A/0x07 wire targets, wsdev status fields)",
+   "evidence": "0x1A 2009 read sequence 0x456DAB.. (+0x947,+0x948,+0xE4C,+0xE48,->f64 +0x13B8,+0x13C0,+0xEF8,+0x9E4,+0x965,+0x95B,+0x994,+0xE9C,+0x949,+0xEEC,+0x93F..+0x942,+0x966,+0x96B,+0x968,+0x969,+0x96A,u16->+0xA0,+0xE24,+0x971[,+0xEE4]) vs 2008 0x452045.. same order with 2008 offsets; S2C 0x44 MP 2009 0x4597AF [EAX+0xa4] (2008 0x4549D9 [EAX+0xa0]); hit apply 2009 0x41A936 ADD [EDI+0x11b4] (2008 0x419EEA [EBX+0x1114]); 0x1A 0x456B88 MOV [EDI+0x127c],EAX (2008 0x451E56 [ESI+0x11dc]); alloc PUSH 0x16b8 at 0x456AEA/0x4535B5 (2008 PUSH 0x15f0 0x451DB8/0x44EF9D).",
+   "verification": "decomp + asm of the 2009 site read and compared with the 2008 site (same instruction pattern); cross-checked by token alignment of the matched function pair",
+   "diff_vs_2008": "region shifts: +4 for 0x84..0xB4, +8 for 0x112, +0x8C for 0x8B3..0x8DF, +0x8D for 0x8E4, +0x90 for 0x904..0xDBC, +0x9C for 0xDE8..0xE84, +0xA0 for 0x107C..0x14F0, +0xB8 for 0x1598..0x15B4",
+   "confidence": "high"
+  }
+ },
+ "functions": {
+  "RegisterLocalPlayer": {
+   "2008": "0x422120",
+   "2009": "0x422FC0",
+   "meaning": "registers an entity with the scene; writes scene local-player pointer when type==4 && host flag==0 && uid==scene uid",
+   "evidence": "gate: 2009 0x423029 CMP [ESI+0xf40]; 0x423043 CMP ECX,[EAX+0x224]; 0x42304F MOV [EAX+0x988],EDI (2008 0x422189/0x42219C/0x4221A8). Called from 0x1A (0x456D99), 0x07 (0x453AD2) and 6 other sites (2008 0x452033, 0x44F40E).",
+   "verification": "decomp + asm of both functions read; normalized-token alignment ratio 0.867",
+   "diff_vs_2008": "same logic; field offsets per scene/entity maps; extra monster-type test (+0x163C) and scene-mode 5 exception in the non-local branch",
+   "confidence": "high"
+  },
+  "per_tick": {
+   "2008": "0x42B260 (FUN_0042b260)",
+   "2009": "0x42C920 (FUN_0042c920)",
+   "meaning": "30 ms logic tick (game_state vtable +0x18): Timer Error check, AI/move/hit ticks, snapshot send",
+   "evidence": "unique xref of 'Timer Error.' (2009 0x52DA70, 2008 0x6F7768); callee order FUN_004185b0/0x4129f0/0x412c60/0x414210/0x415f80/0x416ab0 matches 2008 0x417e10/0x412100/0x412360/0x413920/0x4158d0/0x416380; vtable slot +0x18 at 0x52E1BC.",
+   "verification": "decomp + asm of both functions read; normalized-token alignment ratio 0.815",
+   "diff_vs_2008": "adds scene+0xF3C time-scale mode, tick-step global, room-mode (map+0x2E0) path FUN_0042a300, HP<20% UI hook FUN_00447e10(this,7,0), and the new direct field-entity feeder FUN_004510a0; snapshot sender now takes the scene as a stack argument",
+   "confidence": "high"
+  },
+  "timer_error_check": {
+   "2008": "0x42B31A CMP EAX,0x1388 / 0x42B31F JLE 0x42B344 (message push 0x42B321)",
+   "2009": "0x42CA5B CMP EAX,0x1388 / 0x42CA60 JLE 0x42CA94 (extra gate 0x42CA68 CMP [scene+0xf3c],0; push 0x42CA71)",
+   "meaning": "|system-time delta - game-time delta| > 5000 ms -> log 'Timer Error.' and PostMessage(WM_CLOSE)",
+   "evidence": "asm of both per-tick functions",
+   "verification": "decomp + asm of both functions read",
+   "diff_vs_2008": "adds the scene+0xF3C==0 condition",
+   "confidence": "high"
+  },
+  "hit_detection": {
+   "2008": "0x416380 (FUN_00416380)",
+   "2009": "0x416AB0 (FUN_00416ab0)",
+   "meaning": "client-local swing vs body-box hit detection; sets victim hit-lock and interact state",
+   "evidence": "same callers pattern (per-tick loop), 7 hit-lock writes each, +0x94C/+0x950 -> +0x9DC/+0x9E0 sequence identical (0x416D6E.. vs 0x41662F..).",
+   "verification": "decomp + asm of both functions read; normalized-token alignment ratio 0.974",
+   "diff_vs_2008": "offsets only; reads the tick-step global at 0x416AB6",
+   "confidence": "high"
+  },
+  "hit_apply": {
+   "2008": "0x418AC0 (FUN_00418ac0)",
+   "2009": "0x4194F0 (FUN_004194f0)",
+   "meaning": "applies a hit / damage estimate (+0x1114 -> +0x11B4 CHUD number), recursive",
+   "evidence": "2009 callers FUN_004185b0, FUN_00412c60, FUN_00414210, FUN_0042e790, itself, FUN_00426b60 == 2008 callers 0x417E10, 0x412360, 0x413920, 0x42CF20, itself, 0x4256C0; 0x41A936 ADD [EDI+0x11b4] vs 0x419EEA ADD [EBX+0x1114].",
+   "verification": "decomp + asm of both functions read; normalized-token alignment ratio 0.987",
+   "diff_vs_2008": "offsets only",
+   "confidence": "high"
+  },
+  "wander_ai": {
+   "2008": "0x417E10 (FUN_00417e10(scene, entity))",
+   "2009": "0x4185B0 (FUN_004185b0(scene, tick_step, entity))",
+   "meaning": "monster wander AI tick; also advances the scene logic clock when entity==0",
+   "evidence": "per-tick calls it first in the tick loop (2009 with DAT_0054a284 as arg 2); 0x4185C7 ADD [scene+0xf34],ECX vs 0x417E23 ADD [scene+0xf1c],0x1e.",
+   "verification": "decomp + asm of both functions read; normalized-token alignment ratio 0.850",
+   "diff_vs_2008": "new middle argument (tick step) replacing the constant 30",
+   "confidence": "high"
+  },
+  "render_entities": {
+   "2008": "0x431960 (FUN_00431960)",
+   "2009": "0x4332F0 (FUN_004332f0)",
+   "meaning": "entity/body sprite renderer (gates: scene mode 4/5/6, type>=3, container lookup of anim index, render state != 0x16)",
+   "evidence": "only large DrawSprite function called from the frame-render vtable slot +0x20 (2009 FUN_0043e480, 2008 FUN_0043e1a0); 0x433512 [EBX+0x504]; CALL 0x409F30 and 0x433BD6 CMP [EDI+0x166c],0x16 mirror 2008 0x431B78 / 0x4378B7.",
+   "verification": "decomp + asm of both functions read; normalized-token alignment ratio 0.791",
+   "diff_vs_2008": "41007 -> 34496 bytes; offsets per maps",
+   "confidence": "high"
+  },
+  "snapshot_sender": {
+   "2008": "0x423260 (FUN_00423260, scene in ESI)",
+   "2009": "0x424500 (FUN_00424500(scene) - scene is now a stack arg)",
+   "meaning": "per-tick UDP sender: local input (type 3) to 127.0.0.1:scene+port, room snapshots (7/8/9) when host, room input to host ip:room+10000",
+   "evidence": "only caller is per-tick; SendTo(\"127.0.0.1\", [scene+0x248]) and SendTo(scene+0xF54, [scene+0xF64]+10000) (2008 [scene+0x244] / (scene+0xF38, [scene+0xF48]+10000)); socket scene+0xFBC (2008 +0xF90).",
+   "verification": "decomp + asm of both functions read; normalized-token alignment ratio 0.649",
+   "diff_vs_2008": "RESTRUCTURED: the field-map (room mode 0) type-4 entity snapshot to the loopback no longer exists; only the type-3 input datagram is looped back. Entity state for field maps is applied directly by the new FUN_004510a0 -> FUN_004511b0 on the main thread. Motion-state switch moved to helper FUN_004249e0",
+   "confidence": "high"
+  },
+  "field_state_feeder (new)": {
+   "2008": null,
+   "2009": "0x4510A0 (FUN_004510a0) -> 0x4511B0 (FUN_004511b0)",
+   "meaning": "NEW: per tick, for every type-3 entity (or type-4 with +0xF00>2 in field mode / +0x163C set) packs pos/facing/state and calls FUN_004511b0, which writes drawn pos +0x165C/+0x1660, facing +0x1668, render state +0x166C (the job of the 2008 UDP type-4 handler)",
+   "evidence": "called from per-tick FUN_0042c920 after FUN_00424500; FUN_004511b0 is also called by the UDP handler FUN_0045e230 (room snapshots).",
+   "verification": "decomp + asm of both functions read",
+   "diff_vs_2008": "new in 2009",
+   "confidence": "high"
+  },
+  "udp_snapshot_handler": {
+   "2008": "0x458640 (FUN_00458640; EnterCS 0x458688, LeaveCS 0x459BBA)",
+   "2009": "0x45E230 (FUN_0045e230; EnterCS 0x45E275, LeaveCS 0x45F1A3)",
+   "meaning": "UDP datagram handler (network thread, takes game_state+0x368)",
+   "evidence": "contains the 0xA79B scene-port write (0x45F194 vs 0x459BAB); same busy-flag / CS prologue; cases 3, 6/0xC/0xE, 7/8/9, 0xA, 0xB/0xD/0xF, 0x10, 0x11.",
+   "verification": "decomp + asm of both functions read; normalized-token alignment ratio 0.601",
+   "diff_vs_2008": "case 4 (field snapshot) removed; case 3 now calls FUN_00424ae0 (2008 FUN_00423850); room snapshot apply delegated to FUN_004511b0",
+   "confidence": "high"
+  },
+  "frame": {
+   "2008": "0x40DB20 (FUN_0040db20; EnterCS 0x40DD03; tick call 0x40DD70; Present call 0x40DE7C)",
+   "2009": "0x40E440 (FUN_0040e440; EnterCS 0x40E623; tick call 0x40E690; Present call 0x40E78F)",
+   "meaning": "per-frame: timers, EnterCS(game_state+0x368), vtable tick/FrameMove/Render, Present, LeaveCS",
+   "evidence": "only callee of the main loop; decomp identical apart from the dropped +0x9D test and the +0x357 -> +0x356 flag. LeaveCriticalSection call sites (FF 15 8C 72 4C 00): 0x40E7A0 = normal exit after Present (2008 0x40DE8D), 0x40E732 = device-reset exit (2008 0x40DE1F), 0x40E76B = +0x356 flag exit (2008 0x40DE58), 0x40E6A2 = error exit (2008 0x40DD82, not patched).",
+   "verification": "decomp + asm of both functions read",
+   "diff_vs_2008": "same structure",
+   "confidence": "high"
+  },
+  "main_loop": {
+   "2008": "0x40DA50 (FUN_0040da50)",
+   "2009": "0x40E370 (FUN_0040e370)",
+   "meaning": "PeekMessage loop calling the frame function",
+   "evidence": "decomp identical; called from WinMain body 0x487E84 with ECX=game_state (2008 0x475948).",
+   "verification": "decomp + asm of both functions read",
+   "diff_vs_2008": "identical",
+   "confidence": "high"
+  },
+  "OnReceive": {
+   "2008": "0x44D5D0 (EnterCS 0x44D615, LeaveCS 0x44D7B2)",
+   "2009": "0x451960 (EnterCS 0x4519A5, LeaveCS 0x452A20)",
+   "meaning": "S2C TCP dispatcher (given)",
+   "evidence": "prologue asm identical except busy flag +0x408 -> +0x418.",
+   "verification": "decomp + asm of both functions read",
+   "diff_vs_2008": "see dispatch_2009.json",
+   "confidence": "high"
+  },
+  "wndproc": {
+   "2008": "0x43E3F0 (WM_TIMER table 0x43ED30)",
+   "2009": "0x43E6F0 (WM_TIMER table 0x43F0FC)",
+   "meaning": "window procedure; WM_TIMER id 2 = 'No response from the server.' fallback (5500 ms timer armed by FUN_0042cf20 / 2009 FUN_0042e790 and a new site in OnReceive)",
+   "evidence": "unique xref of 'No response from the server.' (2009 0x52CF3C at 0x43EBA7, 2008 0x6F6C14 at 0x43E85F); table indexed by timer id-2.",
+   "verification": "decomp + asm of both functions read",
+   "diff_vs_2008": "table grew 10 -> 11 entries",
+   "confidence": "high"
+  },
+  "misc matched functions": {
+   "2008": "CreateSockets 0x440150; ConnectToVersionServer 0x440350; scene-mode setter 0x4400C0; subsystem alloc 0x429B50; WinMain body 0x475840; RosterLookupByIndex 0x409770; anim lookup 0x4097B0; entity-by-uid 0x4189F0; input handler 0x42C940; FrameMove-ish 0x42CF20; PresentParams 0x40D070; UI dialog dispatcher 0x446300; 0x1A handler 0x451D8D; 0x07/0x04 handler 0x44EF72; S2C 0x02 handler 0x44D8CA; RLP helper 0x41ACE0; frame-render 0x43E1A0",
+   "2009": "0x440640; 0x440880; 0x4405B0; 0x42B2B0; 0x487D00; 0x409EF0 (byte-identical); 0x409F30 (byte-identical); 0x419450; 0x42E1B0; 0x42E790; 0x40D990 (byte-identical); 0x448730; 0x456ABB; 0x453588; 0x451CF0; 0x41B830; 0x43E480",
+   "meaning": "supporting function map",
+   "evidence": "call-graph position, string xrefs, byte comparison, alignment ratios (0x41ACE0/0x41B830 0.977, 0x42CF20/0x42E790 0.922, 0x412100/0x4129F0 0.994, 0x412360/0x412C60 0.988, 0x413920/0x414210 0.934, 0x4158D0/0x415F80 0.947)",
+   "verification": "decomp/asm spot checks of each pair",
+   "diff_vs_2008": "moved",
+   "confidence": "high"
+  }
+ },
+ "exe_patches": [
+  {
+   "name": "version_server_address",
+   "purpose": "point the only baked-in server address (version server) at the private server",
+   "2008": [
+    {
+     "va": "0x6F79F8",
+     "file_off": "0x2F79F8",
+     "orig": "3132312E3136302E392E313635000000",
+     "patched": "3132372E302E302E3100000000000000",
+     "len": 16,
+     "note": "16-byte slot; pushed at 0x440498 (68 F8 79 6F 00) by ConnectToVersionServer; port push imm at 0x440494 (63 1B = 7011, unpatched). Long names: 53-byte slot at 0x6F7C3F (dead Yahoo item-filling URL) + repoint the push (set_server_address.py)"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x52DD54",
+     "file_off": "0x12DD54",
+     "orig": "3230372E3231312E38342E3436000000",
+     "patched": "3132372E302E302E3100000000000000",
+     "len": 16,
+     "note": "16-byte slot; pushed at 0x4409C8 (68 54 DD 52 00); live-verified in WindSlayer2009\\WindSlayer_patched_7011.exe. Long names (16..52 chars): 53-byte slot at 0x52DFD7 (inside 'http://windslayer.kr.games.yahoo.com/item/item_filling.html' @0x52DFD0, only used by ShellExecuteA in FUN_00447dd0) and write its VA into the push operand at 0x4409C9. Never touch the P2P loopback '127.0.0.1' at 0x527E30 (used by FUN_00424500)"
+    }
+   ],
+   "explanation_2008": "ConnectToVersionServer 0x440350: CSNSocket::Connect(g_sock_version, \"121.160.9.165\", 7011); the game server address comes from the version reply's channel list.",
+   "evidence": "2009 FUN_00440880 0x4409BD..0x4409CD: MOV ECX,[0x54e82c]; PUSH 0x1b63; PUSH 0x52dd54; CALL [Connect]",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "same mechanism, new string/VA; the 2009 channel list carries the port too",
+   "confidence": "high",
+   "status": "applied in 2008 patched exe; applied in live 2009 WindSlayer_patched*.exe",
+   "recommendation": "apply"
+  },
+  {
+   "name": "version_server_port",
+   "purpose": "optional: change the version-server TCP port (7011)",
+   "2008": [
+    {
+     "va": "0x440494",
+     "file_off": "0x40494",
+     "orig": "631B0000",
+     "patched": "631B0000",
+     "len": 4,
+     "note": "imm32 of PUSH 0x1b63 at 0x440493; never patched in 2008"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x4409C4",
+     "file_off": "0x409C4",
+     "orig": "631B0000",
+     "patched": "C71B0000",
+     "len": 4,
+     "note": "imm32 of PUSH 0x1b63 at 0x4409C3; WindSlayer2009\\WindSlayer_patched.exe uses 7111 (C7 1B); _7011 variant keeps 63 1B"
+    }
+   ],
+   "explanation_2008": "port argument of the version-server Connect",
+   "evidence": "same instruction pattern at both sites",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "same",
+   "confidence": "high",
+   "status": "2008: never patched; 2009: optional (live variants exist for 7011 and 7111)",
+   "recommendation": "only if the server does not listen on 7011"
+  },
+  {
+   "name": "update_url",
+   "purpose": "redirect the patch/update-list URL",
+   "2008": [
+    {
+     "va": "0x6F81F3",
+     "file_off": "0x2F81F3",
+     "orig": "77696E64736C617965722E676C6F62616C67616D6563646E2E636F6D2F77696E64736C617965722F7570646174652F",
+     "patched": "3132372E302E302E313A373031322F77696E64736C617965722F7570646174652F0000000000000000000000000000",
+     "len": 47,
+     "note": "host part of 'http://windslayer.globalgamecdn.com/windslayer/update/' @0x6F81EC"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x52E54F",
+     "file_off": "0x12E54F",
+     "orig": "63646E322E6F7574737061726B2E636F6D2F77696E64736C617965722F7570646174652F",
+     "patched": "3132372E302E302E313A373031322F77696E64736C617965722F7570646174652F000000",
+     "len": 36,
+     "note": "host part of 'http://cdn2.outspark.com/windslayer/update/' @0x52E548 (pushed at 0x487F1F, 0x48804C, 0x4895E3, 0x489655)"
+    }
+   ],
+   "explanation_2008": "update-list base URL used by the updater when the version server reports a newer build",
+   "evidence": "2009 strings.tsv: 0x52E548 referenced by FUN_00487f00 (updater thread) and FUN_004893d0",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "different URL; in 2009 the updater thread 0x487F00 only runs when version_code != 14, so this patch is cosmetic",
+   "confidence": "high",
+   "status": "applied in 2008 patched exe; not applied in live 2009 exes",
+   "recommendation": "optional (harmless); not needed if the server answers version_code 14"
+  },
+  {
+   "name": "no_response_timer",
+   "purpose": "neutralize WM_TIMER id 2 ('No response from the server.' -> KillTimer -> back to char select)",
+   "2008": [
+    {
+     "va": "0x43ED30",
+     "file_off": "0x3ED30",
+     "orig": "51E84300",
+     "patched": "DBE94300",
+     "len": 4,
+     "note": "WM_TIMER jump table entry [0] (timer 2): 0x43E851 -> 0x43E9DB (default case: LeaveCS only)"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x43F0FC",
+     "file_off": "0x3F0FC",
+     "orig": "99EB4300",
+     "patched": "9CED4300",
+     "len": 4,
+     "note": "WM_TIMER jump table entry [0] (timer 2): 0x43EB99 -> 0x43ED9C (default case at 0x43ED9C: LEA EAX,[EBX+0x368]; PUSH; CALL [LeaveCriticalSection]; same as 2008 0x43E9DB)"
+    }
+   ],
+   "explanation_2008": "WndProc 0x43E3F0 case WM_TIMER: EnterCS(+0x368); switch(timer id-2) via table 0x43ED30; id 2 shows 'No response from the server.', KillTimer, UI dialog 0x12 ctrl 4 (back). Timer armed with 5500 ms by FUN_0042cf20.",
+   "evidence": "2009 0x43EB86 LEA EAX,[ESI-2]; CMP EAX,0xa; JA 0x43ED9C; JMP [EAX*4+0x43F0FC]; case 0x43EB99 pushes 0x52CF3C 'No response from the server.'",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "same patch at new table; table now has 11 entries (ids 2..12); timer 2 is also armed from a new OnReceive site",
+   "confidence": "high",
+   "status": "applied in 2008 patched exe; not applied in live 2009 exes",
+   "recommendation": "apply if the server can leave an enter-world wait unanswered (with it, an unanswered 0x2B hangs forever instead of returning to char select)"
+  },
+  {
+   "name": "lan_probe_nop",
+   "purpose": "remove the post-login UDP LAN probe (opcode 0x11 + local uid broadcast to 255.255.255.255:42907)",
+   "2008": [
+    {
+     "va": "0x44DFF9",
+     "file_off": "0x4DFF9",
+     "orig": "6A01689BA700006AFFFF15DC404A00",
+     "patched": "909090909090909090909090909090",
+     "len": 15,
+     "note": "PUSH 1; PUSH 0xA79B; PUSH -1; CALL [SendTo(u32,uint,int)] inside S2C 0x02 handler"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x452610",
+     "file_off": "0x52610",
+     "orig": "6A01689BA700006AFFFF15D4704C00",
+     "patched": "909090909090909090909090909090",
+     "len": 15,
+     "note": "same 4 instructions inside the 2009 S2C 0x02 handler (0x4525D3 SetBroadCast(1) ... 0x452627 SetBroadCast(0)); thiscall callee-cleans, so removing pushes+call keeps the stack balanced"
+    }
+   ],
+   "explanation_2008": "S2C 0x02 (login success) handler: GetPeerName(game socket), SetBroadCast(1), Add(u8 0x11), Add(u32 scene+0x220), SendTo(INADDR_BROADCAST, 42907), SetBroadCast(0). Its replies fill the P2P ip later sent in C2S 0x2B.",
+   "evidence": "2009 asm 0x4525CD..0x452627 (same sequence, scene uid at +0x224)",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "identical bytes except the IAT address",
+   "confidence": "high",
+   "status": "applied in 2008 patched exe; not applied in live 2009 exes",
+   "recommendation": "apply (keeps C2S 0x2B p2p_ip empty, as with the 2008 client)"
+  },
+  {
+   "name": "room_sendto_nop",
+   "purpose": "remove the room-map (mode 1) peer-to-host UDP input SendTo",
+   "2008": [
+    {
+     "va": "0x4236E0",
+     "file_off": "0x236E0",
+     "orig": "6A010510270000508D8E380F0000518B8E900F0000FF150C414A00",
+     "patched": "909090909090909090909090909090909090909090909090909090",
+     "len": 27,
+     "note": "PUSH 1; ADD EAX,0x2710; PUSH EAX; LEA ECX,[ESI+0xf38]; PUSH ECX; MOV ECX,[ESI+0xf90]; CALL [SendTo(char*,uint,int)] in FUN_00423260"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x424992",
+     "file_off": "0x24992",
+     "orig": "6A0181C210270000528D85540F000050FF1530714C00",
+     "patched": "90909090909090909090909090909090909090909090",
+     "len": 22,
+     "note": "PUSH 1; ADD EDX,0x2710; PUSH EDX; LEA EAX,[EBP+0xf54]; PUSH EAX; CALL [SendTo] in FUN_00424500 (MOV ECX,[EBP+0xfbc] is at 0x42498C, before the pushes, and can stay)"
+    }
+   ],
+   "explanation_2008": "FUN_00423260 non-host room branch: when the local entity's type byte is 3, when no room datagram has been counted yet (scene+0xF08 == 0), or when more than 9000 ms passed since the last send (scene+0xF20 - scene+0xF0C), sends type-3 input (uid, key bytes) to scene+0xF38 : [scene+0xF48]+10000.",
+   "evidence": "2009 decomp FUN_00424500: SendTo(scene+0xfbc, scene+0xf54, [scene+0xf64]+10000, 1); asm 0x424985..0x4249A7",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "22 bytes instead of 27 (MOV ECX moved before the pushes)",
+   "confidence": "high",
+   "status": "applied in all 2008 patched exes; not applied in live 2009 exes",
+   "recommendation": "do NOT apply unless arena/room UDP must be suppressed: docs/IMPLEMENTATION_ROADMAP S1-17 records that this NOP makes arena/battle/play-room UDP impossible"
+  },
+  {
+   "name": "smooth_sleep_after_present",
+   "purpose": "yield the frame critical section (Sleep(1) after LeaveCriticalSection) so Fireway's network thread is not starved (Vista+ unfair CS)",
+   "2008": [
+    {
+     "va": "0x40DE8D",
+     "file_off": "0xDE8D",
+     "orig": "FF158C424A00",
+     "patched": "E85E5E090090",
+     "len": 6,
+     "note": "normal per-frame exit after Present"
+    },
+    {
+     "va": "0x40DE1F",
+     "file_off": "0xDE1F",
+     "orig": "FF158C424A00",
+     "patched": "E8CC5E090090",
+     "len": 6,
+     "note": "device-reset exit"
+    },
+    {
+     "va": "0x40DE58",
+     "file_off": "0xDE58",
+     "orig": "FF158C424A00",
+     "patched": "E8935E090090",
+     "len": 6,
+     "note": "game_state+0x357 flag exit"
+    },
+    {
+     "va": "0x4A3CF0",
+     "file_off": "0xA3CF0",
+     "orig": "000000000000000000000000000000000000000000",
+     "patched": "FF742404FF158C424A006A01FF15C4424A00C20400",
+     "len": 21,
+     "note": "cave: PUSH [ESP+4]; CALL [LeaveCriticalSection 0x4A428C]; PUSH 1; CALL [Sleep 0x4A42C4]; RET 4"
+    },
+    {
+     "va": "header",
+     "file_off": "0x208",
+     "orig": "E72C0A00",
+     "patched": "052D0A00",
+     "len": 4,
+     "note": ".text VirtualSize 0xA2CE7 -> 0xA2D05 to cover the cave"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x40E7A0",
+     "file_off": "0xE7A0",
+     "orig": "FF158C724C00",
+     "patched": "E85B7A0B0090",
+     "len": 6,
+     "note": "normal per-frame exit after Present (Present = CALL EDX at 0x40E78F)"
+    },
+    {
+     "va": "0x40E732",
+     "file_off": "0xE732",
+     "orig": "FF158C724C00",
+     "patched": "E8C97A0B0090",
+     "len": 6,
+     "note": "device-reset exit (after FUN_0040db30)"
+    },
+    {
+     "va": "0x40E76B",
+     "file_off": "0xE76B",
+     "orig": "FF158C724C00",
+     "patched": "E8907A0B0090",
+     "len": 6,
+     "note": "game_state+0x356 flag exit (after FUN_0040eb10)"
+    },
+    {
+     "va": "0x4C6200",
+     "file_off": "0xC6200",
+     "orig": "000000000000000000000000000000000000000000",
+     "patched": "FF742404FF158C724C006A01FF15D8724C00C20400",
+     "len": 21,
+     "note": "cave: PUSH [ESP+4]; CALL [LeaveCriticalSection 0x4C728C]; PUSH 1; CALL [Sleep 0x4C72D8]; RET 4. .text slack 0x4C61F7..0x4C6FFF (3593 zero bytes, verified) - cave 16-aligned at 0x4C6200"
+    },
+    {
+     "va": "header",
+     "file_off": "0x218",
+     "orig": "F7510C00",
+     "patched": "15520C00",
+     "len": 4,
+     "note": ".text VirtualSize 0xC51F7 -> 0xC5215 to cover the cave (same technique as patch_smooth.py)"
+    }
+   ],
+   "explanation_2008": "FUN_0040db20 holds game_state+0x368 across tick+FrameMove+Render+Present; OnReceive and the UDP handler take the same CS on Fireway's thread. patch_smooth.py routes the three LeaveCS exits through the cave.",
+   "evidence": "2009 FUN_0040e440 asm: 5 LeaveCS calls (0x40E6A2 error, 0x40E732, 0x40E76B, 0x40E7A0) with the same code shape as 2008 (0x40DD82, 0x40DE1F, 0x40DE58, 0x40DE8D); IATs LeaveCriticalSection 0x4C728C, Sleep 0x4C72D8.",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "same fix, new VAs. Expected benefit is smaller: in 2009 the field-map drawn position is applied on the main thread (FUN_004510a0), so the 2008 symptom path (UDP type-4 snapshot starved -> +0x15A4 frozen) no longer exists; TCP packets and the looped-back type-3 input still go through the contended CS",
+   "confidence": "high",
+   "status": "applied in 2008 WindSlayer_patched.exe / _p2.exe (post pre_smooth); not applied in 2009",
+   "recommendation": "port it (cheap, same mechanism); verify live whether 2009 still stutters without it"
+  },
+  {
+   "name": "fullscreen_exclusive",
+   "purpose": "force D3D PresentParams.Windowed = 0 (exclusive fullscreen); currently REVERTED in the 2008 build the user runs",
+   "2008": [
+    {
+     "va": "0x40D070",
+     "file_off": "0xD070",
+     "orig": "0FB64830",
+     "patched": "31C99090",
+     "len": 4,
+     "note": "MOVZX ECX,byte [EAX+0x30] -> XOR ECX,ECX; NOP; NOP (only in WindSlayer_patched.exe.bak_fullscreen)"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x40D990",
+     "file_off": "0xD990",
+     "orig": "0FB64830",
+     "patched": "31C99090",
+     "len": 4,
+     "note": "FUN_0040d990 is byte-identical to 2008 FUN_0040d070"
+    }
+   ],
+   "explanation_2008": "FUN_0040d070 builds D3DPRESENT_PARAMETERS at game_state+0xA8; +0xC8 (Windowed) = byte [this+0x30].",
+   "evidence": "byte comparison of FUN_0040d070 vs FUN_0040d990 (412 bytes identical)",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "identical",
+   "confidence": "high",
+   "status": "not in pre_smooth (windowed build); present in .bak_fullscreen",
+   "recommendation": "optional"
+  },
+  {
+   "name": "second_client_udp_port",
+   "purpose": "run a second client: P2P UDP port 42907 -> 42908 (WindSlayer_p2.exe)",
+   "2008": [
+    {
+     "va": "0x4400DF",
+     "file_off": "0x400DF",
+     "orig": "9BA70000",
+     "patched": "9CA70000",
+     "len": 4,
+     "note": "scene-mode setter FUN_004400c0: MOV [scene+0x244],0xA79B (instr 0x4400D9)"
+    },
+    {
+     "va": "0x4402D1",
+     "file_off": "0x402D1",
+     "orig": "9BA70000",
+     "patched": "9CA70000",
+     "len": 4,
+     "note": "CreateSockets: PUSH 0xA79B for UDP Create (instr 0x4402D0)"
+    },
+    {
+     "va": "0x459BB1",
+     "file_off": "0x59BB1",
+     "orig": "9BA70000",
+     "patched": "9CA70000",
+     "len": 4,
+     "note": "UDP handler FUN_00458640 (instr 0x459BAB)"
+    },
+    {
+     "va": "0x47652C",
+     "file_off": "0x7652C",
+     "orig": "9BA70000",
+     "patched": "9CA70000",
+     "len": 4,
+     "note": "dialog proc FUN_00475c20 (instr 0x476526)"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x4405CF",
+     "file_off": "0x405CF",
+     "orig": "9BA70000",
+     "patched": "9CA70000",
+     "len": 4,
+     "note": "FUN_004405b0: MOV [scene+0x248],0xA79B (instr 0x4405C9)"
+    },
+    {
+     "va": "0x4407FA",
+     "file_off": "0x407FA",
+     "orig": "9BA70000",
+     "patched": "9CA70000",
+     "len": 4,
+     "note": "FUN_00440640 CreateSockets: PUSH 0xA79B (instr 0x4407F9)"
+    },
+    {
+     "va": "0x45F19A",
+     "file_off": "0x5F19A",
+     "orig": "9BA70000",
+     "patched": "9CA70000",
+     "len": 4,
+     "note": "UDP handler FUN_0045e230 (instr 0x45F194)"
+    },
+    {
+     "va": "0x488C42",
+     "file_off": "0x88C42",
+     "orig": "9BA70000",
+     "patched": "9CA70000",
+     "len": 4,
+     "note": "dialog proc FUN_00488190 (instr 0x488C3C)"
+    }
+   ],
+   "explanation_2008": "all four immediates that name the client's own UDP port; the fifth use (LAN-probe destination 0x44DFFB / 2009 0x452613) is NOPed by lan_probe_nop.",
+   "evidence": "grep of both asm corpora for 0xa79b: exactly these 4 sites + the LAN probe in each build",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "same 4 sites, new VAs",
+   "confidence": "high",
+   "status": "applied only in WindSlayer_p2.exe",
+   "recommendation": "apply to the second 2009 client copy only"
+  },
+  {
+   "name": "hires_1280x960",
+   "purpose": "back-buffer 800x600 -> 1280x960 (WindSlayer_hires.exe experiment)",
+   "2008": [
+    {
+     "va": "0x40B777",
+     "file_off": "0xB777",
+     "orig": "20030000",
+     "patched": "00050000",
+     "len": 4,
+     "note": "width imm, MOV [0x70ed4c],0x320 at 0x40B771"
+    },
+    {
+     "va": "0x40B781",
+     "file_off": "0xB781",
+     "orig": "58020000",
+     "patched": "C0030000",
+     "len": 4,
+     "note": "height imm, MOV [0x70ed50],0x258 at 0x40B77B"
+    },
+    {
+     "va": "0x4298F5",
+     "file_off": "0x298F5",
+     "orig": "20030000",
+     "patched": "00050000",
+     "len": 4,
+     "note": "width imm at 0x4298EF"
+    },
+    {
+     "va": "0x4298FF",
+     "file_off": "0x298FF",
+     "orig": "58020000",
+     "patched": "C0030000",
+     "len": 4,
+     "note": "height imm at 0x4298F9"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x40C097",
+     "file_off": "0xC097",
+     "orig": "20030000",
+     "patched": "00050000",
+     "len": 4,
+     "note": "MOV [0x54ef1c],0x320 at 0x40C091 (FUN_0040bfa0)"
+    },
+    {
+     "va": "0x40C0A1",
+     "file_off": "0xC0A1",
+     "orig": "58020000",
+     "patched": "C0030000",
+     "len": 4,
+     "note": "MOV [0x54ef20],0x258 at 0x40C09B"
+    },
+    {
+     "va": "0x42B023",
+     "file_off": "0x2B023",
+     "orig": "20030000",
+     "patched": "00050000",
+     "len": 4,
+     "note": "MOV [0x54ef1c],0x320 at 0x42B01D (FUN_0042ad10)"
+    },
+    {
+     "va": "0x42B02D",
+     "file_off": "0x2B02D",
+     "orig": "58020000",
+     "patched": "C0030000",
+     "len": 4,
+     "note": "MOV [0x54ef20],0x258 at 0x42B027"
+    }
+   ],
+   "explanation_2008": "game_state+0x34C/+0x350 = back-buffer width/height set in two init paths.",
+   "evidence": "byte-pattern search (C7 05 <addr> 20 03 00 00 / 58 02 00 00) in both .text sections",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "same",
+   "confidence": "high",
+   "status": "only in WindSlayer_hires.exe (experiment; UI stays 800x600)",
+   "recommendation": "optional / experimental"
+  },
+  {
+   "name": "xtrap_stubs",
+   "purpose": "2009 only: stub the X-Trap anti-cheat API entry points with RET",
+   "2008": null,
+   "2009": [
+    {
+     "va": "0x49F420",
+     "file_off": "0x9F420",
+     "orig": "8B",
+     "patched": "C3",
+     "len": 1,
+     "note": "X-Trap start (called from WinMain body 0x487D44 with the key string 0x52E3F8; cdecl, caller pops)"
+    },
+    {
+     "va": "0x49F440",
+     "file_off": "0x9F440",
+     "orig": "68",
+     "patched": "C3",
+     "len": 1,
+     "note": "X-Trap keepalive"
+    },
+    {
+     "va": "0x49F460",
+     "file_off": "0x9F460",
+     "orig": "8B",
+     "patched": "C3",
+     "len": 1,
+     "note": "X-Trap step (from FUN_00448730 / OnReceive)"
+    },
+    {
+     "va": "0x49F480",
+     "file_off": "0x9F480",
+     "orig": "8B",
+     "patched": "C3",
+     "len": 1,
+     "note": "X-Trap step (from FUN_00448730 / OnReceive)"
+    }
+   ],
+   "explanation_2008": "no X-Trap in the 2008 client",
+   "evidence": "live-verified (task context); matches the byte diff of WindSlayer2009\\WindSlayer.exe vs WindSlayer_patched*.exe",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "new",
+   "confidence": "high",
+   "status": "applied in live 2009 WindSlayer_patched*.exe",
+   "recommendation": "apply (required to launch)"
+  },
+  {
+   "name": "timer_error_disable",
+   "purpose": "optional, never used in 2008: disable the 'Timer Error.' self-close (system clock vs game clock drift > 5 s)",
+   "2008": [
+    {
+     "va": "0x42B31F",
+     "file_off": "0x2B31F",
+     "orig": "7E23",
+     "patched": "EB23",
+     "len": 2,
+     "note": "JLE -> JMP in FUN_0042b260 (NOT applied in any 2008 exe)"
+    }
+   ],
+   "2009": [
+    {
+     "va": "0x42CA60",
+     "file_off": "0x2CA60",
+     "orig": "7E32",
+     "patched": "EB32",
+     "len": 2,
+     "note": "JLE -> JMP in FUN_0042c920; 2009 also skips the check while scene+0xF3C != 0"
+    }
+   ],
+   "explanation_2008": "per-tick compares GetSystemTime-based elapsed ms with the frame clock; > 5000 ms -> log + WM_CLOSE",
+   "evidence": "asm of both per-tick functions",
+   "verification": "orig bytes asserted against both exes by script; 2008 bytes from byte diff WindSlayer.exe vs WindSlayer_patched.exe.pre_smooth (and the other patched variants)",
+   "diff_vs_2008": "extra scene+0xF3C gate in 2009",
+   "confidence": "high",
+   "status": "not applied anywhere",
+   "recommendation": "only if debugger pauses / suspended clients trigger it"
+  }
+ ],
+ "notes": "How this was built: function pairs were matched by call-graph position, unique string xrefs ('Timer Error.', 'No response from the server.', version-server IP, 'Failed to Create d3dApp.'), byte identity (0x409EF0, 0x409F30, 0x40D990) and a normalized-token alignment of the two Ghidra decomps (constants paired only inside equal token runs; ratios 0.60-0.99 are listed per function). Every offset listed as high confidence was then confirmed by reading the concrete 2008 and 2009 instructions given in 'evidence'. Key layout facts: game_state moved 0x70EA00 -> 0x54EBD0 but most of its low fields (+0x368 CS, +0x364 frame time, +0x34C/+0x350 screen, +0xA8 present params) keep their offsets; the subsystem pointer block moved +0x4C4..+0x4E0 -> +0x4E8..+0x504 (+0x24) and the busy flag +0x408 -> +0x418. Scene shifts are piecewise (+4 at 0x220/0x244, +8 at 0x25C, +0x18 for 0x96D..0xF20, +0x1C for 0xF24..0xF68 because a new dword sits at 2009 +0xF3C, +0x2C for 0xF78..0xF98). Entity (alloc 0x15F0 -> 0x16B8) shifts are also piecewise: +4 (0x84..0xB4), +0x8C (0x8B3..0x8E3), +0x8D (0x8E4), +0x90 (0x904..0xDBC), +0x9C (0xDE8..0xE84), +0xA0 (0x107C..0x14F0), +0xB8 (0x1598..0x15B4). Do not apply a single delta. Tool retargeting summary: SCENE_PTR 0x54F0C0, ANIM_PTR 0x54F0D4, GAME_STATE 0x54EBD0; scene local uid +0x224, mode +0xF18, local player +0x988; entity uid +0x88, type +0x9C, level +0x9D, HP +0xA0, MP +0xA4, max HP +0x11AC, max MP +0x11B0, anim index +0xEFC, pos f64 +0x1298/+0x1328, swing flag +0x944, render state +0x166C (attack == 4), drawn pos +0x165C/+0x1660; container records: class +0x654, sub +0x658. Behaviour changes that matter for tooling: (1) 2009 no longer sends the field-map type-4 UDP snapshot to itself; field entities' drawn state is applied on the main thread each tick by the new FUN_004510a0 -> FUN_004511b0, so the 2008 stutter mechanism (starved UDP loopback) is largely gone, although TCP handling and the looped-back type-3 input still contend for game_state+0x368. (2) The logic tick step is now a global (0x54A284, 30 ms) that can alternate 30/0 in a new time-scale mode flagged by scene+0xF3C, which also suppresses 'Timer Error'. (3) In the 0x1A and 0x07 handlers the two f64 positions are read before RegisterLocalPlayer (after it in 2008). (4) A third TCP CSNSocket (0x54E834) is created but never referenced. Not resolved / caveats: semantics of the new scene+0xF3C mode and of map+0x2E0 (room-mode path FUN_0042a300) were not traced; the game_state vtable base is inferred from the frame function's +0x18 call (medium); secondary scene offsets are medium confidence (from alignment plus one or two spot checks); nothing here was live-tested against the 2009 client except the facts given in the task (X-Trap stubs, version string/port). The 2008 patched exes differ from WindSlayer.exe exactly by: version IP, update URL, WM_TIMER table entry, LAN-probe NOP, room SendTo NOP (pre_smooth); plus the smooth cave (WindSlayer_patched.exe), the 4 port immediates (_p2), the fullscreen patch (.bak_fullscreen) and the 1280x960 immediates (_hires)."
+}

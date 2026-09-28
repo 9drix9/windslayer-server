@@ -1,0 +1,1260 @@
+{
+ "client": "EN 2009 Outspark v1.04 Build 14",
+ "version": "v2.1 2026-09-24 (v1 sprites 0..31 kept; pop sprites +11..+21 retimed to the retail 1.45x/0.9x/1.0x pop)",
+ "control": "basic sprite control DAT_0054e844 (loaded once from ./hs/basic.hsi at 0x43F6A8)",
+ "atlas": {
+  "path": "./hs/combo001_a8.hsc",
+  "image_index": 34,
+  "size": [
+   512,
+   256
+  ],
+  "format": "DXT5",
+  "psnr_rgb_db": 26.3,
+  "psnr_alpha_db": 39.4,
+  "psnr_premultiplied_db": 25.9,
+  "fonts": [
+   "AGENCYB.TTF",
+   "ERASBD.TTF",
+   "FRAHVIT.TTF"
+  ]
+ },
+ "ids": {
+  "COMBO_DIGIT_0": 342,
+  "COMBO_DIGIT_1": 343,
+  "COMBO_DIGIT_2": 344,
+  "COMBO_DIGIT_3": 345,
+  "COMBO_DIGIT_4": 346,
+  "COMBO_DIGIT_5": 347,
+  "COMBO_DIGIT_6": 348,
+  "COMBO_DIGIT_7": 349,
+  "COMBO_DIGIT_8": 350,
+  "COMBO_DIGIT_9": 351,
+  "COMBO_WORD": 352,
+  "COMBO_DIGIT_POP_0": 353,
+  "COMBO_DIGIT_POP_1": 354,
+  "COMBO_DIGIT_POP_2": 355,
+  "COMBO_DIGIT_POP_3": 356,
+  "COMBO_DIGIT_POP_4": 357,
+  "COMBO_DIGIT_POP_5": 358,
+  "COMBO_DIGIT_POP_6": 359,
+  "COMBO_DIGIT_POP_7": 360,
+  "COMBO_DIGIT_POP_8": 361,
+  "COMBO_DIGIT_POP_9": 362,
+  "COMBO_WORD_POP": 363,
+  "LEGACY_GREEN_DIGIT_X14_0": 364,
+  "LEGACY_GREEN_DIGIT_X14_1": 365,
+  "LEGACY_GREEN_DIGIT_X14_2": 366,
+  "LEGACY_GREEN_DIGIT_X14_3": 367,
+  "LEGACY_GREEN_DIGIT_X14_4": 368,
+  "LEGACY_GREEN_DIGIT_X14_5": 369,
+  "LEGACY_GREEN_DIGIT_X14_6": 370,
+  "LEGACY_GREEN_DIGIT_X14_7": 371,
+  "LEGACY_GREEN_DIGIT_X14_8": 372,
+  "LEGACY_GREEN_DIGIT_X14_9": 373,
+  "GRADE_GOOD": 374,
+  "GRADE_BAD": 375,
+  "GRADE_CRITICAL": 376,
+  "ORANGE_DIGIT_0": 377,
+  "ORANGE_DIGIT_1": 378,
+  "ORANGE_DIGIT_2": 379,
+  "ORANGE_DIGIT_3": 380,
+  "ORANGE_DIGIT_4": 381,
+  "ORANGE_DIGIT_5": 382,
+  "ORANGE_DIGIT_6": 383,
+  "ORANGE_DIGIT_7": 384,
+  "ORANGE_DIGIT_8": 385,
+  "ORANGE_DIGIT_9": 386,
+  "ORANGE_WORD": 387,
+  "ORANGE_DIGIT_POP_0": 388,
+  "ORANGE_DIGIT_POP_1": 389,
+  "ORANGE_DIGIT_POP_2": 390,
+  "ORANGE_DIGIT_POP_3": 391,
+  "ORANGE_DIGIT_POP_4": 392,
+  "ORANGE_DIGIT_POP_5": 393,
+  "ORANGE_DIGIT_POP_6": 394,
+  "ORANGE_DIGIT_POP_7": 395,
+  "ORANGE_DIGIT_POP_8": 396,
+  "ORANGE_DIGIT_POP_9": 397,
+  "ORANGE_WORD_POP": 398,
+  "RED_DIGIT_0": 399,
+  "RED_DIGIT_1": 400,
+  "RED_DIGIT_2": 401,
+  "RED_DIGIT_3": 402,
+  "RED_DIGIT_4": 403,
+  "RED_DIGIT_5": 404,
+  "RED_DIGIT_6": 405,
+  "RED_DIGIT_7": 406,
+  "RED_DIGIT_8": 407,
+  "RED_DIGIT_9": 408,
+  "RED_WORD": 409,
+  "RED_DIGIT_POP_0": 410,
+  "RED_DIGIT_POP_1": 411,
+  "RED_DIGIT_POP_2": 412,
+  "RED_DIGIT_POP_3": 413,
+  "RED_DIGIT_POP_4": 414,
+  "RED_DIGIT_POP_5": 415,
+  "RED_DIGIT_POP_6": 416,
+  "RED_DIGIT_POP_7": 417,
+  "RED_DIGIT_POP_8": 418,
+  "RED_DIGIT_POP_9": 419,
+  "RED_WORD_POP": 420
+ },
+ "offsets": {
+  "COMBO_DIGIT_0": 0,
+  "COMBO_DIGIT_1": 1,
+  "COMBO_DIGIT_2": 2,
+  "COMBO_DIGIT_3": 3,
+  "COMBO_DIGIT_4": 4,
+  "COMBO_DIGIT_5": 5,
+  "COMBO_DIGIT_6": 6,
+  "COMBO_DIGIT_7": 7,
+  "COMBO_DIGIT_8": 8,
+  "COMBO_DIGIT_9": 9,
+  "COMBO_WORD": 10,
+  "COMBO_DIGIT_POP_0": 11,
+  "COMBO_DIGIT_POP_1": 12,
+  "COMBO_DIGIT_POP_2": 13,
+  "COMBO_DIGIT_POP_3": 14,
+  "COMBO_DIGIT_POP_4": 15,
+  "COMBO_DIGIT_POP_5": 16,
+  "COMBO_DIGIT_POP_6": 17,
+  "COMBO_DIGIT_POP_7": 18,
+  "COMBO_DIGIT_POP_8": 19,
+  "COMBO_DIGIT_POP_9": 20,
+  "COMBO_WORD_POP": 21,
+  "LEGACY_GREEN_DIGIT_X14_0": 22,
+  "LEGACY_GREEN_DIGIT_X14_1": 23,
+  "LEGACY_GREEN_DIGIT_X14_2": 24,
+  "LEGACY_GREEN_DIGIT_X14_3": 25,
+  "LEGACY_GREEN_DIGIT_X14_4": 26,
+  "LEGACY_GREEN_DIGIT_X14_5": 27,
+  "LEGACY_GREEN_DIGIT_X14_6": 28,
+  "LEGACY_GREEN_DIGIT_X14_7": 29,
+  "LEGACY_GREEN_DIGIT_X14_8": 30,
+  "LEGACY_GREEN_DIGIT_X14_9": 31,
+  "GRADE_GOOD": 32,
+  "GRADE_BAD": 33,
+  "GRADE_CRITICAL": 34,
+  "ORANGE_DIGIT_0": 35,
+  "ORANGE_DIGIT_1": 36,
+  "ORANGE_DIGIT_2": 37,
+  "ORANGE_DIGIT_3": 38,
+  "ORANGE_DIGIT_4": 39,
+  "ORANGE_DIGIT_5": 40,
+  "ORANGE_DIGIT_6": 41,
+  "ORANGE_DIGIT_7": 42,
+  "ORANGE_DIGIT_8": 43,
+  "ORANGE_DIGIT_9": 44,
+  "ORANGE_WORD": 45,
+  "ORANGE_DIGIT_POP_0": 46,
+  "ORANGE_DIGIT_POP_1": 47,
+  "ORANGE_DIGIT_POP_2": 48,
+  "ORANGE_DIGIT_POP_3": 49,
+  "ORANGE_DIGIT_POP_4": 50,
+  "ORANGE_DIGIT_POP_5": 51,
+  "ORANGE_DIGIT_POP_6": 52,
+  "ORANGE_DIGIT_POP_7": 53,
+  "ORANGE_DIGIT_POP_8": 54,
+  "ORANGE_DIGIT_POP_9": 55,
+  "ORANGE_WORD_POP": 56,
+  "RED_DIGIT_0": 57,
+  "RED_DIGIT_1": 58,
+  "RED_DIGIT_2": 59,
+  "RED_DIGIT_3": 60,
+  "RED_DIGIT_4": 61,
+  "RED_DIGIT_5": 62,
+  "RED_DIGIT_6": 63,
+  "RED_DIGIT_7": 64,
+  "RED_DIGIT_8": 65,
+  "RED_DIGIT_9": 66,
+  "RED_WORD": 67,
+  "RED_DIGIT_POP_0": 68,
+  "RED_DIGIT_POP_1": 69,
+  "RED_DIGIT_POP_2": 70,
+  "RED_DIGIT_POP_3": 71,
+  "RED_DIGIT_POP_4": 72,
+  "RED_DIGIT_POP_5": 73,
+  "RED_DIGIT_POP_6": 74,
+  "RED_DIGIT_POP_7": 75,
+  "RED_DIGIT_POP_8": 76,
+  "RED_DIGIT_POP_9": 77,
+  "RED_WORD_POP": 78
+ },
+ "id_ranges": {
+  "COMBO_DIGIT": [
+   342,
+   351
+  ],
+  "COMBO_WORD": 352,
+  "COMBO_DIGIT_POP": [
+   353,
+   362
+  ],
+  "COMBO_WORD_POP": 363,
+  "LEGACY_GREEN_DIGIT_X14": [
+   364,
+   373
+  ],
+  "GRADE_GOOD": 374,
+  "GRADE_BAD": 375,
+  "GRADE_CRITICAL": 376,
+  "ORANGE_DIGIT": [
+   377,
+   386
+  ],
+  "ORANGE_WORD": 387,
+  "ORANGE_DIGIT_POP": [
+   388,
+   397
+  ],
+  "ORANGE_WORD_POP": 398,
+  "RED_DIGIT": [
+   399,
+   408
+  ],
+  "RED_WORD": 409,
+  "RED_DIGIT_POP": [
+   410,
+   419
+  ],
+  "RED_WORD_POP": 420,
+  "first_map_sprite_after_this_file": 421
+ },
+ "counter_sets": {
+  "base_offset": {
+   "green": 0,
+   "orange": 35,
+   "red": 57
+  },
+  "sub_offsets": {
+   "digit": 0,
+   "word": 10,
+   "digit_pop": 11,
+   "word_pop": 21
+  },
+  "rule": "sprite = art_base + base_offset[tier] + sub_offset (+d for digits)",
+  "colours": {
+   "green": {
+    "top": [
+     0,
+     165,
+     0
+    ],
+    "mid": [
+     172,
+     224,
+     12
+    ],
+    "bot": [
+     0,
+     165,
+     0
+    ],
+    "outline": [
+     0,
+     46,
+     0
+    ],
+    "rim": [
+     236,
+     246,
+     226
+    ]
+   },
+   "orange": {
+    "top": [
+     230,
+     113,
+     14
+    ],
+    "mid": [
+     236,
+     224,
+     9
+    ],
+    "bot": [
+     214,
+     120,
+     28
+    ],
+    "outline": [
+     66,
+     26,
+     0
+    ],
+    "rim": [
+     250,
+     242,
+     228
+    ]
+   },
+   "red": {
+    "top": [
+     221,
+     23,
+     14
+    ],
+    "mid": [
+     244,
+     147,
+     19
+    ],
+    "bot": [
+     214,
+     39,
+     8
+    ],
+    "outline": [
+     76,
+     6,
+     0
+    ],
+    "rim": [
+     250,
+     238,
+     230
+    ]
+   }
+  }
+ },
+ "variants": {
+  "A": {
+   "files": [
+    "hs/basic.hsi (replaces the shipped one)",
+    "hs/combo001_a8.hsc",
+    "hs/combo001_a8.hsc1",
+    "hs/combo001_a8.hsc2"
+   ],
+   "ids": "fixed 342..420; no loader code needed"
+  },
+  "B": {
+   "files": [
+    "hs/combo001.hsi (new)",
+    "hs/combo001_a8.hsc",
+    "hs/combo001_a8.hsc1",
+    "hs/combo001_a8.hsc2"
+   ],
+   "ids": "base = return of OpenFromFile(DAT_0054e844, \"./hs/combo001.hsi\", 0, 1, 11 x NULL, 1) called right after the basic.hsi load (0x43F6A8 succeeded, before any map load); id = base + offset; base == 342 when loaded there; 0 = file missing/refused -> draw nothing",
+   "warning": "param_2 MUST be 0 (1 = RemoveAllImage would wipe basic.hsi)"
+  }
+ },
+ "probes": {
+  "note": "GetExtent(DAT_0054e844, base + offset, &w, &h) (IAT 0x4C7398) returns the region size for these sprites (mode 2, or mode 1 with motion_num 1 / line_num 1 / axis 0: AddSprite 0x100084BD)",
+  "extents": {
+   "0": [
+    40,
+    52
+   ],
+   "10": [
+    76,
+    26
+   ],
+   "32": [
+    80,
+    28
+   ],
+   "33": [
+    68,
+    28
+   ],
+   "34": [
+    138,
+    32
+   ],
+   "35": [
+    40,
+    52
+   ],
+   "45": [
+    76,
+    26
+   ],
+   "57": [
+    40,
+    52
+   ],
+   "67": [
+    76,
+    26
+   ]
+  }
+ },
+ "guard": "before drawing, GetExtent(DAT_0054e844, COMBO_WORD, &w, &h) (IAT 0x4C7398) must give the word cell 76x26 (and COMBO_DIGIT_0 40x52); otherwise the new art is not loaded -> fall back to CIME::Draw_Text",
+ "existing_grade_words": {
+  "GOOD": 332,
+  "GREAT": 333,
+  "WOW": 334,
+  "CRITICAL_BURST": 331,
+  "note": "unchanged, basic.hsi 331..334 (fallbacks: GOOD -> 0x14C, CRITICAL! -> 0x14E + 0x14B)"
+ },
+ "grade_words": {
+  "GRADE_GOOD": {
+   "id": 374,
+   "offset": 32,
+   "text": "GOOD",
+   "region": [
+    0,
+    96,
+    80,
+    124
+   ],
+   "cell": [
+    80,
+    28
+   ],
+   "ink_in_cell": [
+    2,
+    2,
+    77,
+    25
+   ],
+   "center": [
+    -40,
+    -134
+   ],
+   "render": {
+    "font": "AGENCYB.TTF",
+    "size_px": 19.0,
+    "xscale": 1.9388,
+    "shear": 0.0,
+    "embolden_px": 0.6,
+    "ink": [
+     75,
+     23
+    ],
+    "target": [
+     75,
+     23
+    ]
+   },
+   "colours": {
+    "stops": [
+     [
+      0.0,
+      [
+       214,
+       252,
+       196
+      ]
+     ],
+     [
+      0.14,
+      [
+       208,
+       246,
+       188
+      ]
+     ],
+     [
+      0.26,
+      [
+       170,
+       206,
+       146
+      ]
+     ],
+     [
+      0.38,
+      [
+       96,
+       146,
+       98
+      ]
+     ],
+     [
+      0.48,
+      [
+       62,
+       124,
+       88
+      ]
+     ],
+     [
+      0.58,
+      [
+       30,
+       88,
+       62
+      ]
+     ],
+     [
+      0.7,
+      [
+       8,
+       64,
+       46
+      ]
+     ],
+     [
+      0.82,
+      [
+       4,
+       94,
+       68
+      ]
+     ],
+     [
+      0.93,
+      [
+       8,
+       134,
+       98
+      ]
+     ],
+     [
+      1.0,
+      [
+       18,
+       150,
+       112
+      ]
+     ]
+    ],
+    "outline": [
+     8,
+     44,
+     34
+    ],
+    "rim": [
+     244,
+     250,
+     244
+    ]
+   },
+   "frames": [
+    {
+     "delay": 80,
+     "pos": [
+      0,
+      60
+     ],
+     "mov": [
+      0,
+      0
+     ],
+     "scale": 1.5
+    },
+    {
+     "delay": 80,
+     "pos": [
+      0,
+      -12
+     ],
+     "mov": [
+      0,
+      0
+     ],
+     "scale": 0.9
+    },
+    {
+     "delay": 700,
+     "pos": [
+      0,
+      0
+     ],
+     "mov": [
+      0,
+      0
+     ],
+     "scale": 1.0
+    }
+   ],
+   "total_ms": 860,
+   "dxt5_psnr_premultiplied_db": 26.9,
+   "geometry": [
+    {
+     "t_ms": 0,
+     "frame": 0,
+     "scale": 1.5,
+     "ink_centre": [
+      -0.75,
+      -120.75
+     ],
+     "ink_box": [
+      -57.0,
+      -138.0,
+      55.5,
+      -103.5
+     ]
+    },
+    {
+     "t_ms": 79,
+     "frame": 0,
+     "scale": 1.5,
+     "ink_centre": [
+      -0.75,
+      -120.75
+     ],
+     "ink_box": [
+      -57.0,
+      -138.0,
+      55.5,
+      -103.5
+     ]
+    },
+    {
+     "t_ms": 80,
+     "frame": 1,
+     "scale": 0.9,
+     "ink_centre": [
+      -0.45,
+      -120.45
+     ],
+     "ink_box": [
+      -34.2,
+      -130.8,
+      33.3,
+      -110.1
+     ]
+    },
+    {
+     "t_ms": 159,
+     "frame": 1,
+     "scale": 0.9,
+     "ink_centre": [
+      -0.45,
+      -120.45
+     ],
+     "ink_box": [
+      -34.2,
+      -130.8,
+      33.3,
+      -110.1
+     ]
+    },
+    {
+     "t_ms": 160,
+     "frame": 2,
+     "scale": 1.0,
+     "ink_centre": [
+      -0.5,
+      -120.5
+     ],
+     "ink_box": [
+      -38.0,
+      -132.0,
+      37.0,
+      -109.0
+     ]
+    },
+    {
+     "t_ms": 859,
+     "frame": 2,
+     "scale": 1.0,
+     "ink_centre": [
+      -0.5,
+      -120.5
+     ],
+     "ink_box": [
+      -38.0,
+      -132.0,
+      37.0,
+      -109.0
+     ]
+    }
+   ]
+  },
+  "GRADE_BAD": {
+   "id": 375,
+   "offset": 33,
+   "text": "BAD",
+   "region": [
+    84,
+    96,
+    152,
+    124
+   ],
+   "cell": [
+    68,
+    28
+   ],
+   "ink_in_cell": [
+    2,
+    2,
+    65,
+    25
+   ],
+   "center": [
+    -34,
+    -134
+   ],
+   "render": {
+    "font": "FRAHVIT.TTF",
+    "size_px": 22.5,
+    "xscale": 1.2995,
+    "shear": -0.04,
+    "embolden_px": 0.0,
+    "ink": [
+     63,
+     23
+    ],
+    "target": [
+     63,
+     23
+    ]
+   },
+   "colours": {
+    "stops": [
+     [
+      0.0,
+      [
+       194,
+       100,
+       10
+      ]
+     ],
+     [
+      0.24,
+      [
+       204,
+       122,
+       24
+      ]
+     ],
+     [
+      0.4,
+      [
+       243,
+       201,
+       77
+      ]
+     ],
+     [
+      0.5,
+      [
+       242,
+       200,
+       80
+      ]
+     ],
+     [
+      0.66,
+      [
+       216,
+       144,
+       26
+      ]
+     ],
+     [
+      1.0,
+      [
+       198,
+       102,
+       11
+      ]
+     ]
+    ],
+    "outline": [
+     54,
+     22,
+     4
+    ],
+    "rim": [
+     252,
+     248,
+     240
+    ]
+   },
+   "frames": [
+    {
+     "delay": 80,
+     "pos": [
+      0,
+      60
+     ],
+     "mov": [
+      0,
+      0
+     ],
+     "scale": 1.5
+    },
+    {
+     "delay": 80,
+     "pos": [
+      0,
+      -12
+     ],
+     "mov": [
+      0,
+      0
+     ],
+     "scale": 0.9
+    },
+    {
+     "delay": 700,
+     "pos": [
+      0,
+      0
+     ],
+     "mov": [
+      0,
+      0
+     ],
+     "scale": 1.0
+    }
+   ],
+   "total_ms": 860,
+   "dxt5_psnr_premultiplied_db": 23.3,
+   "geometry": [
+    {
+     "t_ms": 0,
+     "frame": 0,
+     "scale": 1.5,
+     "ink_centre": [
+      -0.75,
+      -120.75
+     ],
+     "ink_box": [
+      -48.0,
+      -138.0,
+      46.5,
+      -103.5
+     ]
+    },
+    {
+     "t_ms": 79,
+     "frame": 0,
+     "scale": 1.5,
+     "ink_centre": [
+      -0.75,
+      -120.75
+     ],
+     "ink_box": [
+      -48.0,
+      -138.0,
+      46.5,
+      -103.5
+     ]
+    },
+    {
+     "t_ms": 80,
+     "frame": 1,
+     "scale": 0.9,
+     "ink_centre": [
+      -0.45,
+      -120.45
+     ],
+     "ink_box": [
+      -28.8,
+      -130.8,
+      27.9,
+      -110.1
+     ]
+    },
+    {
+     "t_ms": 159,
+     "frame": 1,
+     "scale": 0.9,
+     "ink_centre": [
+      -0.45,
+      -120.45
+     ],
+     "ink_box": [
+      -28.8,
+      -130.8,
+      27.9,
+      -110.1
+     ]
+    },
+    {
+     "t_ms": 160,
+     "frame": 2,
+     "scale": 1.0,
+     "ink_centre": [
+      -0.5,
+      -120.5
+     ],
+     "ink_box": [
+      -32.0,
+      -132.0,
+      31.0,
+      -109.0
+     ]
+    },
+    {
+     "t_ms": 859,
+     "frame": 2,
+     "scale": 1.0,
+     "ink_centre": [
+      -0.5,
+      -120.5
+     ],
+     "ink_box": [
+      -32.0,
+      -132.0,
+      31.0,
+      -109.0
+     ]
+    }
+   ]
+  },
+  "GRADE_CRITICAL": {
+   "id": 376,
+   "offset": 34,
+   "text": "CRITICAL!",
+   "region": [
+    156,
+    96,
+    294,
+    128
+   ],
+   "cell": [
+    138,
+    32
+   ],
+   "ink_in_cell": [
+    2,
+    2,
+    135,
+    29
+   ],
+   "center": [
+    -68,
+    -136
+   ],
+   "render": {
+    "font": "AGENCYB.TTF",
+    "size_px": 24.5,
+    "xscale": 1.5737,
+    "shear": 0.1,
+    "embolden_px": 0.6,
+    "ink": [
+     133,
+     27
+    ],
+    "target": [
+     133,
+     27
+    ]
+   },
+   "colours": {
+    "stops": [
+     [
+      0.0,
+      [
+       255,
+       232,
+       60
+      ]
+     ],
+     [
+      0.3,
+      [
+       250,
+       198,
+       30
+      ]
+     ],
+     [
+      0.45,
+      [
+       240,
+       146,
+       22
+      ]
+     ],
+     [
+      0.55,
+      [
+       196,
+       40,
+       10
+      ]
+     ],
+     [
+      0.68,
+      [
+       224,
+       92,
+       16
+      ]
+     ],
+     [
+      1.0,
+      [
+       246,
+       172,
+       48
+      ]
+     ]
+    ],
+    "outline": [
+     62,
+     16,
+     2
+    ],
+    "rim": [
+     252,
+     246,
+     240
+    ]
+   },
+   "frames": [
+    {
+     "delay": 80,
+     "pos": [
+      0,
+      60
+     ],
+     "mov": [
+      0,
+      0
+     ],
+     "scale": 1.5
+    },
+    {
+     "delay": 80,
+     "pos": [
+      0,
+      -12
+     ],
+     "mov": [
+      0,
+      0
+     ],
+     "scale": 0.9
+    },
+    {
+     "delay": 700,
+     "pos": [
+      0,
+      0
+     ],
+     "mov": [
+      0,
+      0
+     ],
+     "scale": 1.0
+    }
+   ],
+   "total_ms": 860,
+   "dxt5_psnr_premultiplied_db": 23.2,
+   "geometry": [
+    {
+     "t_ms": 0,
+     "frame": 0,
+     "scale": 1.5,
+     "ink_centre": [
+      0.75,
+      -120.75
+     ],
+     "ink_box": [
+      -99.0,
+      -141.0,
+      100.5,
+      -100.5
+     ]
+    },
+    {
+     "t_ms": 79,
+     "frame": 0,
+     "scale": 1.5,
+     "ink_centre": [
+      0.75,
+      -120.75
+     ],
+     "ink_box": [
+      -99.0,
+      -141.0,
+      100.5,
+      -100.5
+     ]
+    },
+    {
+     "t_ms": 80,
+     "frame": 1,
+     "scale": 0.9,
+     "ink_centre": [
+      0.45,
+      -120.45
+     ],
+     "ink_box": [
+      -59.4,
+      -132.6,
+      60.3,
+      -108.3
+     ]
+    },
+    {
+     "t_ms": 159,
+     "frame": 1,
+     "scale": 0.9,
+     "ink_centre": [
+      0.45,
+      -120.45
+     ],
+     "ink_box": [
+      -59.4,
+      -132.6,
+      60.3,
+      -108.3
+     ]
+    },
+    {
+     "t_ms": 160,
+     "frame": 2,
+     "scale": 1.0,
+     "ink_centre": [
+      0.5,
+      -120.5
+     ],
+     "ink_box": [
+      -66.0,
+      -134.0,
+      67.0,
+      -107.0
+     ]
+    },
+    {
+     "t_ms": 859,
+     "frame": 2,
+     "scale": 1.0,
+     "ink_centre": [
+      0.5,
+      -120.5
+     ],
+     "ink_box": [
+      -66.0,
+      -134.0,
+      67.0,
+      -107.0
+     ]
+    }
+   ]
+  }
+ },
+ "grade_spawn": "FUN_0042cd90(0x54EBD0, art_base + 32/33/34, [scene+0x224] (attacker uid), 0, 0, 0, 1, 10, 0): kind 10 follows the entity; the ink centre sits at (0, -120) from its draw point at every frame (0x14C Good!: (4, -121)); the effect is freed after total_ms",
+ "anchor": "counter sprites: (x, y) passed to DrawSprite is the centre of the cell; grade words: see grade_spawn",
+ "digit_cell": [
+  40,
+  52
+ ],
+ "word_cell": [
+  76,
+  26
+ ],
+ "digit_ink_in_cell": {
+  "0": [
+   4,
+   2,
+   36,
+   49
+  ],
+  "1": [
+   3,
+   2,
+   36,
+   48
+  ],
+  "2": [
+   2,
+   2,
+   37,
+   48
+  ],
+  "3": [
+   3,
+   2,
+   37,
+   49
+  ],
+  "4": [
+   3,
+   2,
+   36,
+   48
+  ],
+  "5": [
+   2,
+   3,
+   38,
+   49
+  ],
+  "6": [
+   3,
+   2,
+   36,
+   48
+  ],
+  "7": [
+   3,
+   3,
+   36,
+   48
+  ],
+  "8": [
+   2,
+   2,
+   37,
+   49
+  ],
+  "9": [
+   3,
+   2,
+   36,
+   49
+  ]
+ },
+ "word_ink_in_cell": [
+  2,
+  2,
+  73,
+  23
+ ],
+ "pop": {
+  "digits": [
+   [
+    100,
+    1.45,
+    1.0
+   ],
+   [
+    60,
+    0.9,
+    1.0
+   ],
+   [
+    5000,
+    1.0,
+    1.0
+   ]
+  ],
+  "word": [
+   [
+    100,
+    1.4,
+    1.0
+   ],
+   [
+    60,
+    0.9,
+    1.0
+   ],
+   [
+    5000,
+    1.0,
+    1.0
+   ]
+  ],
+  "note": "step frames (delay ms, scale, enlarge 1.0 = hold): digits 1.45x for 100 ms, \"Combo !\" 1.40x for 100 ms, then both 0.90x for 60 ms, then 1.0x (retail rule doc (b): about 1.3-1.5x for 70-130 ms, then about 0.9x, then 1.0x); repeat 0 clamps to the last frame; pass t = ms since the count changed"
+ },
+ "draw_call": "DrawSprite(this=[0x54E844], id, x, y, t_ms, -1, 0x80000000, 0x80000000, 0x640, 0x4B0)  (thiscall, 9 stack args, RET 0x24; x/y are screen pixels of the 800x600 frame)",
+ "draw_model": "screen(u,v) = (x,y) + pos + trunc(mov*p) + s*((u,v) + center), s = scale*lerp(1,enlarge,p) (SpriteControl 0x100056F0, D3DSprite 0x100023E0; hsi_emu.draw_model)",
+ "layout_800x600": {
+  "word_centre": [
+   743,
+   442
+  ],
+  "digit_centre_y": 433,
+  "rightmost_digit_centre_x": 684,
+  "digit_advance": 31,
+  "rule": "digit k of n (k=0 most significant) centre x = rightmost_digit_centre_x - (n-1-k)*digit_advance",
+  "retail_block": "x 660..782, y 412..462"
+ },
+ "v1_check": {
+  "sprite_lines_0_31": "identical except the frame tables of the pop sprites +11..+21 (same region/centre/mode; v2.1 pop [(100, 1.45, 1.0), (60, 0.9, 1.0), (5000, 1.0, 1.0)] / [(100, 1.4, 1.0), (60, 0.9, 1.0), (5000, 1.0, 1.0)])",
+  "texels": "identical in all 11 v1 regions (DXT5 level 0 decoded)",
+  "ref": "C:\\Users\\ohdri\\Desktop\\WindSlayer2009\\_backup_combo_v1\\combo_art"
+ }
+}

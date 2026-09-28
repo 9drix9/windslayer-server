@@ -1,133 +1,157 @@
-# WindSlayer Private Server (2008 English Client)
+# WindSlayer Private Server
 
-A reverse-engineered private server for **WindSlayer**, a 2D side-scrolling MMORPG published by Outspark in 2008. The official servers went dark around 2012; this project aims to make the game playable locally.
+A reverse-engineered private server for **WindSlayer**, the 2D side-scrolling MMORPG that Outspark ran in North America (2008–2010). The official servers have been dead since about 2012. This project rebuilds the server from scratch by reverse engineering the game client. The goal is to play the game the way it looked and played in retail.
 
-**Current status: PLAYABLE-ish.** As of 2026-04-25, the client logs in, transitions through character select, enters the world, renders the map (`stage01_01` = "The Beginning of the..."), shows full HUD with HP/MP/EXP/hotbar/chat/minimap, and displays our welcome message in chat. The character itself doesn't render visibly yet (last known issue — see [Final blocker](#final-blocker)).
+![State](https://img.shields.io/badge/state-alpha-yellow) ![Client](https://img.shields.io/badge/client-EN%202009%20Build%2014-blue) ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
-![State](https://img.shields.io/badge/state-alpha-yellow) ![Progress](https://img.shields.io/badge/progress-in--world%20%E2%9C%93-brightgreen)
-
----
-
-## What works
-
-- **Servers**: version (TCP 7011) + game (TCP 7022), full Fireway protocol with both encryption modes
-- **Login** with default test/test or admin/admin
-- **Character creation** (opcode 0x0E) — stats, class, appearance, name persist via `accounts.json`
-- **Character select screen** with VISIBLE character models (not invisible like before)
-- **Enter-world flow** — full transition into in-game state
-- **Map rendering** — `stage01_01.hmi` loads and shows the actual game world (mountains, trees, clouds)
-- **Full HUD** — HP/MP/EXP bar, level, hotbar 1-8, chat panel, mini-map, top-bar buttons, movement controls
-- **Welcome chat** appears from "Server[Channel-1]" via opcode 0x0A
-- **Stable in-world heartbeats** (22-byte format that only appears once client is in actual gameplay state)
-- **In-game opcode handlers** (ported from PySlayer):
-  - 0x03 chat → broadcasts as 0x16
-  - 0x04 stat increase → 0x14 stat update
-  - 0x0B buy item → 0x18 got item
-  - 0x0C sell item → 0x19 lost item
-  - 0x15 use item/skill → 0x28+0x44 HP/MP restore
-  - 0x7E change map (with 587-portal database for travel destinations)
-- **`.hmi` map encryption fully cracked** — position-based ADD cipher mod 3 with constants {0xE9, 0xDE, 0xE0}; we can now craft valid map files
-- **Login re-auth suppression** — ignores spurious mid-flow 0x01 from the binary patch falling through
-- **UDP broadcast suppression** — binary patches NOP the two `SendTo` call sites that otherwise generate WSA error floods on localhost
-- **Client error rate**: ~4 errors per session (down from 10,000+ in earlier iterations)
-
-## Final blocker
-
-The 0x07 spawn packet (player data sent on world entry) has a different field layout in the English 2008 client vs the Korean Yahoo client that PySlayer (our reference) targets. Specifically, after `name + uid`, the EN client reads a single byte that gates conditional fields, while PySlayer sends 9 bytes of fixed data there. The misalignment causes the EN client's player struct to receive corrupt data → character doesn't render visibly, no input response, eventually triggers a spurious auto-transition to a non-existent map (e.g. `stage447_18.hmi`) and crashes.
-
-**Fixing this requires** field-by-field reverse-engineering of the EN client's 0x07 handler at VA `0x00450867` (the dispatch table mapping is in `docs/dispatch_table.md`). The decompiled C of the read sequence is in PySlayer's `doc/Windslayers_Full_Packet.c` around line 2046 (`case 7:`). That's bounded work — 3-5 hours of careful IDA/Ghidra time should produce a valid packet.
+> This repo holds server code, client patch scripts, reverse-engineering notes and a few text data tables taken from the clients and from PySlayer (item/NPC/map/quest names and stats). It contains no game binaries, art, sound or map files. You need your own copy of the client.
 
 ---
 
-## Progress timeline
+## Status
 
-- **2026-04-21** — Login, character select, character creation working
-- **2026-04-22** — First HUD render, loading screen blocker identified
-- **2026-04-23** — Reversed dispatch table, mapped enter-world packet format
-- **2026-04-24** — Binary-patched UDP `SendTo` calls; identified missing `stage12_85.hmi` map file as a fake-out (not the real blocker)
-- **2026-04-25** — **Massive day.** Discovered [PySlayer](https://github.com/lcy8047/PySlayer), a Python emulator for the Korean Yahoo version. Cracked `.hmi` encryption (trivial mod-3 ADD cipher). Replaced our reverse-engineered enter-world flow with PySlayer's `0x03 + 0x07 + 0x0A`. Got into the actual game world with full HUD + map rendering + welcome chat. Ported in-game handlers for chat / stats / buy / sell / use-item / change-map. Loaded 587-portal database for map travel. Final remaining issue is the EN-vs-KR difference in 0x07 spawn-packet layout.
+The server runs the **English Outspark client v1.04, Build 14 (Jan 2009)**, the main target. The server also supports the **2008 English beta client** (`CLIENT_BUILD "2008"`, data from `CLIENT_DIR`, default `..` = `server/` placed inside the 2008 install), but this repo has no 2008 client patcher.
+
+### Working in-game
+- **Connection:** the Fireway protocol and encryption are cracked, and every packet the client can receive is mapped (165 S2C opcodes in 2008, the 2009 spec in `server/protocol_spec_2009.json`).
+- **Basics:** login, character create/select/delete, entering the world, portals, smooth movement (includes a client patch for the stutter).
+- **Retail combat.** The client detects the hit and reports it, and the server applies damage using the client's own damage formula.
+  - Skills and buffs/debuffs. Ice Spear freezes.
+  - The combo counter with CRITICAL! / GOOD / BAD hits.
+  - Monsters only fight back after you hit them, and their name turns red while they're fighting.
+  - Monster melee and chasing.
+- **Progression:** EXP, leveling, stats, class change, HP/MP regen, death and revive, village return.
+- **World and items:**
+  - Quests and quest items.
+  - NPC shops, bank, loot drops with pickup and ownership, card deck.
+  - Crafting, reinforcement and gathering.
+  - Flea market.
+- **Equipment:** your equipped gear, clothes and weapon show on your character, for you and for everyone else.
+- **Multiplayer:**
+  - Players see each other move, fight and level up.
+  - Chat, whispers, friends, messenger, memos, mentors, parties, Player Info.
+  - GM commands (`/go`, `/kick`, `/manner`, …).
+- **Built, now in live testing:** player trading, personal shops (stalls), Praise/Report.
+
+### In progress (being built; not in this repo yet)
+- **Spark Shop** (cash shop): wallet, buying, gifting, hair dye, rename, megaphones, period items.
+- **Events:** EXP x2, login gifts, the Event News popup, event quests.
+- **Field bosses:** Rynx, Monkey King and 9 more, with persistent respawn timers, boss drops and boss quests.
+
+### Researched, coming next
+Guilds, pets, blacklist, 4 channels, instance dungeons, PvP (Arena / Battlefield / Play & Chat / Guild Battle). Specs are in [`docs/systems_2009/`](docs/systems_2009/) and the plan is in [`docs/ROADMAP_2009_ADDENDUM.md`](docs/ROADMAP_2009_ADDENDUM.md).
 
 ---
 
-## How to use this
+## Quick start (EN 2009 client)
 
-**You need your own copy of the 2008 English WindSlayer client.** This repo contains ONLY the server code and reverse-engineering notes — no game binaries, no game assets. Distributing those would be copyright infringement.
+### Requirements
+- Windows (the client is a 32-bit Windows game).
+- Python 3.10+.
+- `pip install pefile` for the client patcher. The server itself needs only the standard library. The dev tools also use `Pillow`, `capstone` and `pefile` (optional: `keystone-engine` for `combo_hud_2009.py --check`, `openpyxl` for `server/data/build_data.py`).
+- Your own install of the **WindSlayer EN v1.04 (Build 14)** client.
 
-### Prerequisites
-- Windows (the client is a 32-bit Windows game)
-- Python 3.10+
-- An unpatched copy of the 2008 English `WindSlayer.exe` and its game directory
-- `ED2DSprite.dll` (if missing, copy `D2DSprite.dll` to that name)
-- `__COMPAT_LAYER=RunAsInvoker` env var (the launcher tries to auto-elevate without it)
+### 1. Patch the client
+Copy the files from [`client_2009/`](client_2009/) into your WindSlayer install folder (next to `WindSlayer.exe`), then run:
 
-### Patching the client
+```
+python patch_2009.py              # server at 127.0.0.1
+python patch_2009.py my.host.name # or another address
+python patch_2009.py --p2         # optional 2nd client (UDP port 42908) for multiplayer on one PC
+```
 
-Apply these binary patches to a copy of `WindSlayer.exe` (don't distribute the patched binary):
+This writes `WindSlayer_patched.exe` and leaves the original exe unchanged. Before patching, it checks every original byte. The patch:
+- stubs out X-Trap;
+- points the client at your server;
+- disables the "No response" timer and the LAN probe;
+- fixes the movement stutter;
+- applies the retail monster-aggro and name-colour rules;
+- adds the combo/grade HUD. Skip it with `--no-combo-hud`.
 
-1. **Server IP** — change the hardcoded server IP to `127.0.0.1`. See [`docs/patching.md`](docs/patching.md).
-2. **Suppress "No response" dialog** — at file offset `0x3ED30`, change `51 E8 43 00` → `DB E9 43 00` (jump table redirect from 0x43E851 → 0x43E9DB).
-3. **NOP UDP SendTo #1** — at file offset `0x4DFF9`, replace 15 bytes (push pushes + call) with `90` (NOP).
-4. **NOP UDP SendTo #2** — at file offset `0x236E0`, replace 27 bytes with `90`.
+The script header lists every patched address.
 
-The UDP NOPs are critical to avoid WSA error floods on localhost.
+### 2. Configure and start the server
+In `server/config.json`, set:
 
-### Crafting map files
+```json
+"CLIENT_BUILD": "2009",
+"CLIENT_DIR_2009": "C:/path/to/your/WindSlayer2009"
+```
 
-The English client requests `stage12_85.hmi` (a map that doesn't exist in any version). Create one by:
-1. Use PySlayer's `utils/hsdecrypt.py` algorithm (or our `tools/encrypt_hmi.py`) to encrypt a known-good decrypted map (e.g. a copy of `stage12_20.hmi.out`) as `stage12_85.hmi`.
-2. Drop in `hs/` folder.
+The server reads item, NPC, map and quest data from your client install. `CLIENT_DIR_2009` may be relative to `server/`. Then run:
 
-### Running
-
-```bash
+```
 cd server
 python windslayer_server.py
 ```
 
-Then launch your patched client. Log in with `test`/`test`, pick or create a character, hit Start.
+The server uses ports **7011** (version), **7022** (game) and **7099** (admin, bound to 127.0.0.1 only). On first start it creates `accounts.json` with the test accounts `test`/`test` (character TestHero) and `admin`/`admin`. Passwords are stored hashed.
+
+- **More accounts:** stop the server and add `"name": {"password": "pw"}` to `accounts.json`. It is hashed on the next start. Or set `"AUTO_REGISTER": true`.
+- **Players on other machines:**
+  - set `"PUBLIC_IP"` in `config.json` to the server's IPv4 address (host names are not accepted);
+  - open TCP 7011 and 7022; 7099 stays local;
+  - change or remove the test accounts first.
+
+### 3. Play
+The 2009 client has no ID/password form; it takes the login from launcher arguments. Use:
+
+```
+play_2009.bat [account] [password]      (default test test)
+```
+
+In the launcher, click **Window** (or Full Screen), then **START**. Next, pick the channel, then your character.
+
+For a second player on the same PC:
+1. Run `python patch_2009.py --p2`. It writes `WindSlayer_p2.exe`, which uses P2P UDP port 42908.
+2. Start it from the install folder with another account: `set __COMPAT_LAYER=RunAsInvoker`, then `WindSlayer_p2.exe -admin admin -x -x`. Or use `python wsdev.py --build 2009 --client 2 up` (default admin/admin).
 
 ---
 
-## Architecture
+## Repo layout
 
-```
-windslayer_server.py    main server, opcode dispatcher, all packet builders
-cencmsg.py              Fireway CEncMsg port (XOR + MT19937 encryption)
-accounts.json           local account/character DB
-portals.json            587 map portal entries (from PySlayer's gamedef.sqlite3)
-```
+| Path | What |
+|---|---|
+| `server/` | The server. `windslayer_server.py` is the main file. Most systems have their own module: `packets.py` (spec-driven codec for both clients), `store.py` (accounts, migrations), `combat.py`, `damage.py`, `mobai.py`, `quests.py`, `inventory.py`, `trade.py`, `stall.py`, `social.py`, `gm.py`, etc. |
+| `server/test_*.py` | 44 offline test suites with fake clients for both builds. Run one with `python test_combat.py`. They never touch your real `accounts.json`.<br><br>Most suites read game data from a client install: the 2008 client at `CLIENT_DIR` and the 2009 client at `CLIENT_DIR_2009`. Without one, they skip or fail. Keep the shipped `config.json` on `"2008"` when you run `test_store.py`; it compares the file with the defaults. |
+| `server/protocol_spec*.json` | Machine-readable packet grammars for the 2008 and 2009 clients, used by the codec. |
+| `server/wsdev.py`, `wsview.py`, `wsre.py` | Dev harness:<br>• `wsdev`: start the server and client and run `!` dev commands;<br>• `wsview`: screenshots, live entity state from client memory, and input;<br>• `wsre`: the reverse-engineering toolkit. |
+| `client_2009/` | Client patcher (`patch_2009.py`), the combo HUD patch and the launcher `.bat`. |
+| `docs/` | Reverse-engineering docs:<br>• `PROTOCOL.md`: the full protocol reference;<br>• `IMPLEMENTATION_ROADMAP.md` and `ROADMAP_2009_ADDENDUM.md`: the phase plan;<br>• `systems/` and `systems_2009/`: per-system specs;<br>• combat, damage-formula, aggro and equipment RE notes;<br>• a survey of retail gameplay videos. |
+| `docs/legacy/` | The April–June 2026 notes from the first 2008-client attempt. |
+| `tools/` | Older standalone RE helpers. |
 
-## What we've reverse-engineered
+### GM and dev commands
+New characters are not GMs, and that includes TestHero. There are two ways to make one:
+- run `python wsdev.py gm TestHero` while the server is running;
+- or, with the server stopped, set `"gm": 1` on the character in `accounts.json`.
 
-- [`docs/protocol.md`](docs/protocol.md) — Fireway wire protocol
-- [`docs/dispatch_table.md`](docs/dispatch_table.md) — opcode→handler mapping (82 handlers, 130+ opcodes)
-- [`docs/enter_world_fields.md`](docs/enter_world_fields.md) — the original 0x2B response field map (now superseded by PySlayer's 0x03+0x07+0x0A flow)
-- [`docs/patching.md`](docs/patching.md) — client binary patches with file offsets
-- [`docs/known_issues.md`](docs/known_issues.md) — blockers, failed experiments, hypotheses
+The client picks up the flag after a relog or a portal.
 
-## Tools
+GM chat commands:
+- `/go <name>`
+- `/kick <slot>` (slot numbers come from `!who`)
+- `/manner <name> <n>`
 
-- `tools/probe.py` — read-only state snapshot
-- `tools/find_char.py` — locate active character struct in heap
-- `tools/live_monitor.py` — poll state for changes
-- (DO NOT use INT3 breakpoints — Fireway is timing-sensitive and crashes)
+For a GM, a chat line starting with `!` is a dev command. For anyone else it is ordinary chat. You can also send one from the command line: `python wsdev.py --build 2009 dev <character> "!cmd"`. Examples: `!warp <map> [x y]`, `!level <n>`, `!give <item> [n]`, `!gold <n>`, `!hp <n>`, `!learn <skill> [force]`, `!who`, `!mobs`, `!where`.
 
-## Acknowledgments
+---
 
-- **[lcy8047/PySlayer](https://github.com/lcy8047/PySlayer)** (originally [mirusu400/PySlayer](https://mirusu400.github.io/PySlayer/)) — a working Python server emulator for the Korean Yahoo version. The enter-world packet flow, the 50+ opcode implementations, the `.hmi` decryption algorithm, the portal database, and most of the protocol knowledge for this project came from PySlayer. License: GPL — our reuse of these algorithms is in good faith for protocol interoperability.
-- The unnamed contributor who shared the asset dump (`hs_decrypt.zip`), opcode list, and map_codes lookup that helped us crack the encryption and verify the protocol.
+## How it was done (short version)
 
-## License
+1. Mapped the client's packet dispatch, then exported all ~1,500 functions with Ghidra and wrote a grammar for every packet.
+2. Cracked the Fireway XOR table and the `.hsi/.hmi/.hsc` asset cipher (additive mod-3 plus a SHA-1 footer).
+3. Found, unpacked and patched the Outspark Build 14 client (X-Trap stubs, SSO login, per-channel ports).
+4. Used [PySlayer](https://github.com/lcy8047/PySlayer), a Korean-client emulator, as a cross-reference for packet shapes and content tables.
+5. Built each system in reviewed, tested phases. Each one was then checked live with two real clients against the server, and against retail gameplay footage from 2009–2011.
 
-MIT for our original code (server, reverse-engineering notes, tools). Inherited code from PySlayer is GPL — that affects any direct copies of their algorithms; the protocol knowledge itself is not copyrightable.
+---
 
-This repository contains **no game binaries, assets, maps, or copyrighted client material** — only original code and protocol documentation. WindSlayer is the property of its original publisher (Outspark, 2008) and current operators (Sesisoft).
+## Credits
 
-## Contributing
+- [PySlayer](https://github.com/lcy8047/PySlayer), originally by mirusu400, is the Korean-client emulator we used as the ground-truth protocol reference. `server/gamedef.sqlite3` comes from PySlayer, which is GPL-3.0.
+- Retail gameplay videos from 2009–2011 on YouTube, used as the reference for how the game should look and feel.
 
-Best entry points:
+## Legal
 
-- **The 0x07 spawn-packet RE work** — that's the last blocker. Reverse-engineer EN client's handler at VA `0x00450867` and rebuild the spawn packet to match. Comparison reference is in `PySlayer/doc/Windslayers_Full_Packet.c` `case 7:`.
-- **Test with your own EN 2008 client** and report whether you reach the same stuck-spawn state.
-- **Port more PySlayer opcode handlers** — they have ~50, we have ~10. Each one ported is one more in-game feature working.
-- **Document the dispatch table handlers we haven't analyzed** — we have all 82 VAs but only a handful are understood.
+WindSlayer is the property of its original developers and publishers. This project is a non-commercial preservation effort. It does **not** distribute game binaries, art, sound or map files. Don't upload patched executables or game files to this repo. Our code is under the MIT license (see `LICENSE`); `server/gamedef.sqlite3` keeps PySlayer's GPL-3.0 license.

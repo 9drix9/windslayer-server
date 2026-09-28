@@ -1,0 +1,1602 @@
+{
+ "1601": {
+  "en_title": "Grandmaster Ninja Gloves",
+  "en_text": "Gloves favored by ninjas."
+ },
+ "1602": {
+  "en_title": "Grandmaster Ninja Shoes (M)",
+  "en_text": "Shoes favored by ninjas."
+ },
+ "1603": {
+  "en_title": "Apprentice Ninja Top (F)",
+  "en_text": "Top favored by ninjas."
+ },
+ "1604": {
+  "en_title": "Apprentice Ninja Pants (F)",
+  "en_text": "Pants favored by ninjas."
+ },
+ "1605": {
+  "en_title": "Apprentice Ninja Shoes (F)",
+  "en_text": "Shoes favored by ninjas."
+ },
+ "1606": {
+  "en_title": "Adept Ninja Top (F)",
+  "en_text": "Top favored by ninjas."
+ },
+ "1607": {
+  "en_title": "Adept Ninja Pants (F)",
+  "en_text": "Pants favored by ninjas."
+ },
+ "1608": {
+  "en_title": "Adept Ninja Shoes (F)",
+  "en_text": "Shoes favored by ninjas."
+ },
+ "1609": {
+  "en_title": "Expert Ninja Top (F)",
+  "en_text": "Top favored by ninjas."
+ },
+ "1610": {
+  "en_title": "Expert Ninja Pants (F)",
+  "en_text": "Pants favored by ninjas."
+ },
+ "1611": {
+  "en_title": "Expert Ninja Shoes (F)",
+  "en_text": "Shoes favored by ninjas."
+ },
+ "1612": {
+  "en_title": "Master Ninja Top (F)",
+  "en_text": "Top favored by ninjas."
+ },
+ "1613": {
+  "en_title": "Master Ninja Pants (F)",
+  "en_text": "Pants favored by ninjas."
+ },
+ "1614": {
+  "en_title": "Master Ninja Shoes (F)",
+  "en_text": "Shoes favored by ninjas."
+ },
+ "1615": {
+  "en_title": "Grandmaster Ninja Top (F)",
+  "en_text": "Top favored by ninjas."
+ },
+ "1616": {
+  "en_title": "Grandmaster Ninja Pants (F)",
+  "en_text": "Pants favored by ninjas."
+ },
+ "1617": {
+  "en_title": "Grandmaster Ninja Shoes (F)",
+  "en_text": "Shoes favored by ninjas."
+ },
+ "1618": {
+  "en_title": "Apprentice Hunter Top (M)",
+  "en_text": "Top favored by hunters."
+ },
+ "1619": {
+  "en_title": "Apprentice Hunter Pants (M)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1620": {
+  "en_title": "Apprentice Hunter Gloves",
+  "en_text": "Gloves favored by hunters."
+ },
+ "1621": {
+  "en_title": "Apprentice Hunter Shoes",
+  "en_text": "Shoes favored by hunters."
+ },
+ "1622": {
+  "en_title": "Adept Hunter Top (M)",
+  "en_text": "Top favored by hunters."
+ },
+ "1623": {
+  "en_title": "Adept Hunter Pants (M)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1624": {
+  "en_title": "Adept Hunter Gloves",
+  "en_text": "Gloves favored by hunters."
+ },
+ "1625": {
+  "en_title": "Adept Hunter Shoes",
+  "en_text": "Shoes favored by hunters."
+ },
+ "1626": {
+  "en_title": "Expert Hunter Top (M)",
+  "en_text": "Top favored by hunters."
+ },
+ "1627": {
+  "en_title": "Expert Hunter Pants (M)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1628": {
+  "en_title": "Expert Hunter Gloves",
+  "en_text": "Gloves favored by hunters."
+ },
+ "1629": {
+  "en_title": "Expert Hunter Shoes",
+  "en_text": "Shoes favored by hunters."
+ },
+ "1630": {
+  "en_title": "Master Hunter Top (M)",
+  "en_text": "Top favored by hunters."
+ },
+ "1631": {
+  "en_title": "Master Hunter Pants (M)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1632": {
+  "en_title": "Master Hunter Gloves",
+  "en_text": "Gloves favored by hunters."
+ },
+ "1633": {
+  "en_title": "Master Hunter Shoes",
+  "en_text": "Shoes favored by hunters."
+ },
+ "1634": {
+  "en_title": "Grandmaster Hunter Top (M)",
+  "en_text": "Top favored by hunters."
+ },
+ "1635": {
+  "en_title": "Grandmaster Hunter Pants (M)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1636": {
+  "en_title": "Grandmaster Hunter Gloves",
+  "en_text": "Gloves favored by hunters."
+ },
+ "1637": {
+  "en_title": "Grandmaster Hunter Shoes",
+  "en_text": "Shoes favored by hunters."
+ },
+ "1638": {
+  "en_title": "Apprentice Hunter Top (F)",
+  "en_text": "Top favored by hunters."
+ },
+ "1639": {
+  "en_title": "Apprentice Hunter Pants (F)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1640": {
+  "en_title": "Adept Hunter Top (F)",
+  "en_text": "Top favored by hunters."
+ },
+ "1641": {
+  "en_title": "Adept Hunter Pants (F)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1642": {
+  "en_title": "Expert Hunter Top (F)",
+  "en_text": "Top favored by hunters."
+ },
+ "1643": {
+  "en_title": "Expert Hunter Pants (F)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1644": {
+  "en_title": "Master Hunter Top (F)",
+  "en_text": "Top favored by hunters."
+ },
+ "1645": {
+  "en_title": "Master Hunter Pants (F)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1646": {
+  "en_title": "Grandmaster Hunter Top (F)",
+  "en_text": "Top favored by hunters."
+ },
+ "1647": {
+  "en_title": "Grandmaster Hunter Pants (F)",
+  "en_text": "Pants favored by hunters."
+ },
+ "1648": {
+  "en_title": "Apprentice Martial Master Top (M)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1649": {
+  "en_title": "Apprentice Martial Master Pants (M)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1650": {
+  "en_title": "Apprentice Martial Master Gloves (M)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1651": {
+  "en_title": "Apprentice Martial Master Shoes (M)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1652": {
+  "en_title": "Adept Martial Master Top (M)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1653": {
+  "en_title": "Adept Martial Master Pants (M)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1654": {
+  "en_title": "Adept Martial Master Gloves (M)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1655": {
+  "en_title": "Adept Martial Master Shoes (M)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1656": {
+  "en_title": "Expert Martial Master Top (M)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1657": {
+  "en_title": "Expert Martial Master Pants (M)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1658": {
+  "en_title": "Expert Martial Master Gloves (M)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1659": {
+  "en_title": "Expert Martial Master Shoes (M)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1660": {
+  "en_title": "Master Martial Master Top (M)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1661": {
+  "en_title": "Master Martial Master Pants (M)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1662": {
+  "en_title": "Master Martial Master Gloves (M)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1663": {
+  "en_title": "Master Martial Master Shoes (M)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1664": {
+  "en_title": "Grandmaster Martial Master Top (M)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1665": {
+  "en_title": "Grandmaster Martial Master Pants (M)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1666": {
+  "en_title": "Grandmaster Martial Master Gloves (M)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1667": {
+  "en_title": "Grandmaster Martial Master Shoes (M)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1668": {
+  "en_title": "Apprentice Martial Master Top (F)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1669": {
+  "en_title": "Apprentice Martial Master Pants (F)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1670": {
+  "en_title": "Apprentice Martial Master Gloves (F)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1671": {
+  "en_title": "Apprentice Martial Master Shoes (F)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1672": {
+  "en_title": "Adept Martial Master Top (F)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1673": {
+  "en_title": "Adept Martial Master Pants (F)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1674": {
+  "en_title": "Adept Martial Master Gloves (F)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1675": {
+  "en_title": "Adept Martial Master Shoes (F)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1676": {
+  "en_title": "Expert Martial Master Top (F)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1677": {
+  "en_title": "Expert Martial Master Pants (F)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1678": {
+  "en_title": "Expert Martial Master Gloves (F)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1679": {
+  "en_title": "Expert Martial Master Shoes (F)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1680": {
+  "en_title": "Master Martial Master Top (F)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1681": {
+  "en_title": "Master Martial Master Pants (F)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1682": {
+  "en_title": "Master Martial Master Gloves (F)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1683": {
+  "en_title": "Master Martial Master Shoes (F)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1684": {
+  "en_title": "Grandmaster Martial Master Top (F)",
+  "en_text": "Top favored by martial masters."
+ },
+ "1685": {
+  "en_title": "Grandmaster Martial Master Pants (F)",
+  "en_text": "Pants favored by martial masters."
+ },
+ "1686": {
+  "en_title": "Grandmaster Martial Master Gloves (F)",
+  "en_text": "Gloves favored by martial masters."
+ },
+ "1687": {
+  "en_title": "Grandmaster Martial Master Shoes (F)",
+  "en_text": "Shoes favored by martial masters."
+ },
+ "1688": {
+  "en_title": "Apprentice Plate Armor Top (M)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1689": {
+  "en_title": "Apprentice Plate Armor Pants (M)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1690": {
+  "en_title": "Apprentice Plate Gauntlets",
+  "en_text": "Plate gauntlets favored by warriors."
+ },
+ "1691": {
+  "en_title": "Apprentice Plate Boots",
+  "en_text": "Plate boots favored by warriors."
+ },
+ "1692": {
+  "en_title": "Adept Plate Armor Top (M)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1693": {
+  "en_title": "Adept Plate Armor Pants (M)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1694": {
+  "en_title": "Adept Plate Gauntlets",
+  "en_text": "Plate gauntlets favored by warriors."
+ },
+ "1695": {
+  "en_title": "Adept Plate Boots",
+  "en_text": "Plate boots favored by warriors."
+ },
+ "1696": {
+  "en_title": "Expert Plate Armor Top (M)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1697": {
+  "en_title": "Expert Plate Armor Pants (M)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1698": {
+  "en_title": "Expert Plate Gauntlets",
+  "en_text": "Plate gauntlets favored by warriors."
+ },
+ "1699": {
+  "en_title": "Expert Plate Boots",
+  "en_text": "Plate boots favored by warriors."
+ },
+ "1700": {
+  "en_title": "Master Plate Armor Top (M)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1701": {
+  "en_title": "Master Plate Armor Pants (M)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1702": {
+  "en_title": "Master Plate Gauntlets",
+  "en_text": "Plate gauntlets favored by warriors."
+ },
+ "1703": {
+  "en_title": "Master Plate Boots",
+  "en_text": "Plate boots favored by warriors."
+ },
+ "1704": {
+  "en_title": "Grandmaster Plate Armor Top (M)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1705": {
+  "en_title": "Grandmaster Plate Armor Pants (M)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1706": {
+  "en_title": "Grandmaster Plate Gauntlets",
+  "en_text": "Plate gauntlets favored by warriors."
+ },
+ "1707": {
+  "en_title": "Grandmaster Plate Boots",
+  "en_text": "Plate boots favored by warriors."
+ },
+ "1708": {
+  "en_title": "Apprentice Plate Armor Top (F)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1709": {
+  "en_title": "Apprentice Plate Armor Pants (F)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1710": {
+  "en_title": "Adept Plate Armor Top (F)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1711": {
+  "en_title": "Adept Plate Armor Pants (F)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1712": {
+  "en_title": "Expert Plate Armor Top (F)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1713": {
+  "en_title": "Expert Plate Armor Pants (F)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1714": {
+  "en_title": "Master Plate Armor Top (F)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1715": {
+  "en_title": "Master Plate Armor Pants (F)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1716": {
+  "en_title": "Grandmaster Plate Armor Top (F)",
+  "en_text": "Plate armor favored by warriors."
+ },
+ "1717": {
+  "en_title": "Grandmaster Plate Armor Pants (F)",
+  "en_text": "Plate leggings favored by warriors."
+ },
+ "1718": {
+  "en_title": "Apprentice Wizard Top (M)",
+  "en_text": "Top favored by wizards."
+ },
+ "1719": {
+  "en_title": "Apprentice Wizard Pants (M)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1720": {
+  "en_title": "Apprentice Wizard Gloves (M)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1721": {
+  "en_title": "Apprentice Wizard Shoes (M)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1722": {
+  "en_title": "Adept Wizard Top (M)",
+  "en_text": "Top favored by wizards."
+ },
+ "1723": {
+  "en_title": "Adept Wizard Pants (M)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1724": {
+  "en_title": "Adept Wizard Gloves (M)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1725": {
+  "en_title": "Adept Wizard Shoes (M)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1726": {
+  "en_title": "Expert Wizard Top (M)",
+  "en_text": "Top favored by wizards."
+ },
+ "1727": {
+  "en_title": "Expert Wizard Pants (M)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1728": {
+  "en_title": "Expert Wizard Gloves (M)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1729": {
+  "en_title": "Expert Wizard Shoes (M)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1730": {
+  "en_title": "Master Wizard Top (M)",
+  "en_text": "Top favored by wizards."
+ },
+ "1731": {
+  "en_title": "Master Wizard Pants (M)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1732": {
+  "en_title": "Master Wizard Gloves (M)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1733": {
+  "en_title": "Master Wizard Shoes (M)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1734": {
+  "en_title": "Grandmaster Wizard Top (M)",
+  "en_text": "Top favored by wizards."
+ },
+ "1735": {
+  "en_title": "Grandmaster Wizard Pants (M)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1736": {
+  "en_title": "Grandmaster Wizard Gloves (M)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1737": {
+  "en_title": "Grandmaster Wizard Shoes (M)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1738": {
+  "en_title": "Apprentice Wizard Top (F)",
+  "en_text": "Top favored by wizards."
+ },
+ "1739": {
+  "en_title": "Apprentice Wizard Pants (F)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1740": {
+  "en_title": "Apprentice Wizard Gloves (F)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1741": {
+  "en_title": "Apprentice Wizard Shoes (F)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1742": {
+  "en_title": "Adept Wizard Top (F)",
+  "en_text": "Top favored by wizards."
+ },
+ "1743": {
+  "en_title": "Adept Wizard Pants (F)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1744": {
+  "en_title": "Adept Wizard Gloves (F)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1745": {
+  "en_title": "Adept Wizard Shoes (F)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1746": {
+  "en_title": "Expert Wizard Top (F)",
+  "en_text": "Top favored by wizards."
+ },
+ "1747": {
+  "en_title": "Expert Wizard Pants (F)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1748": {
+  "en_title": "Expert Wizard Gloves (F)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1749": {
+  "en_title": "Expert Wizard Shoes (F)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1750": {
+  "en_title": "Master Wizard Top (F)",
+  "en_text": "Top favored by wizards."
+ },
+ "1751": {
+  "en_title": "Master Wizard Pants (F)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1752": {
+  "en_title": "Master Wizard Gloves (F)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1753": {
+  "en_title": "Master Wizard Shoes (F)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1754": {
+  "en_title": "Grandmaster Wizard Top (F)",
+  "en_text": "Top favored by wizards."
+ },
+ "1755": {
+  "en_title": "Grandmaster Wizard Pants (F)",
+  "en_text": "Pants favored by wizards."
+ },
+ "1756": {
+  "en_title": "Grandmaster Wizard Gloves (F)",
+  "en_text": "Gloves favored by wizards."
+ },
+ "1757": {
+  "en_title": "Grandmaster Wizard Shoes (F)",
+  "en_text": "Shoes favored by wizards."
+ },
+ "1758": {
+  "en_title": "Apprentice High Priest Top (M)",
+  "en_text": "Top favored by high priests."
+ },
+ "1759": {
+  "en_title": "Apprentice High Priest Pants (M)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1760": {
+  "en_title": "Apprentice High Priest Gloves (M)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1761": {
+  "en_title": "Apprentice High Priest Shoes (M)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1762": {
+  "en_title": "Adept High Priest Top (M)",
+  "en_text": "Top favored by high priests."
+ },
+ "1763": {
+  "en_title": "Adept High Priest Pants (M)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1764": {
+  "en_title": "Adept High Priest Gloves (M)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1765": {
+  "en_title": "Adept High Priest Shoes (M)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1766": {
+  "en_title": "Expert High Priest Top (M)",
+  "en_text": "Top favored by high priests."
+ },
+ "1767": {
+  "en_title": "Expert High Priest Pants (M)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1768": {
+  "en_title": "Expert High Priest Gloves (M)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1769": {
+  "en_title": "Expert High Priest Shoes (M)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1770": {
+  "en_title": "Master High Priest Top (M)",
+  "en_text": "Top favored by high priests."
+ },
+ "1771": {
+  "en_title": "Master High Priest Pants (M)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1772": {
+  "en_title": "Master High Priest Gloves (M)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1773": {
+  "en_title": "Master High Priest Shoes (M)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1774": {
+  "en_title": "Grandmaster High Priest Top (M)",
+  "en_text": "Top favored by high priests."
+ },
+ "1775": {
+  "en_title": "Grandmaster High Priest Pants (M)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1776": {
+  "en_title": "Grandmaster High Priest Gloves (M)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1777": {
+  "en_title": "Grandmaster High Priest Shoes (M)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1778": {
+  "en_title": "Apprentice High Priest Top (F)",
+  "en_text": "Top favored by high priests."
+ },
+ "1779": {
+  "en_title": "Apprentice High Priest Pants (F)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1780": {
+  "en_title": "Apprentice High Priest Gloves (F)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1781": {
+  "en_title": "Apprentice High Priest Shoes (F)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1782": {
+  "en_title": "Adept High Priest Top (F)",
+  "en_text": "Top favored by high priests."
+ },
+ "1783": {
+  "en_title": "Adept High Priest Pants (F)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1784": {
+  "en_title": "Adept High Priest Gloves (F)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1785": {
+  "en_title": "Adept High Priest Shoes (F)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1786": {
+  "en_title": "Expert High Priest Top (F)",
+  "en_text": "Top favored by high priests."
+ },
+ "1787": {
+  "en_title": "Expert High Priest Pants (F)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1788": {
+  "en_title": "Expert High Priest Gloves (F)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1789": {
+  "en_title": "Expert High Priest Shoes (F)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1790": {
+  "en_title": "Master High Priest Top (F)",
+  "en_text": "Top favored by high priests."
+ },
+ "1791": {
+  "en_title": "Master High Priest Pants (F)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1792": {
+  "en_title": "Master High Priest Gloves (F)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1793": {
+  "en_title": "Master High Priest Shoes (F)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1794": {
+  "en_title": "Grandmaster High Priest Top (F)",
+  "en_text": "Top favored by high priests."
+ },
+ "1795": {
+  "en_title": "Grandmaster High Priest Pants (F)",
+  "en_text": "Pants favored by high priests."
+ },
+ "1796": {
+  "en_title": "Grandmaster High Priest Gloves (F)",
+  "en_text": "Gloves favored by high priests."
+ },
+ "1797": {
+  "en_title": "Grandmaster High Priest Shoes (F)",
+  "en_text": "Shoes favored by high priests."
+ },
+ "1798": {
+  "en_title": "Nature's Knuckles",
+  "en_text": "Nature itself is the greatest power."
+ },
+ "1799": {
+  "en_title": "Madman's Knuckles",
+  "en_text": "Knuckles of a fighter who chased power until he went mad."
+ },
+ "1800": {
+  "en_title": "Lethal Knuckles",
+  "en_text": "The one-strike kill is the pinnacle of martial arts."
+ },
+ "1801": {
+  "en_title": "Demon Lord Knuckles",
+  "en_text": "Knuckles of the Demon Lord whose name alone made fighters tremble."
+ },
+ "1802": {
+  "en_title": "Sonic Dagger",
+  "en_text": "By the time you sense his presence, you are already kneeling."
+ },
+ "1803": {
+  "en_title": "Night Master",
+  "en_text": "Who dares defy the lord of the night?"
+ },
+ "1804": {
+  "en_title": "Dark Shadow",
+  "en_text": "Even shadows fall into a deeper darkness."
+ },
+ "1805": {
+  "en_title": "Shadow Justice",
+  "en_text": "The judge of darkness. If he appears, you are already guilty."
+ },
+ "1806": {
+  "en_title": "Moonslicer",
+  "en_text": "A blade so cold it could cut even the moon."
+ },
+ "1807": {
+  "en_title": "One Sword",
+  "en_text": "The ultimate sword is one. All things are one, and one is all."
+ },
+ "1808": {
+  "en_title": "Bloodstream Sword",
+  "en_text": "A blade stained crimson from cutting down so many."
+ },
+ "1809": {
+  "en_title": "Hero's Sword",
+  "en_text": "A legendary blade forged by the King of Burittnia for a hero."
+ },
+ "1810": {
+  "en_title": "Sonic Longbow",
+  "en_text": "Pierces its target at the speed of sound."
+ },
+ "1811": {
+  "en_title": "Fairy Bow",
+  "en_text": "A bow imbued with the spirit of the fairies."
+ },
+ "1812": {
+  "en_title": "Blood Bow",
+  "en_text": "The bow of the mad hunter Mad Orren."
+ },
+ "1813": {
+  "en_title": "Roxlin Longbow",
+  "en_text": "The bow of Robbie Roxlin, great archer of Roxlin Forest."
+ },
+ "1814": {
+  "en_title": "Staff of Destiny",
+  "en_text": "When you truly accept your fate, you become its master."
+ },
+ "1815": {
+  "en_title": "Staff of Enlightenment",
+  "en_text": "Only those who grasp all magic's laws may wield this staff."
+ },
+ "1816": {
+  "en_title": "Staff of Tremor",
+  "en_text": "Staff of Archmage Gandiez, who lost control of its power."
+ },
+ "1817": {
+  "en_title": "Staff of Transcendence",
+  "en_text": "Transcendent one, bring benefit to the world."
+ },
+ "1818": {
+  "en_title": "Angel Wand",
+  "en_text": "This wand, blessed by an angel, will protect you."
+ },
+ "1819": {
+  "en_title": "Wand of Law",
+  "en_text": "Spread the Law of Emembashura to all who suffer."
+ },
+ "1820": {
+  "en_title": "Jaehyun's Wand",
+  "en_text": "The wand of Jaehyun, legendary High Bishop of Emembashura."
+ },
+ "1821": {
+  "en_title": "Archangel Wand",
+  "en_text": "The archangels of heaven walk always at your side."
+ },
+ "1822": {
+  "en_title": "Warrior's Shield",
+  "en_text": "The crimson light of this shield is the warrior's emblem."
+ },
+ "1823": {
+  "en_title": "Red Crusader Shield",
+  "en_text": "Shield of the Red Crusaders, elite guard of conqueror Kairis."
+ },
+ "1824": {
+  "en_title": "Holy Cross Shield",
+  "en_text": "A shield imbued with sacred protective power."
+ },
+ "1825": {
+  "en_title": "Gold Stars Shield",
+  "en_text": "A shield of honor set with stars of gold."
+ },
+ "1826": {
+  "en_title": "Kairis Shield",
+  "en_text": "Shield of the great conqueror Kairis, leader of the Red Crusaders."
+ },
+ "1827": {
+  "en_title": "Orichalcum Shield",
+  "en_text": "The mightiest shield, forged from super-alloy orichalcum."
+ },
+ "1828": {
+  "en_title": "Rough Wooden Club (S)",
+  "en_text": "A rough club cut from a thick branch."
+ },
+ "1829": {
+  "en_title": "Spiked Wooden Club (S)",
+  "en_text": "A club studded with metal. It hurts more."
+ },
+ "1830": {
+  "en_title": "Wooden Sword (S)",
+  "en_text": "A sword carved from wood."
+ },
+ "1831": {
+  "en_title": "Bamboo Sword (S)",
+  "en_text": "A sword made of bamboo bound together."
+ },
+ "1832": {
+  "en_title": "Reinforced Bamboo Sword (S)",
+  "en_text": "A bamboo sword strengthened for higher damage."
+ },
+ "1833": {
+  "en_title": "Oaken Sword (S)",
+  "en_text": "A blade carved from oak."
+ },
+ "1834": {
+  "en_title": "Small Bronze Sword (S)",
+  "en_text": "A sword many adventurers favor."
+ },
+ "1835": {
+  "en_title": "Small Iron Sword (S)",
+  "en_text": "Small, but strong."
+ },
+ "1836": {
+  "en_title": "Short Sword (S)",
+  "en_text": "A sword many adventurers favor."
+ },
+ "1837": {
+  "en_title": "Small Katana (S)",
+  "en_text": "An eastern blade, cheap but serviceable."
+ },
+ "1838": {
+  "en_title": "Great Sword (S)",
+  "en_text": "A sword with powerful attack."
+ },
+ "1839": {
+  "en_title": "Small Korean Sword (S)",
+  "en_text": "A sword with powerful attack."
+ },
+ "1840": {
+  "en_title": "Broad Great Sword (S)",
+  "en_text": "A wide-bladed, powerful sword."
+ },
+ "1841": {
+  "en_title": "Pasa Blade (S)",
+  "en_text": "A blade infused with demon-banishing power."
+ },
+ "1842": {
+  "en_title": "Dragontail (S)",
+  "en_text": "A one-handed sword forged from a dragon's tail."
+ },
+ "1843": {
+  "en_title": "Heroic Invincible (S)",
+  "en_text": "Symbol of the hero and of invincibility. Overwhelming power itself."
+ },
+ "1844": {
+  "en_title": "Moonslicer (S)",
+  "en_text": "A blade so cold it could cut even the moon."
+ },
+ "1845": {
+  "en_title": "One Sword (S)",
+  "en_text": "The ultimate sword is one. All things are one, and one is all."
+ },
+ "1846": {
+  "en_title": "Bloodstream Sword (S)",
+  "en_text": "A blade stained crimson from cutting down so many."
+ },
+ "1847": {
+  "en_title": "Hero's Sword (S)",
+  "en_text": "A legendary blade forged by the King of Burittnia for a hero."
+ },
+ "1848": {
+  "en_title": "Brown Fedora",
+  "en_text": "A brown fedora for dapper gentlemen."
+ },
+ "1849": {
+  "en_title": "Purple Knit Hat",
+  "en_text": "A stylish purple knit hat."
+ },
+ "1850": {
+  "en_title": "Blue Bucket Hat",
+  "en_text": "A pleated blue bucket hat for fashion leaders."
+ },
+ "1851": {
+  "en_title": "Purple Hunting Cap",
+  "en_text": "For those who know style - a purple hunting cap."
+ },
+ "1852": {
+  "en_title": "White-Striped Bandana",
+  "en_text": "Follow me if you can - my white-striped bandana."
+ },
+ "1853": {
+  "en_title": "Brown Aviator Helmet",
+  "en_text": "Soar through the skies in your plane."
+ },
+ "1854": {
+  "en_title": "Buckle Fedora",
+  "en_text": "Both your outfit and your hat are strategy."
+ },
+ "1855": {
+  "en_title": "Blue Wizard Hat",
+  "en_text": "A hat for the stylish wizard."
+ },
+ "1856": {
+  "en_title": "Blue Vintage Cap",
+  "en_text": "I'm me - that's why I wear the blue vintage cap."
+ },
+ "1857": {
+  "en_title": "Pirate Hat",
+  "en_text": "Want to be a sea outlaw? Wear the pirate hat!"
+ },
+ "1858": {
+  "en_title": "Naval Officer Cap",
+  "en_text": "I'll guard the seas - by the naval officer."
+ },
+ "1859": {
+  "en_title": "Artist Hunting Cap",
+  "en_text": "I feel the soul of art burning within me."
+ },
+ "1860": {
+  "en_title": "Gun Robo Helmet",
+  "en_text": "Wear the Gun Robo Helmet and become the invincible Gun Robo."
+ },
+ "1861": {
+  "en_title": "Red Taegeuk Bandana",
+  "en_text": "Relive that day of glory once more."
+ },
+ "1862": {
+  "en_title": "Yellow Aviator Helmet",
+  "en_text": "How about a flight through the sky today?"
+ },
+ "1863": {
+  "en_title": "Motorcycle Helmet",
+  "en_text": "I become the wind in an endless sprint."
+ },
+ "1864": {
+  "en_title": "Brown Ski Cap",
+  "en_text": "Wear the brown ski cap and cut through the white snow."
+ },
+ "1865": {
+  "en_title": "White Flower Ski Cap",
+  "en_text": "Snow falling thick - let's go skiing!"
+ },
+ "1866": {
+  "en_title": "Wood-Frame Glasses",
+  "en_text": "Classic wood-frame glasses."
+ },
+ "1867": {
+  "en_title": "Black Sunglasses",
+  "en_text": "When you want to escape the sun - black sunglasses."
+ },
+ "1868": {
+  "en_title": "Round Gold-Rim Glasses",
+  "en_text": "Intelligent-looking round gold-rim glasses."
+ },
+ "1869": {
+  "en_title": "Green Fashion Glasses",
+  "en_text": "For those who know style - green fashion glasses."
+ },
+ "1870": {
+  "en_title": "Red Semi-Rimless Glasses",
+  "en_text": "Pick by your mood - red semi-rimless glasses."
+ },
+ "1871": {
+  "en_title": "Gold Semi-Rimless Glasses",
+  "en_text": "Pick by your mood - gold semi-rimless glasses."
+ },
+ "1872": {
+  "en_title": "Rimless Glasses",
+  "en_text": "Rimless glasses with a subtle charm."
+ },
+ "1873": {
+  "en_title": "Grey Tinted Glasses",
+  "en_text": "Mysterious-looking grey tinted glasses."
+ },
+ "1874": {
+  "en_title": "Blue Sports Glasses",
+  "en_text": "Blue sports glasses for the cool sportsman."
+ },
+ "1875": {
+  "en_title": "Aviator Goggles",
+  "en_text": "Won't you fly the skies with me?"
+ },
+ "1876": {
+  "en_title": "Scouter",
+  "en_text": "A futuristic fashion scouter."
+ },
+ "1877": {
+  "en_title": "Superman Cape",
+  "en_text": "A Superman cosplay cape."
+ },
+ "1878": {
+  "en_title": "Wizard Cloak",
+  "en_text": "A wizard's cloak."
+ },
+ "1879": {
+  "en_title": "Batman Cape",
+  "en_text": "A Batman cosplay cape."
+ },
+ "1880": {
+  "en_title": "Angel Wings",
+  "en_text": "The pretty wings of an angel."
+ },
+ "1881": {
+  "en_title": "Demon Wings",
+  "en_text": "The wings of a mischievous little demon."
+ },
+ "1882": {
+  "en_title": "Butterfly Wings",
+  "en_text": "Pretty butterfly wings."
+ },
+ "1883": {
+  "en_title": "Dragonfly Wings",
+  "en_text": "Cute dragonfly wings."
+ },
+ "1884": {
+  "en_title": "Equipment Slot Expansion",
+  "en_text": "Expands your equipment inventory slots."
+ },
+ "1885": {
+  "en_title": "Consumable Slot Expansion",
+  "en_text": "Expands your consumable inventory slots."
+ },
+ "1886": {
+  "en_title": "Etc Slot Expansion",
+  "en_text": "Expands your etc inventory slots."
+ },
+ "1887": {
+  "en_title": "Storage Equipment Slot Expansion",
+  "en_text": "Expands your storage equipment slots."
+ },
+ "1888": {
+  "en_title": "Storage Consumable Slot Expansion",
+  "en_text": "Expands your storage consumable slots."
+ },
+ "1889": {
+  "en_title": "Storage Etc Slot Expansion",
+  "en_text": "Expands your storage etc slots."
+ },
+ "1890": {
+  "en_title": "Gold to Winie",
+  "en_text": "Converts gold to Winie cash."
+ },
+ "1891": {
+  "en_title": "EXP Protection",
+  "en_text": "Protects your EXP from being lost when defeated in the field."
+ },
+ "1892": {
+  "en_title": "Teleport to Friend",
+  "en_text": "Teleport directly to a friend."
+ },
+ "1893": {
+  "en_title": "Teleport to Player",
+  "en_text": "Teleport directly to a specified player."
+ },
+ "1894": {
+  "en_title": "Note (x1)",
+  "en_text": "Sends a written note to another player. Works for offline friends too."
+ },
+ "1895": {
+  "en_title": "Name Change",
+  "en_text": "Lets you change your nickname once. Tired of your current name? Try a new one."
+ },
+ "1896": {
+  "en_title": "Shop Premium Pass",
+  "en_text": "A premium pass for the cash shop."
+ },
+ "1897": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies.\nTrainer: Warrior Skill Master"
+ },
+ "1898": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1899": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1900": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1901": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1902": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1903": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1904": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1905": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1906": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1907": {
+  "en_title": "Continuous Strike",
+  "en_text": "Stab swiftly to pierce multiple enemies."
+ },
+ "1908": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe.\nTrainer: Warrior Skill Master"
+ },
+ "1909": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1910": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1911": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1912": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1913": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1914": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1915": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1916": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1917": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1918": {
+  "en_title": "Charge",
+  "en_text": "Charge with your body to knock back your foe."
+ },
+ "1919": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once.\n\nTrainer: Archer Skill Master"
+ },
+ "1920": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1921": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1922": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1923": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1924": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1925": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1926": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1927": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1928": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1929": {
+  "en_title": "Double Shot",
+  "en_text": "Fire two arrows at once."
+ },
+ "1930": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile.\nTrainer: Archer Skill Master"
+ },
+ "1931": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1932": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1933": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1934": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1935": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1936": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1937": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1938": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1939": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1940": {
+  "en_title": "Binding Arrow",
+  "en_text": "Binds the target and renders them immobile."
+ },
+ "1941": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack.\nTrainer: Rogue Skill Master"
+ },
+ "1942": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1943": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1944": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1945": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1946": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1947": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1948": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1949": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1950": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1951": {
+  "en_title": "Throwing Star",
+  "en_text": "Hurl a throwing star to attack."
+ },
+ "1952": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder for a fiery strike.\nTrainer: Rogue Master"
+ },
+ "1953": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1954": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1955": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1956": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1957": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1958": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1959": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1960": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1961": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1962": {
+  "en_title": "Explosive Strike",
+  "en_text": "Coat your blade in gunpowder and deliver a fiery strike."
+ },
+ "1963": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power.\nTrainer: Priest Skill Master"
+ },
+ "1964": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1965": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1966": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1967": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1968": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1969": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1970": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1971": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1972": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1973": {
+  "en_title": "Earth Smash",
+  "en_text": "Hurl a boulder charged with earth power."
+ },
+ "1974": {
+  "en_title": "Thornroot",
+  "en_text": "Thorny roots erupt to attack and bind the target.\nTrainer: Priest Master"
+ },
+ "1975": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1976": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1977": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1978": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1979": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1980": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1981": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1982": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1983": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1984": {
+  "en_title": "Thornroot",
+  "en_text": "Sprouts thorny roots that attack and bind the target."
+ },
+ "1985": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front.\nTrainer: Mage Skill Master"
+ },
+ "1986": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1987": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1988": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1989": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1990": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1991": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1992": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1993": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1994": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1995": {
+  "en_title": "Stone Upper",
+  "en_text": "Raises a pillar of stone to guard your front."
+ },
+ "1996": {
+  "en_title": "Teleport",
+  "en_text": "Teleports instantly in the direction you face.\n \nTrainer: Mage Skill Master"
+ },
+ "1997": {
+  "en_title": "Teleport",
+  "en_text": "Teleports instantly in the direction you face."
+ },
+ "1998": {
+  "en_title": "Teleport",
+  "en_text": "Teleports instantly in the direction you face."
+ },
+ "1999": {
+  "en_title": "Teleport",
+  "en_text": "Teleports instantly in the direction you face."
+ },
+ "2000": {
+  "en_title": "Teleport",
+  "en_text": "Teleports instantly in the direction you face."
+ }
+}

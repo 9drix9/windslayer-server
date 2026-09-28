@@ -1,0 +1,1602 @@
+{
+  "1": {
+    "en_title": "Monkey Hat Bead",
+    "en_text": "A decorative bead attached to a monkey hat."
+  },
+  "2": {
+    "en_title": "Tough Cotton Shirt (F)",
+    "en_text": "A comfortable top made of tough, well-woven cotton."
+  },
+  "3": {
+    "en_title": "Blue Mushroom",
+    "en_text": "A mushroom found in shaded forest spots. Used to brew anti-inflammatory remedies."
+  },
+  "4": {
+    "en_title": "Worm-Eaten Leaf",
+    "en_text": "A leaf riddled with holes left by insects."
+  },
+  "5": {
+    "en_title": "Herb",
+    "en_text": "A bitter-tasting plant. Chewing it restores some vitality."
+  },
+  "6": {
+    "en_title": "Catosilin",
+    "en_text": "An effective remedy for joint pain. Also restores stamina."
+  },
+  "7": {
+    "en_title": "Health Potion (S)",
+    "en_text": "A reddish cherry-flavored syrup that restores a small amount of HP."
+  },
+  "8": {
+    "en_title": "Golden Leaf",
+    "en_text": "A rare golden leaf from Popola Forest, said to bring good luck."
+  },
+  "9": {
+    "en_title": "Wooden Sword",
+    "en_text": "A sword carved from a sturdy piece of wood."
+  },
+  "10": {
+    "en_title": "Chocolate",
+    "en_text": "A sweet snack that melts in your mouth."
+  },
+  "11": {
+    "en_title": "Short Bow",
+    "en_text": "A simple bow carved from wood."
+  },
+  "12": {
+    "en_title": "Rice Ball",
+    "en_text": "A simple, filling meal that's easy to carry."
+  },
+  "13": {
+    "en_title": "Acorn",
+    "en_text": "A hard-shelled nut that falls from trees. Not edible."
+  },
+  "14": {
+    "en_title": "Purple Tee (M)",
+    "en_text": "A cotton shirt that wicks away sweat well."
+  },
+  "15": {
+    "en_title": "Dried Frog Leg",
+    "en_text": "A frog's hind leg that has been caught and dried."
+  },
+  "16": {
+    "en_title": "Blue Cotton Shorts (M)",
+    "en_text": "Comfortable cotton shorts that wick away sweat."
+  },
+  "17": {
+    "en_title": "Popola Return Stone",
+    "en_text": "A single-use return stone that warps you back to Popola Village."
+  },
+  "18": {
+    "en_title": "Blue-Grey Tee (M)",
+    "en_text": "A cotton shirt that wicks away sweat well."
+  },
+  "19": {
+    "en_title": "Magenta Tee (F)",
+    "en_text": "A cotton shirt that wicks away sweat well."
+  },
+  "20": {
+    "en_title": "Light Green Cotton Shorts (M)",
+    "en_text": "Comfortable cotton shorts that wick away sweat."
+  },
+  "21": {
+    "en_title": "Grey Cotton Skirt (F)",
+    "en_text": "A breezy skirt that wicks away sweat."
+  },
+  "22": {
+    "en_title": "Ojicheon Return Stone",
+    "en_text": "A single-use return stone that warps you back to Ojicheon."
+  },
+  "23": {
+    "en_title": "Blue-Grey Tee (F)",
+    "en_text": "A cotton shirt that wicks away sweat well."
+  },
+  "24": {
+    "en_title": "Balderan Return Stone",
+    "en_text": "A single-use return stone that warps you back to Balderan."
+  },
+  "25": {
+    "en_title": "Light Green Cotton Skirt (F)",
+    "en_text": "A breezy skirt that wicks away sweat."
+  },
+  "26": {
+    "en_title": "Basic Undershirt (F)",
+    "en_text": "A plain undergarment top."
+  },
+  "27": {
+    "en_title": "Green Tee (F)",
+    "en_text": "A cotton shirt that wicks away sweat well."
+  },
+  "28": {
+    "en_title": "Basic Underpants (M)",
+    "en_text": "A plain undergarment bottom."
+  },
+  "29": {
+    "en_title": "Yellow Cloth Skirt (F)",
+    "en_text": "A breezy skirt that wicks away sweat."
+  },
+  "30": {
+    "en_title": "Green Tee (M)",
+    "en_text": "A cotton shirt that wicks away sweat well."
+  },
+  "31": {
+    "en_title": "Tangerine Tee (F)",
+    "en_text": "A cotton shirt that wicks away sweat well."
+  },
+  "32": {
+    "en_title": "Yellow Cotton Shorts (M)",
+    "en_text": "Comfortable cotton shorts that wick away sweat."
+  },
+  "33": {
+    "en_title": "Red Cloth Skirt (F)",
+    "en_text": "A breezy skirt that wicks away sweat."
+  },
+  "34": {
+    "en_title": "Tangerine Tee (M)",
+    "en_text": "A cotton shirt that wicks away sweat well."
+  },
+  "35": {
+    "en_title": "Amakusa Return Stone",
+    "en_text": "A single-use return stone that warps you back to Amakusa."
+  },
+  "36": {
+    "en_title": "Red Cotton Shorts (M)",
+    "en_text": "Comfortable cotton shorts that wick away sweat."
+  },
+  "37": {
+    "en_title": "White Wing Fragment",
+    "en_text": "A small wing fragment with soft white feathers."
+  },
+  "38": {
+    "en_title": "Purple Shoes",
+    "en_text": "Cheap shoes available almost anywhere."
+  },
+  "39": {
+    "en_title": "Tough Cotton Shirt (M)",
+    "en_text": "A comfortable top made of tough, well-woven cotton."
+  },
+  "40": {
+    "en_title": "Grass Green Shoes",
+    "en_text": "Cheap shoes available almost anywhere."
+  },
+  "41": {
+    "en_title": "Red Shoes",
+    "en_text": "Cheap shoes available almost anywhere."
+  },
+  "42": {
+    "en_title": "Purple Shoes",
+    "en_text": "Cheap shoes available almost anywhere."
+  },
+  "43": {
+    "en_title": "Nancho's Letter",
+    "en_text": "A letter from Nancho. The contents are unknown."
+  },
+  "44": {
+    "en_title": "Antigo's Reply",
+    "en_text": "A reply from Antigo, who hates scrap metal."
+  },
+  "45": {
+    "en_title": "Cecilia's Reply",
+    "en_text": "A reply from Cecilia. Reading it would be rude."
+  },
+  "46": {
+    "en_title": "May's Letter",
+    "en_text": "A letter from May. The heart on the envelope is a bit much."
+  },
+  "47": {
+    "en_title": "Herb Seed",
+    "en_text": "An herb seed, sometimes brewed into tea."
+  },
+  "48": {
+    "en_title": "Green Leaf",
+    "en_text": "An ordinary leaf you can find anywhere in the forest."
+  },
+  "49": {
+    "en_title": "Pork Rib",
+    "en_text": "A sweet-sauced pork rib."
+  },
+  "50": {
+    "en_title": "Chicken Leg",
+    "en_text": "A nutritious chicken drumstick rich in protein."
+  },
+  "51": {
+    "en_title": "Mana Potion (S)",
+    "en_text": "A bluish syrup that restores a small amount of MP."
+  },
+  "52": {
+    "en_title": "Tin",
+    "en_text": "A metal used in alloys such as bronze."
+  },
+  "53": {
+    "en_title": "Bronze",
+    "en_text": "An alloy made from copper and tin."
+  },
+  "54": {
+    "en_title": "Spicy Chicken",
+    "en_text": "A chicken dish so hot it clears your head instantly."
+  },
+  "55": {
+    "en_title": "Broken Arrow",
+    "en_text": "An arrow snapped at the middle. Sometimes used to carry urgent messages."
+  },
+  "56": {
+    "en_title": "Iron",
+    "en_text": "Stronger than copper or bronze, but rusts easily."
+  },
+  "57": {
+    "en_title": "Mithril",
+    "en_text": "A rare metal mined deep underground."
+  },
+  "58": {
+    "en_title": "Apple",
+    "en_text": "A sweet and tart fruit."
+  },
+  "59": {
+    "en_title": "Silver",
+    "en_text": "A precious metal used to craft fine items."
+  },
+  "60": {
+    "en_title": "Gold",
+    "en_text": "A precious metal used to craft fine items."
+  },
+  "61": {
+    "en_title": "Copper",
+    "en_text": "An easily worked metal with many uses."
+  },
+  "62": {
+    "en_title": "Korean Ginseng",
+    "en_text": "Six-year-old ginseng prized for its restorative powers."
+  },
+  "63": {
+    "en_title": "Orichalcum",
+    "en_text": "A rare metal that is extremely strong but difficult to forge."
+  },
+  "64": {
+    "en_title": "Thin Leather Armor Top (F)",
+    "en_text": "A top crafted from thin leather. Serviceable for now."
+  },
+  "65": {
+    "en_title": "Thin Leather Armor Bottom (F)",
+    "en_text": "A bottom crafted from thin leather. Serviceable for now."
+  },
+  "66": {
+    "en_title": "Okane's Photo",
+    "en_text": "An envelope containing a photo of Okane taken with a Photo Stone. (Quest item)"
+  },
+  "67": {
+    "en_title": "Nancho's Bankbook",
+    "en_text": "Holds 1500 gold. Can be exchanged at the shop."
+  },
+  "68": {
+    "en_title": "Thin Leather Sandals",
+    "en_text": "Sandals made from thin leather. Serviceable for now."
+  },
+  "69": {
+    "en_title": "Photo Stone",
+    "en_text": "A mystical stone that captures a scene onto paper. Single use. (Quest item)"
+  },
+  "70": {
+    "en_title": "Wooden Sword",
+    "en_text": "A practice sword carved from oak."
+  },
+  "71": {
+    "en_title": "Short Sword",
+    "en_text": "A sword favored by many adventurers."
+  },
+  "72": {
+    "en_title": "Small Katana",
+    "en_text": "An affordable eastern blade with decent performance."
+  },
+  "73": {
+    "en_title": "Great Sword",
+    "en_text": "A sword with powerful attack strength."
+  },
+  "74": {
+    "en_title": "Round Wooden Shield",
+    "en_text": "A crude shield carved from wood."
+  },
+  "75": {
+    "en_title": "Square Wooden Shield",
+    "en_text": "A wooden shield reinforced with extra planks."
+  },
+  "76": {
+    "en_title": "Wooden Kite Shield",
+    "en_text": "A kite shield built from layered wood."
+  },
+  "77": {
+    "en_title": "Reinforced Round Shield",
+    "en_text": "A wooden shield rimmed with metal for added defense."
+  },
+  "78": {
+    "en_title": "Silver Kite Shield",
+    "en_text": "A kite shield crafted from refined silver."
+  },
+  "79": {
+    "en_title": "Dash (Locked)",
+    "en_text": "Sprint a short distance at high speed. Learn from: Gracie."
+  },
+  "80": {
+    "en_title": "Dash",
+    "en_text": "Sprint a short distance at high speed."
+  },
+  "81": {
+    "en_title": "Mining (Locked)",
+    "en_text": "Gather various smithing materials. Learn: visit Gandalph at level 4."
+  },
+  "82": {
+    "en_title": "Mining",
+    "en_text": "Gather various smithing materials."
+  },
+  "83": {
+    "en_title": "Rice Stalk <Event>",
+    "en_text": "Chuseok event item. Used to make songpyeon. *Event items may disappear after the event ends."
+  },
+  "84": {
+    "en_title": "Pine Needles <Event>",
+    "en_text": "Chuseok event item. Used to make songpyeon. *Event items may disappear after the event ends."
+  },
+  "85": {
+    "en_title": "Foraging (Locked)",
+    "en_text": "Gather various herbs. Learn: visit Rona at level 3."
+  },
+  "86": {
+    "en_title": "Foraging",
+    "en_text": "Gather various herbs."
+  },
+  "87": {
+    "en_title": "Heavy Attack (Locked)",
+    "en_text": "A heavy strike that draws out 100% of a weapon's power. Condition: speak with Leon in Popola at level 5."
+  },
+  "88": {
+    "en_title": "Heavy Attack",
+    "en_text": "A heavy strike that draws out 100% of a weapon's power."
+  },
+  "89": {
+    "en_title": "Block & Evade (Locked)",
+    "en_text": "Evade weak attacks 100% (block). Strong attacks can't be evaded (Warriors block by shield defense). Condition: defeat Shiryosoni at level 8."
+  },
+  "90": {
+    "en_title": "Block & Evade",
+    "en_text": "Evade weak attacks 100% (block). Strong attacks can't be evaded (Warriors block by shield defense)."
+  },
+  "91": {
+    "en_title": "Chestnut <Event>",
+    "en_text": "Chuseok event item. Used to make songpyeon. *Event items may disappear after the event ends."
+  },
+  "92": {
+    "en_title": "Songpyeon <Event>",
+    "en_text": "Chuseok event item. Best when made together with family. *Event items may disappear after the event ends."
+  },
+  "93": {
+    "en_title": "Double Jump (Locked)",
+    "en_text": "Jump again in mid-air to reach much higher places. Learn from: Murubishiri."
+  },
+  "94": {
+    "en_title": "Double Jump",
+    "en_text": "Jump again in mid-air to reach much higher places."
+  },
+  "95": {
+    "en_title": "Gandalph's Recommendation",
+    "en_text": "A letter of recommendation written by Gandalph himself."
+  },
+  "96": {
+    "en_title": "Sailor Top (F) *",
+    "en_text": "A popular school uniform top."
+  },
+  "97": {
+    "en_title": "Sailor Skirt (F) *",
+    "en_text": "A popular school uniform skirt."
+  },
+  "98": {
+    "en_title": "Ring <Event>",
+    "en_text": "An inexpensive but pretty ring."
+  },
+  "99": {
+    "en_title": "Sneakers *",
+    "en_text": "Stylish low-tops made of quality fabric."
+  },
+  "100": {
+    "en_title": "Yellow Hip-Hop Outfit (F) *",
+    "en_text": "A loose-fitting fashion outfit."
+  },
+  "101": {
+    "en_title": "Cropped Jeans *",
+    "en_text": "Short-cut cropped jeans."
+  },
+  "102": {
+    "en_title": "Black Shoes (F) *",
+    "en_text": "Black shoes worn with loose socks."
+  },
+  "103": {
+    "en_title": "Tough Cotton Pants (M)",
+    "en_text": "Pants made of quality fabric."
+  },
+  "104": {
+    "en_title": "Seren Plain Return Stone",
+    "en_text": "A single-use return stone that warps you back to the Atajokunabu Village on Seren Plain."
+  },
+  "105": {
+    "en_title": "Bone",
+    "en_text": "An animal bone. Very hard and painful if struck with."
+  },
+  "106": {
+    "en_title": "Thin Leather Gloves",
+    "en_text": "Gloves crafted from thin leather. Serviceable enough."
+  },
+  "107": {
+    "en_title": "Backplate Leather",
+    "en_text": "Tough hide used to craft serviceable gloves."
+  },
+  "108": {
+    "en_title": "Cactus",
+    "en_text": "A plant that grows even in arid lands. Its spines hurt if touched."
+  },
+  "109": {
+    "en_title": "Beef Jerky",
+    "en_text": "Dried meat. Tough but tasty."
+  },
+  "110": {
+    "en_title": "Healing Boost (Master)",
+    "en_text": "Boosts natural healing rate. Master: Warrior Skill Master."
+  },
+  "111": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "112": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "113": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "114": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "115": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "116": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "117": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "118": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "119": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "120": {
+    "en_title": "Healing Boost",
+    "en_text": "Boosts natural healing rate."
+  },
+  "121": {
+    "en_title": "Rough Wooden Club",
+    "en_text": "A crude club made from a thick branch."
+  },
+  "122": {
+    "en_title": "Moon Fragment <Event>",
+    "en_text": "Chuseok event item. Gather moon fragments to craft a Harvest Moon Ring. *Event items may disappear after the event ends."
+  },
+  "123": {
+    "en_title": "Golden Pig <Event>",
+    "en_text": "It's 2007, the year of the Golden Pig! Happy New Year!"
+  },
+  "124": {
+    "en_title": "Shiryosoni Chest Fur",
+    "en_text": "Fur plucked from Shiryosoni's chest. Warm, soft, and very useful."
+  },
+  "125": {
+    "en_title": "Gandalph's Love Letter",
+    "en_text": "A heartfelt love letter from Gandalph. It makes you cringe to read."
+  },
+  "126": {
+    "en_title": "Peach",
+    "en_text": "A peach with sweet, juicy flesh."
+  },
+  "127": {
+    "en_title": "Monkey Tail Hair",
+    "en_text": "Tail hair from a red monkey."
+  },
+  "128": {
+    "en_title": "Ghost Monkey Horn",
+    "en_text": "A horn from a ghost monkey. Hard but easy to carve, often used for seals."
+  },
+  "129": {
+    "en_title": "Ghost Monkey Whisker",
+    "en_text": "A rough whisker from a red ghost monkey, used for decoration."
+  },
+  "130": {
+    "en_title": "Nylon",
+    "en_text": "An extremely tough synthetic fiber."
+  },
+  "131": {
+    "en_title": "Soy Milk",
+    "en_text": "A healthy drink made primarily from soybeans."
+  },
+  "132": {
+    "en_title": "Strawberry e",
+    "en_text": "A tart fruit. Also used as an accessory by Berry Girl."
+  },
+  "133": {
+    "en_title": "Ruby",
+    "en_text": "A precious gem with a deep red glow."
+  },
+  "134": {
+    "en_title": "Topaz",
+    "en_text": "A precious gem with a violet tint."
+  },
+  "135": {
+    "en_title": "Sapphire",
+    "en_text": "A precious gem with a deep blue glow."
+  },
+  "136": {
+    "en_title": "Musso Turtle Shell",
+    "en_text": "The shell of a Musso turtle. Hard and useful for many crafts."
+  },
+  "137": {
+    "en_title": "Musso Turtle Horn",
+    "en_text": "A Musso turtle's horn. Very hard, sometimes used for tools."
+  },
+  "138": {
+    "en_title": "Dragon-Phoenix Soup",
+    "en_text": "A nourishing soup made from soft-shell turtle."
+  },
+  "139": {
+    "en_title": "Dumpling",
+    "en_text": "A dumpling stuffed with meat and vegetables."
+  },
+  "140": {
+    "en_title": "Pork",
+    "en_text": "Excellent quality meat. Best not eaten raw."
+  },
+  "141": {
+    "en_title": "Health Potion (M)",
+    "en_text": "A reddish cherry-flavored syrup that restores a moderate amount of HP."
+  },
+  "142": {
+    "en_title": "Health Potion (L)",
+    "en_text": "A reddish cherry-flavored syrup that restores a large amount of HP."
+  },
+  "143": {
+    "en_title": "Jajangmyeon",
+    "en_text": "A tasty meal of noodles in black bean sauce."
+  },
+  "144": {
+    "en_title": "Fried Dumpling",
+    "en_text": "A crispy, savory deep-fried dumpling."
+  },
+  "145": {
+    "en_title": "Diamond",
+    "en_text": "An extremely hard and valuable gem."
+  },
+  "146": {
+    "en_title": "Honga Lunchbox",
+    "en_text": "The favorite dinner of the Hamelin development team."
+  },
+  "147": {
+    "en_title": "Silk Thread",
+    "en_text": "Thread used to weave fine fabric."
+  },
+  "148": {
+    "en_title": "Cow Bezoar Pill",
+    "en_text": "A heart medicine. Calms the nerves before a test."
+  },
+  "149": {
+    "en_title": "Banana",
+    "en_text": "A sweet and tasty fruit."
+  },
+  "150": {
+    "en_title": "Spring Water",
+    "en_text": "Pure water drawn from a mountain spring."
+  },
+  "151": {
+    "en_title": "Crude Oil",
+    "en_text": "A black liquid pumped from the ground, used as fuel."
+  },
+  "152": {
+    "en_title": "Yakult",
+    "en_text": "A drink with beneficial bacteria for gut health."
+  },
+  "153": {
+    "en_title": "Cheongyang Chili",
+    "en_text": "A fiery chili pepper that wakes you right up."
+  },
+  "154": {
+    "en_title": "Cherry",
+    "en_text": "A small, tart berry."
+  },
+  "155": {
+    "en_title": "Pineapple",
+    "en_text": "A sweet and tart tropical fruit."
+  },
+  "156": {
+    "en_title": "Plastic",
+    "en_text": "An organic compound used to make various household goods."
+  },
+  "157": {
+    "en_title": "Red Ginseng",
+    "en_text": "Ginseng steamed nine times. Stronger effects with reduced toxicity."
+  },
+  "158": {
+    "en_title": "Thin Leather Armor Top (M)",
+    "en_text": "A top crafted from thin leather. Serviceable for now."
+  },
+  "159": {
+    "en_title": "Thin Leather Armor Bottom (M)",
+    "en_text": "A bottom crafted from thin leather. Serviceable for now."
+  },
+  "160": {
+    "en_title": "Old Entry Ticket",
+    "en_text": "The event has ended."
+  },
+  "161": {
+    "en_title": "Baobab Branch",
+    "en_text": "A branch from a baobab tree."
+  },
+  "162": {
+    "en_title": "Hard Skull",
+    "en_text": "A skull harder than most metals."
+  },
+  "163": {
+    "en_title": "Ivory",
+    "en_text": "Ivory from a Goliphant. Used for many purposes."
+  },
+  "164": {
+    "en_title": "Goliphant Hide",
+    "en_text": "Goliphant hide. Tough enough to make tents from."
+  },
+  "165": {
+    "en_title": "Sharp Horn",
+    "en_text": "A sharp horn from a Pyodong."
+  },
+  "166": {
+    "en_title": "Pyodong Pelt",
+    "en_text": "A spotted pelt from a Pyodong. Considered high-grade leather."
+  },
+  "167": {
+    "en_title": "Drill",
+    "en_text": "A Driller Dudak's drill. Designed to dig through earth."
+  },
+  "168": {
+    "en_title": "Leowolf Mane",
+    "en_text": "Mane from a Leowolf. Warm but stiff and hard to work with."
+  },
+  "169": {
+    "en_title": "Yellow-Striped Shirt (M) *",
+    "en_text": "A black tee with bold yellow stripes."
+  },
+  "170": {
+    "en_title": "Khaki Cargo Pants *",
+    "en_text": "Yellow-striped khaki 7/8-length cargo pants."
+  },
+  "171": {
+    "en_title": "Black Wudadas *",
+    "en_text": "Black Wudadas brand sneakers."
+  },
+  "172": {
+    "en_title": "Basic Undershirt (F)",
+    "en_text": "Undergarment."
+  },
+  "173": {
+    "en_title": "Basic Underpants (F)",
+    "en_text": "Undergarment."
+  },
+  "174": {
+    "en_title": "Rubias Black Jeans *",
+    "en_text": "Dark wash Rubias brand jeans."
+  },
+  "175": {
+    "en_title": "Grandma's Reply",
+    "en_text": "A reply from the old fortune teller. Still written in her grumpy tone."
+  },
+  "176": {
+    "en_title": "Small Korean Sword",
+    "en_text": "A sword with strong attack power."
+  },
+  "177": {
+    "en_title": "Pink Tracksuit Top (F) *",
+    "en_text": "A pink Wudadas brand tracksuit top."
+  },
+  "178": {
+    "en_title": "Pink Tracksuit Pants *",
+    "en_text": "Wudadas brand tracksuit pants with white side stripes."
+  },
+  "179": {
+    "en_title": "Thick Branch",
+    "en_text": "A club fashioned from a thick branch."
+  },
+  "180": {
+    "en_title": "Warrior Job Change",
+    "en_text": "Change job to Warrior."
+  },
+  "181": {
+    "en_title": "Grey Scrap Metal",
+    "en_text": "A scrap piece a junk dealer would love."
+  },
+  "182": {
+    "en_title": "Red Scrap Metal",
+    "en_text": "A scrap piece a junk dealer would love."
+  },
+  "183": {
+    "en_title": "Thick Screw",
+    "en_text": "A thick screw made to industrial standard."
+  },
+  "184": {
+    "en_title": "Yellow Scrap Metal",
+    "en_text": "A peculiar yellow scrap with unusual material."
+  },
+  "185": {
+    "en_title": "White Feather",
+    "en_text": "A soft, white feather."
+  },
+  "186": {
+    "en_title": "Black Feather",
+    "en_text": "An elegant, deep black feather."
+  },
+  "187": {
+    "en_title": "Wooden Doll",
+    "en_text": "A child's doll carved from wood."
+  },
+  "188": {
+    "en_title": "Swordsmanship License",
+    "en_text": "A useless license listing trivial swordplay techniques."
+  },
+  "189": {
+    "en_title": "Takoyaki",
+    "en_text": "Soft and tasty takoyaki balls."
+  },
+  "190": {
+    "en_title": "Fundoshi Cloth",
+    "en_text": "Cloth used to make fundoshi loincloths."
+  },
+  "191": {
+    "en_title": "Ninja Hood",
+    "en_text": "A hood favored by ninjas."
+  },
+  "192": {
+    "en_title": "Teru Teru Bozu",
+    "en_text": "A doll hung up to ward off rain."
+  },
+  "193": {
+    "en_title": "Personal Shop (Locked)",
+    "en_text": "Open a personal shop to sell items from your inventory."
+  },
+  "194": {
+    "en_title": "Personal Shop",
+    "en_text": "Open a personal shop to sell items from your inventory."
+  },
+  "195": {
+    "en_title": "Small Bronze Sword",
+    "en_text": "A sword favored by many adventurers."
+  },
+  "196": {
+    "en_title": "Moon Dust <Event>",
+    "en_text": "Chuseok event item. Moon dust crafted from moon fragments. *Event items may disappear after the event ends."
+  },
+  "197": {
+    "en_title": "Wood Scrap",
+    "en_text": "An ordinary piece of wood."
+  },
+  "198": {
+    "en_title": "Quality Lumber",
+    "en_text": "Good-quality wood used for many purposes."
+  },
+  "199": {
+    "en_title": "Lightning-Struck Wood",
+    "en_text": "A fragment of jujube wood struck by lightning. Said to hold mystical power."
+  },
+  "200": {
+    "en_title": "Black Cross Shirt (M) *",
+    "en_text": "A shirt with a striking white cross design."
+  },
+  "201": {
+    "en_title": "White Hip-Hop Cargo Pants (M) *",
+    "en_text": "White hip-hop style cargo pants."
+  },
+  "202": {
+    "en_title": "Black Oppalos Shoes *",
+    "en_text": "Shiny black dress shoes."
+  },
+  "203": {
+    "en_title": "Martial Artist Job Change",
+    "en_text": "Change job to Martial Artist."
+  },
+  "204": {
+    "en_title": "Archer Job Change",
+    "en_text": "Change job to Archer."
+  },
+  "205": {
+    "en_title": "Priest Job Change",
+    "en_text": "Change job to Priest."
+  },
+  "206": {
+    "en_title": "Mage Job Change",
+    "en_text": "Change job to Mage."
+  },
+  "207": {
+    "en_title": "Rogue Job Change",
+    "en_text": "Change job to Rogue."
+  },
+  "208": {
+    "en_title": "Reinforced Bamboo Sword",
+    "en_text": "A bamboo sword strengthened for greater attack power."
+  },
+  "209": {
+    "en_title": "Arrow",
+    "en_text": "An arrow finely carved from wood."
+  },
+  "210": {
+    "en_title": "Tough Cotton Skirt (F)",
+    "en_text": "A skirt made from tough fabric."
+  },
+  "211": {
+    "en_title": "Tough Cotton Shoes",
+    "en_text": "Shoes made from tough fabric."
+  },
+  "212": {
+    "en_title": "W",
+    "en_text": "The 'W' of Windslayer."
+  },
+  "213": {
+    "en_title": "I",
+    "en_text": "The 'I' of Windslayer."
+  },
+  "214": {
+    "en_title": "N",
+    "en_text": "The 'N' of Windslayer."
+  },
+  "215": {
+    "en_title": "D",
+    "en_text": "The 'D' of Windslayer."
+  },
+  "216": {
+    "en_title": "S",
+    "en_text": "The 'S' of Windslayer."
+  },
+  "217": {
+    "en_title": "L",
+    "en_text": "The 'L' of Windslayer."
+  },
+  "218": {
+    "en_title": "A",
+    "en_text": "The 'A' of Windslayer."
+  },
+  "219": {
+    "en_title": "Y",
+    "en_text": "The 'Y' of Windslayer."
+  },
+  "220": {
+    "en_title": "E",
+    "en_text": "The 'E' of Windslayer."
+  },
+  "221": {
+    "en_title": "R",
+    "en_text": "The 'R' of Windslayer."
+  },
+  "222": {
+    "en_title": "Flamebloom Dew",
+    "en_text": "Fire-attribute dew from the Flamebloom."
+  },
+  "223": {
+    "en_title": "Flamebloom Seed",
+    "en_text": "Fire-attribute seed from the Flamebloom."
+  },
+  "224": {
+    "en_title": "Flamebloom Leaf",
+    "en_text": "Fire-attribute leaf from the Flamebloom."
+  },
+  "225": {
+    "en_title": "Flamebloom Flower",
+    "en_text": "Fire-attribute flower from the Flamebloom."
+  },
+  "226": {
+    "en_title": "Flamebloom Fruit",
+    "en_text": "Fire-attribute fruit from the Flamebloom."
+  },
+  "227": {
+    "en_title": "Aquastar Dew",
+    "en_text": "Water-attribute dew from the Aquastar."
+  },
+  "228": {
+    "en_title": "Aquastar Seed",
+    "en_text": "Water-attribute seed from the Aquastar."
+  },
+  "229": {
+    "en_title": "Aquastar Leaf",
+    "en_text": "Water-attribute leaf from the Aquastar."
+  },
+  "230": {
+    "en_title": "Aquastar Flower",
+    "en_text": "Water-attribute flower from the Aquastar."
+  },
+  "231": {
+    "en_title": "Aquastar Fruit",
+    "en_text": "Water-attribute fruit from the Aquastar."
+  },
+  "232": {
+    "en_title": "Earthbloom Dew",
+    "en_text": "Earth-attribute dew from the Earthbloom."
+  },
+  "233": {
+    "en_title": "Earthbloom Seed",
+    "en_text": "Earth-attribute seed from the Earthbloom."
+  },
+  "234": {
+    "en_title": "Earthbloom Leaf",
+    "en_text": "Earth-attribute leaf from the Earthbloom."
+  },
+  "235": {
+    "en_title": "Earthbloom Flower",
+    "en_text": "Earth-attribute flower from the Earthbloom."
+  },
+  "236": {
+    "en_title": "Earthbloom Fruit",
+    "en_text": "Earth-attribute fruit from the Earthbloom."
+  },
+  "237": {
+    "en_title": "Windreap Dew",
+    "en_text": "Wind-attribute dew from the Windreap."
+  },
+  "238": {
+    "en_title": "Windreap Seed",
+    "en_text": "Wind-attribute seed from the Windreap."
+  },
+  "239": {
+    "en_title": "Windreap Leaf",
+    "en_text": "Wind-attribute leaf from the Windreap."
+  },
+  "240": {
+    "en_title": "Windreap Flower",
+    "en_text": "Wind-attribute flower from the Windreap."
+  },
+  "241": {
+    "en_title": "Windreap Fruit",
+    "en_text": "Wind-attribute fruit from the Windreap."
+  },
+  "242": {
+    "en_title": "Diamond Flower Dew",
+    "en_text": "Physical-attribute dew from the Diamond Flower."
+  },
+  "243": {
+    "en_title": "Diamond Flower Seed",
+    "en_text": "Physical-attribute seed from the Diamond Flower."
+  },
+  "244": {
+    "en_title": "Diamond Flower Leaf",
+    "en_text": "Physical-attribute leaf from the Diamond Flower."
+  },
+  "245": {
+    "en_title": "Diamond Flower",
+    "en_text": "Physical-attribute flower from the Diamond Flower."
+  },
+  "246": {
+    "en_title": "Diamond Flower Fruit",
+    "en_text": "Physical-attribute fruit from the Diamond Flower."
+  },
+  "247": {
+    "en_title": "Gold Thread",
+    "en_text": "Gold thread used to weave fine fabric."
+  },
+  "248": {
+    "en_title": "Apprentice Priest Wand",
+    "en_text": "A wand favored by priests."
+  },
+  "249": {
+    "en_title": "Priest's Wand",
+    "en_text": "A wand favored by priests."
+  },
+  "250": {
+    "en_title": "Apprentice Mage Staff",
+    "en_text": "A staff favored by mages."
+  },
+  "251": {
+    "en_title": "Mage's Staff",
+    "en_text": "A staff favored by mages."
+  },
+  "252": {
+    "en_title": "Staff of Knowledge",
+    "en_text": "A staff favored by mages."
+  },
+  "253": {
+    "en_title": "Longbow",
+    "en_text": "A bow with enhanced attack power."
+  },
+  "254": {
+    "en_title": "Composite Bow",
+    "en_text": "A bow made from highly elastic materials."
+  },
+  "255": {
+    "en_title": "Fox Bow",
+    "en_text": "A bow imbued with the power of the fox."
+  },
+  "256": {
+    "en_title": "Dagger",
+    "en_text": "A dagger favored by rogues."
+  },
+  "257": {
+    "en_title": "Reinforced Dagger",
+    "en_text": "A dagger favored by rogues."
+  },
+  "258": {
+    "en_title": "Steel Knuckles",
+    "en_text": "Studded gloves favored by martial artists."
+  },
+  "259": {
+    "en_title": "Ice Spear (Master)",
+    "en_text": "Strike with ice shards. Master: Warrior Skill Master."
+  },
+  "260": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "261": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "262": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "263": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "264": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "265": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "266": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "267": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "268": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "269": {
+    "en_title": "Ice Spear",
+    "en_text": "Strike with ice shards."
+  },
+  "270": {
+    "en_title": "Fire Beat (Master)",
+    "en_text": "Attack with flames. Master: Warrior Skill Master."
+  },
+  "271": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "272": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "273": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "274": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "275": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "276": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "277": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "278": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "279": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "280": {
+    "en_title": "Fire Beat",
+    "en_text": "Attack with flames."
+  },
+  "281": {
+    "en_title": "Eli Dust",
+    "en_text": "Eli Dust, a base material for Elementiriums."
+  },
+  "282": {
+    "en_title": "Elistone Regular",
+    "en_text": "An Elementirium material. Can also be made by combining Eli Dust."
+  },
+  "283": {
+    "en_title": "Elistone Medium",
+    "en_text": "An Elementirium material. Can also be made by combining Elistone Regular."
+  },
+  "284": {
+    "en_title": "Elistone Large",
+    "en_text": "An Elementirium material. Can be made by combining Elistone Medium."
+  },
+  "285": {
+    "en_title": "Elistone Deluxe",
+    "en_text": "An Elementirium material."
+  },
+  "286": {
+    "en_title": "Nameless Weed",
+    "en_text": "A nameless weed nobody bothers with."
+  },
+  "287": {
+    "en_title": "Stone Fragment",
+    "en_text": "A bit of broken stone often found while mining."
+  },
+  "288": {
+    "en_title": "Titanium",
+    "en_text": "A rare metal used for high-grade items. Light and strong."
+  },
+  "289": {
+    "en_title": "Adamantium",
+    "en_text": "A legendary metal said to be unbreakable."
+  },
+  "290": {
+    "en_title": "Pretty Pebble",
+    "en_text": "A pretty pebble of the kind found everywhere."
+  },
+  "291": {
+    "en_title": "Attack Boost (Master)",
+    "en_text": "Raises attack power for a time. Lowers defense for a time. Master: Warrior Skill Master."
+  },
+  "292": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "293": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "294": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "295": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "296": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "297": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "298": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "299": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "300": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "301": {
+    "en_title": "Attack Boost",
+    "en_text": "Raises attack power for a time. Lowers defense for a time."
+  },
+  "302": {
+    "en_title": "Defense Boost (Master)",
+    "en_text": "Raises defense for a time. Lowers attack for a time. Master: Warrior Skill Master."
+  },
+  "303": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "304": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "305": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "306": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "307": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "308": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "309": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "310": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "311": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "312": {
+    "en_title": "Defense Boost",
+    "en_text": "Raises defense for a time. Lowers attack for a time."
+  },
+  "313": {
+    "en_title": "Wind Cutter (Master)",
+    "en_text": "Slash with an air-cleaving shockwave. Master: Warrior Skill Master."
+  },
+  "314": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "315": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "316": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "317": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "318": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "319": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "320": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "321": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "322": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "323": {
+    "en_title": "Wind Cutter",
+    "en_text": "Slash with an air-cleaving shockwave."
+  },
+  "324": {
+    "en_title": "Focus Boost (Master)",
+    "en_text": "Sharpens focus to raise attack for a time. Master: Archer Skill Master."
+  },
+  "325": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "326": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "327": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "328": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "329": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "330": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "331": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "332": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "333": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "334": {
+    "en_title": "Focus Boost",
+    "en_text": "Sharpens focus to raise attack for a time."
+  },
+  "335": {
+    "en_title": "Ice Arrow (Master)",
+    "en_text": "Fire a magical arrow imbued with frost. Master: Archer Skill Master."
+  },
+  "336": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "337": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "338": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "339": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "340": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "341": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "342": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "343": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "344": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "345": {
+    "en_title": "Ice Arrow",
+    "en_text": "Fire a magical arrow imbued with frost."
+  },
+  "346": {
+    "en_title": "Fire Arrow (Master)",
+    "en_text": "Fire a magical arrow wreathed in flame. Master: Archer Skill Master."
+  },
+  "347": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "348": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "349": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "350": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "351": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "352": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "353": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "354": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "355": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "356": {
+    "en_title": "Fire Arrow",
+    "en_text": "Fire a magical arrow wreathed in flame."
+  },
+  "357": {
+    "en_title": "Wind Arrow (Master)",
+    "en_text": "Fire a sharp magical arrow that cleaves the air. Master: Archer Skill Master."
+  },
+  "358": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "359": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "360": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "361": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "362": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "363": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "364": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "365": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "366": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "367": {
+    "en_title": "Wind Arrow",
+    "en_text": "Fire a sharp magical arrow that cleaves the air."
+  },
+  "368": {
+    "en_title": "Evasion (Master)",
+    "en_text": "Dodge enemy attacks to reduce damage. Master: Archer Skill Master."
+  },
+  "369": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "370": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "371": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "372": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "373": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "374": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "375": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "376": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "377": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "378": {
+    "en_title": "Evasion",
+    "en_text": "Dodge enemy attacks to reduce damage."
+  },
+  "379": {
+    "en_title": "Range Boost (Master)",
+    "en_text": "Increases attack range. Master: Archer Skill Master."
+  },
+  "380": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "381": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "382": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "383": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "384": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "385": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "386": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "387": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "388": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "389": {
+    "en_title": "Range Boost",
+    "en_text": "Increases attack range."
+  },
+  "390": {
+    "en_title": "Poison (Master)",
+    "en_text": "Apply a lethal poison to drain HP over time. Master: Rogue Skill Master."
+  },
+  "391": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  },
+  "392": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  },
+  "393": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  },
+  "394": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  },
+  "395": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  },
+  "396": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  },
+  "397": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  },
+  "398": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  },
+  "399": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  },
+  "400": {
+    "en_title": "Poison",
+    "en_text": "Apply a lethal poison to drain HP over time."
+  }
+}
