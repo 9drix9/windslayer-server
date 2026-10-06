@@ -140,10 +140,13 @@ class WorldState(PersistenceTest):
         map, so the store kept saying 101 whatever the client was looking at."""
         c, _ = self.enter()
         char = self.char()
-        self.assertEqual((char['map'], char['x'], char['y']), (101, 700.0, 812.0))
+        # the start point (700, 812) and the portal arrival (50, 712) are both 100 px above
+        # their floor: a map load saves the floor point he lands on (livetest bug 5)
+        self.assertEqual((char['map'], char['x'], char['y']), (101, 700.0, 912.0))
         self.portal_to_102(c)
         target = EC.portal(101, 23)
-        self.assertEqual((char['map'], char['x'], char['y']), target)
+        self.assertEqual(target, (102, 50.0, 712.0))
+        self.assertEqual((char['map'], char['x'], char['y']), (102, 50.0, 812.0))
         self.assertEqual(self.disk()['test']['characters'][0]['map'], 102)
 
     def test_a_map_transfer_invalidates_the_driver_entity_cache(self):
@@ -181,7 +184,9 @@ class WorldState(PersistenceTest):
         state, spawn, _, hp, _ = pkts[:5]
         self.assertEqual(self.state_of(state)['map_code'], 102)
         row = F.FakeClient.decode(spawn)['repeat[player_count]'][0]
-        self.assertEqual((row['pos_x'], row['pos_y'], row['cur_hp']), (600.0, 712.0, 37))
+        # (600, 712) is above 102's floor there: the relog lands on the floor under the
+        # saved point, y 912 (livetest bug 5)
+        self.assertEqual((row['pos_x'], row['pos_y'], row['cur_hp']), (600.0, 912.0, 37))
         self.assertEqual(F.FakeClient.decode(hp)['hp'], 37)          # no refill
         self.assertEqual(again.session['current_map'], 102)
 
@@ -191,9 +196,9 @@ class WorldState(PersistenceTest):
         server actually learns: the spawn, each portal arrival, and any C2S 0x0D that
         names one (following a plain walk step is world-move-relay, a later phase)."""
         c, _ = self.enter()
-        self.assertEqual(c.session['pos'], (700.0, 812.0))          # the spawn point
-        self.portal_to_102(c)
-        self.assertEqual(c.session['pos'], EC.portal(101, 23)[1:])   # the arrival point
+        self.assertEqual(c.session['pos'], (700.0, 912.0))          # the spawn point, on the
+        self.portal_to_102(c)                                        # floor (livetest bug 5)
+        self.assertEqual(c.session['pos'], (50.0, 812.0))            # the arrival point, ditto
         c.send_c2s('0x42CE94/0x0D', MOVE_TO)                         # the client's own point
         self.assertTrue(c.wait_session(lambda s: s.get('pos') == (612.0, 700.0)))
         self.disconnect(c)
@@ -202,7 +207,8 @@ class WorldState(PersistenceTest):
         # and the relog spawns there
         again, pkts = self.enter(monsters=8)
         row = F.FakeClient.decode(pkts[1])['repeat[player_count]'][0]
-        self.assertEqual((row['pos_x'], row['pos_y']), (612.0, 700.0))
+        # on the floor under that point (a slope there, y 905: livetest bug 5)
+        self.assertEqual((row['pos_x'], row['pos_y']), (612.0, 905.0))
 
     def test_portal_sends_current_hp_not_max(self):
         c, _ = self.enter()

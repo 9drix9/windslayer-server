@@ -613,7 +613,8 @@ class Death(CombatServer):
         c.send(0x2E)
         lead = c.expect(0x08, 0x03, 0x07, 0x28, 0x44)[0]
         self.assertEqual(dec(lead)['map_code'], 101)
-        self.assertEqual(c.session['pos'], (700.0, 812.0))
+        # the start point (700, 812) settled onto 101's floor (livetest bug 5)
+        self.assertEqual(c.session['pos'], (700.0, 912.0))
 
     def test_logging_out_dead_comes_back_revived(self):
         self.hero(level=5, hp=100)
@@ -625,7 +626,8 @@ class Death(CombatServer):
         c.thread.join(timeout=5.0)
         self.assertEqual((self.char()['hp'], self.char()['map']), (0, 102))
         c2, pkts = self.enter()
-        self.assertEqual((c2.session['current_map'], c2.session['pos']), (101, (1405.0, 714.0)))
+        # the revive point (1405, 714) is 100 px above 101's floor: he lands on it (livetest bug 5)
+        self.assertEqual((c2.session['current_map'], c2.session['pos']), (101, (1405.0, 814.0)))
         self.assertEqual(dec(pkts[3])['hp'], c2.session['max_hp'] // 2)
         self.assertFalse(c2.session['dead'])
 
@@ -678,9 +680,32 @@ class Death(CombatServer):
         self.assertIn('not dead', self.text(c.expect(0x15)))
         self.gm(c, '!die')
         c.expect(0x3E, 0x15)
+        # livetest bug 11: !hp / !mp refuse on a corpse, as !damage does (no 0x28 / 0x44), and
+        # so do !level / !exp, whose level-up healed the corpse (review of bug 11; no 0x21)
+        char = self.server._session_char(c.session)
+        exp = char['exp']
+        for line in ('!hp 50', '!mp 10', '!hp +5', '!level 6', '!exp +500', '!exp 99999'):
+            with self.subTest(line):
+                self.gm(c, line)
+                self.assertIn('dead (click Revived, or !revive)', self.text(c.expect(0x15)))
+                c.expect_silence(0.1)
+        self.assertEqual((c.session['hp'], char['exp']), (0, exp))
+        # exp credited to a corpse (a DoT kill whose caster died since) that crosses a level:
+        # the corpse is only re-clamped, never healed to the new maxima
+        mp, lv = c.session['mp'], progression.level_for_exp(exp)
+        self.assertGreater(self.server.grant_exp(c.session, progression.exp_for_level(lv + 1) - exp), 0)
+        c.expect(0x21)
+        self.assertGreater(c.session['max_mp'], mp)                  # the new maximum is higher...
+        self.assertEqual((c.session['hp'], c.session['mp'], c.session['dead']), (0, mp, True))
+        self.assertEqual(char['hp'], 0)                              # ...and the record stays dead
         self.gm(c, '!revive')
-        c.expect(0x08, 0x03, 0x07, 0x28, 0x44, 0x15)
+        line = c.expect(0x08, 0x03, 0x07, 0x28, 0x44, 0x15)[-1]
         self.assertFalse(c.session['dead'])
+        # the start point (700, 812) on 101's floor, and the reply says so (livetest bug 5)
+        self.assertEqual(c.session['pos'], (700.0, 912.0))
+        self.assertIn('Revived on map 101 at (700, 912)', self.text(line))
+        self.gm(c, '!hp 7')                                          # alive again: allowed
+        self.assertEqual(dec(c.expect(0x28, 0x15)[0])['hp'], 7)
 
 
 @unittest.skipUnless(HAVE_HII, 'needs the EN client hs/windslayer.hii')
@@ -857,7 +882,7 @@ class ContactDamage(CombatServer):
         self.at(c, 1200, 714)
         self.cast(c, STUN)
         c.expect(0x25, 0x44, 0x41)
-        c.session['contact_t'] = 0.0
+        c.session['contact_t'] = {}                                # its contact slot is free again
         self.move(c, 6 << 12, event_source_uid=PUPU[1])
         c.expect_silence(0.15)
         self.assertEqual(c.session['hp'], 9)

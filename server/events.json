@@ -1,0 +1,18 @@
+{
+  "_comment": "P13 event schedule (events.py; config EVENTS_FILE names this file, '' = no events). Times are UTC (ISO 8601, 'Z'); start/end null = open-ended. enabled false = only the GM '!event start <id> [minutes]' runs it. exp_mult scales kill exp after the card bonus (at least 1; quests only with EVENT_EXP_QUESTS). announce.text gets the '[Announcement] ' prefix and must fit 88 bytes with it; every_min 0 = on entry only. login_gift [item, count] rows go out once per character through S2C 0x99 sub 9 (EN item Types 0/1/2 only). popup_event_news opens window 1019 (S2C 0x80 {1, 0x3FB}) once per login. push_quests (ev-e5) are quest-chain heads: on the first world entry of an event the first quest of each chain (hqi NextQuest) the character has not finished is pushed with S2C 0x26 unless already held, and each turn-in at Nicolas pushes the next one while the event runs (158 -> 159 -> 160, the only fully English chain; Korean-text quests only with config EVENT_QUEST_KOREAN_TEXT; the 2008 hqi's 158 is Korean with no turn-in NPC, so a 2008 server pushes nothing). cash_gift waits for P8 (ev-e6). '!event reload' re-reads this file.",
+  "events": [
+    {
+      "id": "p13-exit",
+      "_comment": "The P13 exit-criteria event (ROADMAP_2009_ADDENDUM P13 criterion 2): EXP x2, Love Potion x5, Event News, quest 158. Disabled: '!event start p13-exit' or set enabled true.",
+      "enabled": false,
+      "start": null,
+      "end": null,
+      "exp_mult": 2.0,
+      "announce": {"text": "EXP x2 event! Visit Nicolas for the Monster Card Challenge.", "every_min": 30, "on_enter": true},
+      "popup_event_news": true,
+      "login_gift": [[1282, 5]],
+      "push_quests": [158],
+      "cash_gift": []
+    }
+  ]
+}

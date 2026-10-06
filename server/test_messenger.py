@@ -737,6 +737,11 @@ class _Messenger:
     def note(self, c, to, text, item=NOTE):
         self.send(c, 0x4B, {'item_id': item, 'recipient_name': to, 'contents': text})
 
+    def give_notes(self, name, count, item=NOTE):
+        """Notes are records of the cash inventory since P8 stage 1 (DEV_FREE_NOTES off): the
+        serial a sent note names in its 0x77 and uses up."""
+        return self.server.cash.grant(self.rec(name), item, count)['serial']
+
     def memos_in(self, got):
         return [(_name(r['sender_name']), P.to_bytes(r['text'])) for op, f in got if op == 0x78
                 for r in f['repeat[count]']]
@@ -745,9 +750,11 @@ class _Messenger:
         """Exit criterion 4: A's note to offline Late -> 0x77 {1, serial} ("You successfully
         sent the message."); Late logs in: its 0x2F lists the memo (0x78) and again after
         every map load, until its memo window deletes it (C2S 0x44)."""
+        serial = self.give_notes('TestHero', 1)
         self.note(self.a, 'late', b'see you')
         got = self.a.s2c(self.a.expect(0x77))
-        self.assertEqual(got, {'result': 1, 'cash_item_serial': 0})       # DEV_FREE_NOTES: no cash inventory
+        self.assertEqual(got, {'result': 1, 'cash_item_serial': serial})  # the used Note's record
+        self.assertEqual(self.rec('TestHero')['cash_items'], [])          # ... used up
         self.assertEqual([(m['from'], m['text']) for m in self.rec('Late')['memos']], [('TestHero', 'see you')])
         late = self.login('late', 'late', 'Late', 3)
         self.mc.drain()
@@ -764,6 +771,7 @@ class _Messenger:
         self.assertEqual([op for op, _ in self.sync(late)], [0x0B])
 
     def test_a_note_to_an_online_player_arrives_at_once_and_the_delete_guard(self):
+        self.give_notes('TestHero', 2)
         self.sync(self.b)                                                  # B's view is synced
         self.note(self.a, 'Watcher', b'hello')
         self.assertEqual(self.a.s2c(self.a.expect(0x77))['result'], 1)
@@ -786,6 +794,7 @@ class _Messenger:
         self.assertEqual(self.memos_in(self.sync(self.b)), [('Late', b'unseen'), ('TestHero', b'after portal')])
 
     def test_note_refusals_and_the_gift_thank_you(self):
+        self.give_notes('TestHero', 2)
         for to, text, item, why in (('Nobody', b'x', NOTE, 'unknown'), ('TestHero', b'x', NOTE, 'own name'),
                                     ('Watcher', b'', NOTE, 'empty'), ('Watcher', b'x', 5, 'not a note')):
             with self.subTest(why):
@@ -793,14 +802,17 @@ class _Messenger:
                 pkt = self.a.expect(0x77)
                 self.assertEqual((len(pkt.payload), self.a.s2c(pkt)['result']), (1, 0))
         self.assertEqual(self.rec('Watcher')['memos'], [])
+        self.assertEqual([r['qty'] for r in self.rec('TestHero')['cash_items']], [2])   # a refusal uses none
         # 9999: a memo for the gift's sender, no item, never a reply (no wait box)
         self.send(self.a, 0x4B, {'note_item_id': 9999, 'recipient_name': 'Late', 'message': 'thanks!'}, gift=True)
         self.a.expect_silence(0.15)
         self.assertEqual([(m['from'], m['text']) for m in self.rec('Late')['memos']], [('TestHero', 'thanks!')])
         self.send(self.a, 0x4B, {'note_item_id': 9999, 'recipient_name': 'Nobody', 'message': 'x'}, gift=True)
         self.a.expect_silence(0.15)
-        # DEV_FREE_NOTES off: no cash inventory owns a note before P8
-        self.server.config['DEV_FREE_NOTES'] = False
+        # no Note owned (DEV_FREE_NOTES is retired since P8 stage 4): refused
+        with self.server.store.lock:
+            self.rec('TestHero')['cash_items'] = []
+        self.assertNotIn('DEV_FREE_NOTES', self.server.config)
         self.note(self.a, 'Late', b'x')
         self.assertEqual(self.a.s2c(self.a.expect(0x77))['result'], 0)
 
@@ -812,11 +824,20 @@ class _Messenger:
         rec = self.a.s2c(cash)
         self.assertEqual((rec['count'], rec['repeat[count]'][0]['item_id'], rec['repeat[count]'][0]['quantity']),
                          (1, NOTE, 2))
+        # livetest bug 4: the 0x77 consume-by-serial acts only on limit_type 1 (count-limited)
+        # or 2 (period); a limit_type 0 Note stayed in the Spark Items tab after it was sent
+        # (P8: the record's serial is the store-wide one the stored record carries, asserted below)
+        self.assertEqual(rec['repeat[count]'][0]['limit_type'], 1)
         if self.build == B9:
             self.assertEqual(rec['mode'], 0)
+        # P8 stage 1: a cash inventory record (limit_type 1, so the client's 0x77 consume-by-serial
+        # takes one off - livetest 2026-09-25), persisted, with a store-wide serial
+        [stored] = self.rec('TestHero')['cash_items']
+        self.assertEqual((rec['repeat[count]'][0]['limit_type'], rec['repeat[count]'][0]['serial']),
+                         (1, stored['serial']))
         self.note(self.a, 'Late', b'with a real note')
-        self.assertEqual(self.a.s2c(self.a.expect(0x77))['cash_item_serial'], W.GameServer.DEV_NOTE_SERIAL)
-        self.assertEqual(self.a.session['dev_notes'][NOTE][1], 1)
+        self.assertEqual(self.a.s2c(self.a.expect(0x77))['cash_item_serial'], stored['serial'])
+        self.assertEqual(stored['qty'], 1)
         self.sync(self.b)
         line = b'!mail Watcher from the GM'
         self.send(self.a, 0x03, {'msg_len': len(line), 'message': line})

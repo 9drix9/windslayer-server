@@ -37,6 +37,7 @@ import en_content as EC  # noqa: E402
 import fakeclient as F  # noqa: E402
 import inventory as INV  # noqa: E402
 import packets as P  # noqa: E402
+import presence as PR  # noqa: E402
 import quests as Q  # noqa: E402
 import world as worldmod  # noqa: E402
 from wsproto import hexbytes  # noqa: E402
@@ -267,14 +268,52 @@ class MapTransferPrimitive(TransferTest):
         c, _ = self.enter()
         with self.server._combat_lock(c.session):
             c.session['hp'], c.session['mp'] = 42, 8
-        lead, state, spawn, hp, mp = self.portal(c)[:5]
+        with self.assertLogs('WS', logging.INFO) as cm:
+            lead, state, spawn, hp, mp = self.portal(c)[:5]
+        # the [PORTAL] line names the point he lands on, as the [MAP] line does (review of
+        # livetest bug 5: it printed the raw table point, 100 px above it)
+        line = next(m for m in cm.output if '[PORTAL]' in m)
+        self.assertIn('-> map 102', line)
+        self.assertTrue(line.endswith('at (50, 812)'), line)
         self.assertEqual(len(lead.payload), 6)                   # S3-04: no uid, no padding
         self.assertEqual(F.FakeClient.decode(lead), {'map_code': 102, 'game_time_ms': 1000})
         self.assertEqual(self.state(state)['map_code'], 102)
         row = F.FakeClient.decode(spawn)['repeat[player_count]'][0]
-        self.assertEqual((row['pos_x'], row['pos_y']), EC.portal(101, PORTAL_101_23)[1:])
+        # livetest bug 5: the portal arrival (50, 712) is 100 px above 102's floor; the 0x07
+        # puts him ON the floor (the 2009 client never drops an idle local player)
+        ax, ay = EC.portal(101, PORTAL_101_23)[1:]
+        self.assertEqual((ax, ay), (50.0, 712.0))
+        self.assertEqual((row['pos_x'], row['pos_y']), (50.0, 812.0))
+        self.assertEqual(c.session['pos'], (50.0, 812.0))
         self.assertEqual((row['cur_hp'], row['cur_mp']), (42, 8))
         self.assertEqual((F.FakeClient.decode(hp)['hp'], F.FakeClient.decode(mp)['mp']), (42, 8))
+
+    def test_every_arrival_is_settled_onto_the_floor(self):
+        """livetest bug 5: portal arrivals, the 101 start point and the revive points sit 100 px
+        above their floor and the 2009 client does not drop an idle local player, so he floated
+        there while the other clients drew him on the floor (presence.floor_point). Every map
+        load now puts the owner's 0x07, session['pos'] and the saved record on the floor point."""
+        with self.server.store.lock:
+            ch = self.char()
+            ch['map'], ch['x'], ch['y'] = 101, 700.0, 812.0          # START_X / START_Y
+        c, pkts = self.enter()                                        # enter world
+        row = F.FakeClient.decode(pkts[1])['repeat[player_count]'][0]
+        self.assertEqual((row['pos_x'], row['pos_y']), (700.0, 912.0))
+        self.assertEqual(c.session['pos'], (700.0, 912.0))
+        self.assertEqual((self.char()['x'], self.char()['y']), (700.0, 912.0))
+        for dest, x, y, floor in ((102, 48.0, 713.0, 812.0),           # a pvp return (48, 713)
+                                  (101, 1411.0, 714.0, 814.0),         # 102 -> 101 portal arrival
+                                  (102, 1000.0, 714.0, 714.0)):        # already on a floor: kept
+            with self.subTest(dest=dest, y=y):
+                self.server._map_transfer(c.session['sock'], c.session, dest, x, y, reason='test')
+                pkts = c.expect(0x08, 0x03, 0x07, 0x28, 0x44, *F.mob_packets(8 if dest == 102 else 0))
+                row = F.FakeClient.decode(pkts[2])['repeat[player_count]'][0]
+                self.assertEqual((row['pos_x'], row['pos_y']), (x, floor))
+                self.assertEqual(c.session['pos'], (x, floor))
+                self.assertEqual((self.char()['map'], self.char()['x'], self.char()['y']), (dest, x, floor))
+        # the point the transfer uses is the observers' floor point too, and settling is idempotent
+        self.assertEqual(W.GameServer._arrival_point(101, 700, 812), PR.settle(101, 700, 812, PR.SLOPE_SLACK_PX))
+        self.assertEqual(W.GameServer._arrival_point(101, 700, 912), (700.0, 912.0))
 
     def test_enter_world_sends_no_lead_at_all(self):
         """An 0x08 during enter world put the client in a re-map-load loop (2026-06-09)."""

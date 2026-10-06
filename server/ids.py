@@ -16,10 +16,15 @@ never allocates a number the client reserves for itself.
 | room number        | 1 .. 128, never 0x81               | pvp-room-model (arena/play/battle)      |
 | messenger room     | u32 counter, never 0               | social_friend-chat-room                 |
 | cash item serial   | global, >= 0x1000                  | premium_cash-wallet-model               |
+| character id (cid) | 1 .. 0x7FFFFFFF, never reused      | store (ROADMAP_2009_ADDENDUM C4 / X14)  |
 
 The player uid is per account, not per character (D1): the client writes scene+0x220
 from the S2C 0x02 account_id before character select, and every later local-player
 record (0x07 registration gate 0x4221A2, 0x1D, 0x22, ...) must carry that value.
+
+The character id is the server's own stable key of one CHARACTER (it never goes on the
+wire): a rename changes the name, never the cid, so guild membership (P14) and blacklist
+entries (P12) keyed by it follow a renamed character (ROADMAP_2009_ADDENDUM X14 / C4).
 """
 import threading
 from dataclasses import dataclass
@@ -53,8 +58,9 @@ GROUND_ITEM = IdSpace('ground item id (per map)', 1, 0xFFFF, 'item_inventory-gro
 ROOM = IdSpace('room number', 1, 128, 'pvp-room-model')
 MESSENGER_ROOM = IdSpace('messenger chat room', 1, 0xFFFFFFFF, 'social_friend-chat-room')
 CASH_SERIAL = IdSpace('cash item serial', 0x1000, 0xFFFFFFFF, 'premium_cash-wallet-model')
+CHARACTER = IdSpace('character id', 1, 0x7FFFFFFF, 'store (ROADMAP_2009_ADDENDUM C4 / X14)')
 
-SPACES = (PLAYER, MONSTER, SELECT_SCREEN, MAP_NPC, GROUND_ITEM, ROOM, MESSENGER_ROOM, CASH_SERIAL)
+SPACES = (PLAYER, MONSTER, SELECT_SCREEN, MAP_NPC, GROUND_ITEM, ROOM, MESSENGER_ROOM, CASH_SERIAL, CHARACTER)
 
 # Room number 0x81 marks "in the cash shop" in the 0x07 room_id field (S2-45), so no real
 # room may use it. It lies just past 1..128 today; the skip keeps it out if the range grows.

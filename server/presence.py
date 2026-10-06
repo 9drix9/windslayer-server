@@ -69,6 +69,9 @@ was built before the change and was still in flight when the change was broadcas
 not hold the subject yet, so it got no 0x1D) - spawn() and show_peers_to() compare the
 revision they built the record at with the current one under the receiver's lock and
 rebuild a stale record, so that peer spawns the subject with the new state instead.
+A change with no side-effect-free packet - a level DOWN (0x22 always plays the level-up
+effect and heal) - goes through reshow_to_holders(): touch, then 0x06 + a fresh record on
+every holder.
 
 Visibility and privacy
 ----------------------
@@ -83,17 +86,47 @@ Movement relay (world-move-relay, world_movement_npc.md F2; spec corrections C3/
 Each accepted C2S 0x0D becomes ONE S2C 0x1B node for every peer that holds the mover:
 {uid, hold_ms = min(logic_elapsed_ms, 990), state words, tails by ae / vb / ie}. The client
 applies node k `hold_ms` after node k-1 and a type-3 entity simulates only while a node is
-pending (C3: "0x1B must be streamed, hold = logic_elapsed_ms"), so the observer replays the
-mover's own input timeline with its own physics - that, not the server's estimate, is what
-keeps B's picture of A within a few px. The first node after the mover stood idle gets a
-30 ms hold (START_HOLD_MS): standing moves nothing, and it keeps a walk from starting ~1 s
-late on an observer whose copy still has +0x904 12 from the last stop. lo is masked to bits 0-21 and hi to 0-11: the rest is
-stale scratch (scene+0xEF8) that the observer's next own 0x0D would echo back. 0x2A is NOT
-used for players: it flushes the queue and teleports to a server point (spec 0x2A C3), which
-would replace the exact stream with the estimate. Pure idle keepalives (idle, no tails, the
-same words as the last relay, logic_elapsed >= 15000) are not relayed (F2 step 5 option);
-the one or two idle packets after a stop are, because they let a remote walker's +0x904
-settle from 12 to 8 (world_movement_npc#23).
+pending (C3: "0x1B must be streamed, hold = logic_elapsed_ms"; 2009 FUN_004129f0 and the
+tick gates 0x412CB1 / 0x414278 / 0x415FEF / 0x416B0D: node k's input runs exactly while node
+k+1's hold counts down, and the copy is frozen while its queue is empty), so the observer
+replays the mover's own input timeline with its own physics - that, not the server's
+estimate, is what keeps B's picture of A within a few px, and only while the relayed holds
+add up to the mover's own logic time (POSITION_SYNC_RE 2026-09-28 R1).
+
+The start hold (desync fix P1, config RELAY_START_HOLD_GAP_MS, default 450): a node gets the
+30 ms START_HOLD_MS instead of its elapsed time only when the last relayed words were idle
+(or nothing was relayed since the spawn), its own words are not, AND more than
+RELAY_START_HOLD_GAP_MS passed. The builder (FUN_0042e1b0) also sends idle words while its
+entity is still BUSY - an attack or cast animation after the key went up, the dash end, a
+hurt slide, a fall - repeating every 210 ms (CMP 0xD2) until the entity is idle, then one
+final idle packet and only the 15 s keepalive after it. So a gap over 450 ms after idle
+words means that idle packet was the final one (the mover stood in state 8 with neutral
+input for the whole gap: clamping loses nothing, and it still keeps a walk from starting
+~1 s late on an observer whose copy has +0x904 12 from the last stop, world_movement_npc#23),
+while a shorter gap is relayed exactly: clamping it cut up to 180 ms of simulation out of
+"release a key, press another within 210 ms" (the copy left floating after jump + attack,
+dashes and knockbacks short; live b_jatk1 / c_dash1 / g_kb3). A copy that really is idle
+zeroes any hold on its next pass anyway (0x412ABC..0x412AF6). 0 = the legacy clamp after
+every idle node.
+
+The settle node (desync fix P2, config RELAY_SETTLE_NODE): once the mover's last relayed
+words are idle and no C2S 0x0D came for RELAY_SETTLE_AFTER_MS (450), every holder gets
+exactly once a duplicate of that final node with hold RELAY_SETTLE_HOLD_MS (990):
+settle_node(). An idle copy zeroes the hold on its next pass (nothing visible); a copy left
+in the air or mid-animation by any shortfall simulates the idle input until it lands or
+finishes (then its idle check zeroes the rest), so no float outlasts the settle. It is
+idle words only (never an ae or ie tail, which would replay a hit), never to the mover, and
+decided under the mover's move lock (state['lock']) - the same lock relay() holds around its
+decision and push - so a settle can never be queued behind a newer non-idle node. Lock order:
+world_lock -> move lock -> the receiver's presence_lock -> send_lock.
+
+lo is masked to bits 0-21 and hi to 0-11: the rest is stale scratch (scene+0xEF8) that the
+observer's next own 0x0D would echo back. 0x2A is NOT used for players: it flushes the queue
+and teleports to a server point (spec 0x2A C3), which would replace the exact stream with the
+estimate. Pure idle keepalives (idle, no tails, the same words as the last relay,
+logic_elapsed >= 15000) are not relayed (F2 step 5 option); the one or two idle packets
+after a stop are, because they let a remote walker's +0x904 settle from 12 to 8
+(world_movement_npc#23).
 
 Cast animations (cs-cast-anim-relay, P6 stage 4)
 ------------------------------------------------
@@ -119,13 +152,26 @@ so session['pos'] is dead-reckoned from the state words:
     action event: x += dir * 0.25 px/ms * elapsed (live world_movement_npc#02: 250 px/s, 7.5
     px per 30 ms tick, scene clock 1.002 x wall; the 2009 logic tick is also 30 ms, LIVE
     2026-09-23 smoothness note; the 2009 walk speed is taken to be the same);
+  - with POSITION_ESTIMATE_DASH_KNOCK (desync fix P3, on): a dash (motion 6 with a
+    direction) moves 2.7 x the walk (20.25 px per tick) after a 60 ms wind-up for at most
+    540 ms (18 ticks, 364.5 px; live session 3), counted across packets in
+    state['dash_ms']; a knockback (the action nibble of the packet) moves 4 ticks x 7.5 px
+    for actions 6 / 9 / 10 and 2 ticks for 7 / 8 in the facing2 direction (bits 20-21: 1 =
+    -x, 2 = +x; live g_kb3: 30 and 15 px); a dash attack (motion 1 or 5 right after motion
+    6) adds 37.5 px in the dash direction; and his own hurt (action 6 / 7 / 9 of his packet,
+    hi its ms: state 3) moves him by that knockback only: neither a walk nor a dash word
+    moves him for hitstun.hurt_len ms from that packet's tick (contact 250: 270 ms, a Monkey
+    Soldier swing 810: 750), on the logic clock state['clock'], and a dash restarts at its
+    end (live session 3: the direction words sent in the stun put the estimate up to 112 px
+    off);
   - x stays inside the map's collision lines and y follows the EN floor lines
     (en_maps.MapData.floor_near: slopes up to the step, ledges down);
   - fixes: every interact tail pos (a hit report, a trap, ...) and every arrival point;
     the dev memory driver (DEV_MEMORY_COMBAT) is a fix too when POSITION_DRIVER_FIX is on,
     and only a measurement of the estimate's error when it is off - never a dependency.
-Jumps onto a higher platform and knock-backs are invisible to it until the next fix: that
-is the error G1 bounds (LIVE_TEST_LOG "P5 stage 2" and GameServer._dev_where).
+Jumps onto a higher platform, skill lunges and item / buff speed are invisible to it until
+the next fix: that is the error G1 bounds (LIVE_TEST_LOG "P5 stage 2" and
+GameServer._dev_where).
 
 Dropped connections
 -------------------
@@ -143,6 +189,7 @@ import threading
 import time
 
 import en_maps
+import hitstun as HS
 import packets as P
 import records as R
 import world as worldmod
@@ -154,6 +201,7 @@ LO_MASK = 0x003FFFFF        # bits 22-31: stale scratch bytes of scene+0xEF8 (20
 HI_MASK = 0x00000FFF        # hi bits 0-11 = +0x958; the rest is scratch
 DIR_LEFT, DIR_RIGHT = 1, 2  # lo bits 0-1 (+0x8B3: wire 1 = 2 left, 2 = 6 right, 0/3 = 8 none)
 MOTION_WALK, MOTION_ATTACK, MOTION_JUMP, MOTION_DOWN = 0, 1, 3, 4   # lo bits 2-4 (+0x8B4, C12)
+MOTION_STRONG, MOTION_DASH = 5, 6   # strong attack (skill 88), dash (skill 80; POSITION_SYNC_RE 1)
 MOTION_CAST = 7             # +0x8B4 7: the skill-cast pose (cs-cast-anim-relay, is_cast_pose)
 MOVING_MOTIONS = (MOTION_WALK, MOTION_JUMP)
 # S2C 0x1B hold_ms cap (world-move-relay: "hold_ms = min(logic_elapsed_ms, 990)"): a stalled
@@ -164,10 +212,54 @@ HOLD_MAX_MS = 990
 # +0x904 is back to 8 - a remote walker can keep 12 after its stop node (world_movement_npc
 # #23), and a 990 hold would then start every walk ~1 s late on the observer's screen.
 START_HOLD_MS = 30
+# ... but only after a REAL idle gap (desync fix P1, config RELAY_START_HOLD_GAP_MS; module
+# docstring "Movement relay"): a busy entity's builder repeats its idle words every 210 ms
+# (FUN_0042e1b0 CMP 0xD2), so an idle node followed by more than this is the final idle
+# packet. 450 = two busy sends plus frame hitches. 0 = clamp after every idle node (legacy).
+START_HOLD_GAP_MS = 450
+# The settle node (desync fix P2, config RELAY_SETTLE_NODE / _AFTER_MS / _HOLD_MS;
+# settle_node()): the mover's last relayed words idle and no 0x0D for SETTLE_AFTER_MS -> one
+# duplicate of that node with SETTLE_HOLD_MS to every holder.
+SETTLE_AFTER_MS = 450
+SETTLE_HOLD_MS = 990
 # The client's idle keepalive (spec 0x0D trigger rule 5): an idle client sends every 15 s.
 IDLE_KEEPALIVE_MS = 15000
 # Live world_movement_npc#02: 250 px/s = 7.5 px per 30 ms logic tick.
 WALK_PX_PER_MS = 0.25
+# Dash, knockback and dash attack (desync fix P3, config POSITION_ESTIMATE_DASH_KNOCK;
+# POSITION_SYNC_RE_2026-09-28 sections 1-3): state 6 moves 2.7 x the walk step (0x416403) =
+# 20.25 px per 30 ms tick, after the state 5 wind-up (T[5] 50 ms: state 6 from the dash's
+# tick + 60). State 6 runs on while +0xE24 < 500 and the motion is still 6 (0x4150F0):
+# +0xE24 counts 30 a tick from 0 there, so it turns to state 7 on the 18th tick after the
+# wind-up - 18 ticks of movement, 540 ms, 364.5 px. Live session 3 measured 364.5 px for
+# three tapped dashes and a held one (3b_dash1..3, 3b_dashheld); the old 420 ms cap (14
+# ticks, from live c_dash1) left the estimate 81 px short. The same for every class and
+# level: the length is that constant, Dash (skill 0x50) has one level and FUN_004281b0
+# only gates its start (motion case 6, state 8 / 0xC, 0x414887). What else changes it is
+# not in the words: the +0x942 speed grade and a slow (+0x1280) scale the walk as well, a
+# root in his buff slots (+0xF24: Arrow Grapple, Thornbush, Spider Web, Forced Blindfold)
+# stops any dash, and scene+0xF18 5 (not the field, 6) lifts the cap.
+DASH_PX_PER_MS = 2.7 * WALK_PX_PER_MS
+DASH_WINDUP_MS = 60
+DASH_MOVE_MS = 540
+# A hit reaction slides the victim 7.5 px per tick in its facing2 direction (+0x95C -> +0x95B,
+# 0x413BAF): 4 ticks for actions 6 / 9 / 10 (+0xE9C starts at 0), 2 for 7 / 8 (it starts at
+# 0x3C). Live g_kb3: 30 px for action 6, 15 px for action 7, one action packet per hit.
+KNOCK_TICK_PX = 7.5
+KNOCK_TICKS = {6: 4, 9: 4, 10: 4, 7: 2, 8: 2}
+# His own hurt (live session 3, config POSITION_ESTIMATE_DASH_KNOCK): pass 2 cases 6 / 7 / 9
+# put him in state 3 from the tick of the packet that carries the action, for
+# hitstun.hurt_len(action, hi) ms (contact 250: 270, a Monkey Soldier swing 810: 750; the
+# hitstun tracker's busy window). FUN_00415f80 moves a body only in 6 / 0xC / the air or by
+# the slide (+0x95B, the knockback above), and the motion case acts only in 8 / 0xC: a walk
+# or dash word inside the hurt moves nothing, and a dash word still held at its end starts
+# a new dash there (wind-up included). 8 / 10 launch him (state 0x17, which moves in the
+# air with a direction key): not frozen.
+STUN_ACTIONS = tuple(sorted(HS.HURT_EVENTS - set(HS.AIRBORNE_HURTS)))
+# Motion 1 or 5 in state 6 (the dash itself: after the wind-up, before its end) slides at
+# walk speed for ~150 ms (+0x95B = facing, cleared at 0x4158A3 / 0x415987): 37.5 px in the
+# dash direction. In the wind-up (state 5) or the dash end (7) the attack input is refused.
+DASH_ATTACK_PX = 37.5
 # A single packet never reports more than this much walking: the client sends every ~210 ms
 # while moving, so a bigger logic_elapsed_ms is a stall (minimised window, debugger).
 MAX_STEP_MS = 5000
@@ -235,17 +327,40 @@ def is_moving(lo):
     return direction(lo) != 0 and motion(lo) in MOVING_MOTIONS and action(lo) == 0
 
 
+def facing2(lo):
+    """-1 / +1 / 0: the knockback direction of a hit reaction (bits 20-21 = +0x95C / 2009
+    node+0x50: 1 = left, 2 = right)."""
+    bits = (int(lo) >> 20) & 0x3
+    return -1 if bits == 1 else 1 if bits == 2 else 0
+
+
+def is_dash(lo):
+    """Dash words: motion 6 with a direction (0x19 left, 0x1A right)."""
+    return motion(lo) == MOTION_DASH and direction(lo) != 0
+
+
 # ------------------------------------------------------------- the relay ---
-def relay_fields(uid, rec, prev_lo=None):
+def start_hold_applies(prev_lo, lo, elapsed, gap_ms=START_HOLD_GAP_MS):
+    """The P1 rule (module docstring "Movement relay"): the 30 ms start hold replaces the
+    elapsed time only when (a) the last relayed words were idle or nothing was relayed since
+    the spawn (prev_lo None), (b) these words are not idle and (c) more than `gap_ms` passed
+    - the gap after the builder's FINAL idle packet. gap_ms <= 0: (c) always holds (the
+    legacy clamp after every idle node)."""
+    return ((prev_lo is None or is_idle(prev_lo)) and not is_idle(lo)
+            and (gap_ms <= 0 or int(elapsed) > gap_ms))
+
+
+def relay_fields(uid, rec, prev_lo=None, gap_ms=START_HOLD_GAP_MS):
     """S2C 0x1B fields for one decoded C2S 0x0D (world_movement_npc.md 1.4 field mapping):
-    logic_elapsed_ms -> hold_ms (capped; START_HOLD_MS when the last relayed words - prev_lo,
-    None = none since the spawn - were idle and these are not), event_source_uid ->
-    target_uid, f64_1338/1340 -> target_x/y, the interact tail's pos_x/pos_y -> pos_x/pos_y.
-    The other interact-tail fields have no carrier in any EN TCP S2C (P2P path only)."""
+    logic_elapsed_ms -> hold_ms (capped at 990; START_HOLD_MS when start_hold_applies: the
+    last relayed words - prev_lo, None = none since the spawn - were idle, these are not and
+    more than `gap_ms` passed), event_source_uid -> target_uid, f64_1338/1340 ->
+    target_x/y, the interact tail's pos_x/pos_y -> pos_x/pos_y. The other interact-tail
+    fields have no carrier in any EN TCP S2C (P2P path only)."""
     lo, hi = masked(rec.get('state_lo', 0), rec.get('state_hi', 0))
     elapsed = max(0, int(rec.get('logic_elapsed_ms', 0) or 0))
     hold = min(elapsed, HOLD_MAX_MS)
-    if (prev_lo is None or is_idle(prev_lo)) and not is_idle(lo):
+    if start_hold_applies(prev_lo, lo, elapsed, gap_ms):
         hold = min(hold, START_HOLD_MS)
     fields = {'uid': int(uid) & 0xFFFFFFFF, 'hold_ms': hold,
               'state_blob': struct.pack('<II', lo, hi)}
@@ -312,14 +427,54 @@ def reset_estimate(session, fix=FIX_ARRIVAL, now=None):
     own 0x07 spawned him there, idle)."""
     now = time.monotonic() if now is None else now
     state = move_state(session)
-    state.update({'lo': 0, 'hi': 0, 'relayed': None, 'fix': fix, 'fix_t': now})
+    state.update({'lo': 0, 'hi': 0, 'relayed': None, 'fix': fix, 'fix_t': now, 'dash_ms': 0,
+                  'stun_until': None})
     return state
 
 
-def advance(session, rec, now=None):
+def stunned_ms(state, elapsed):
+    """How many of the first ms of a packet's `elapsed` (the logic window from the previous
+    packet's tick, state['clock'] before it) he spent in his own hurt (state 3, STUN_ACTIONS:
+    until state['stun_until'] on that clock). The hurt begins at a packet's own tick, so it
+    is always a prefix of the later windows."""
+    until = state.get('stun_until')
+    if until is None:
+        return 0
+    return min(int(elapsed), max(0, int(until) - int(state.get('clock') or 0)))
+
+
+def dash_knock_dx(state, prev, lo, elapsed, stunned=0):
+    """The x a dash, a knockback or a dash attack adds for one packet (desync fix P3, module
+    docstring "Position estimate"): `prev` the words held for `elapsed` ms, `lo` the new
+    ones. Keeps the dash clock state['dash_ms'] (the ms since motion 6 started) across
+    packets. `stunned`: the first ms of `elapsed` he spent in his own hurt (stunned_ms): the
+    hurt ended any dash, the dash moves nothing there, and dash words still held when it
+    ends start a new dash at that moment (the clock restarts, wind-up included)."""
+    dx = 0.0
+    stunned = min(int(elapsed), max(0, int(stunned or 0)))
+    if is_dash(prev):
+        t0 = 0 if stunned else int(state.get('dash_ms') or 0)
+        t1 = t0 + int(elapsed) - stunned
+        run = min(t1, DASH_WINDUP_MS + DASH_MOVE_MS) - max(t0, DASH_WINDUP_MS)
+        dx += direction(prev) * DASH_PX_PER_MS * max(0, run)
+        state['dash_ms'] = t1
+        if (motion(lo) in (MOTION_ATTACK, MOTION_STRONG)
+                and DASH_WINDUP_MS <= t1 <= DASH_WINDUP_MS + DASH_MOVE_MS):
+            dx += direction(prev) * DASH_ATTACK_PX         # the dash attack: pressed in state 6
+    if is_dash(lo) and not (is_dash(prev) and direction(prev) == direction(lo)):
+        state['dash_ms'] = 0                               # a dash starts: its clock restarts
+    ticks = KNOCK_TICKS.get(action(lo), 0)
+    if ticks:
+        dx += facing2(lo) * ticks * KNOCK_TICK_PX
+    return dx
+
+
+def advance(session, rec, now=None, *, dash_knock=True):
     """Follow one accepted C2S 0x0D: dead-reckon session['pos'] over the time the previous
-    input was held, then take the interact tail's point as a fix. Returns True when the
-    player just stopped (for the stop log line)."""
+    input was held (and, with `dash_knock` - config POSITION_ESTIMATE_DASH_KNOCK - a dash,
+    a knockback, a dash attack: dash_knock_dx, and no walk or dash inside his own hurt:
+    stunned_ms), then take the interact tail's point as a fix. Returns True when the player
+    just stopped (for the stop log line)."""
     now = time.monotonic() if now is None else now
     state = move_state(session)
     stats = state.setdefault('stats', {'packets': 0, 'ae': 0, 'ie': 0})
@@ -331,14 +486,21 @@ def advance(session, rec, now=None):
     stats['ie'] += bool(interact(lo))
     x, y = session.get('pos') or (0.0, 0.0)
     code = session.get('current_map')
-    if code is not None and (is_moving(prev) or state.get('fix') == FIX_ARRIVAL):
+    stunned = stunned_ms(state, elapsed) if dash_knock else 0
+    state['clock'] = int(state.get('clock') or 0) + elapsed       # his logic clock, this tick
+    extra = dash_knock_dx(state, prev, lo, elapsed, stunned) if dash_knock else 0.0
+    if code is not None and (is_moving(prev) or extra or state.get('fix') == FIX_ARRIVAL):
         # Moving, or the first packet after an arrival (the arrival point is 100 px above the
         # portal floor and the player has fallen onto it by now).
-        dx = direction(prev) * WALK_PX_PER_MS * elapsed if is_moving(prev) else 0.0
+        walk = direction(prev) * WALK_PX_PER_MS * (elapsed - stunned) if is_moving(prev) else 0.0
+        dx = walk + extra
         x, y = settle(code, float(x) + dx, float(y), abs(dx) + SLOPE_SLACK_PX)
         session['pos'] = (x, y)
         if state.get('fix') == FIX_ARRIVAL:
             state['fix'] = FIX_RECKONED
+    if dash_knock and action(lo) in STUN_ACTIONS:
+        # His own hurt: state 3 from this packet's tick (pass 2 runs before the state machine).
+        state['stun_until'] = state['clock'] + HS.hurt_len(action(lo), hi)
     if interact(lo) and 'pos_x' in rec:
         session['pos'] = (float(rec['pos_x']), float(rec['pos_y']))
         state['fix'], state['fix_t'] = FIX_INTERACT, now
@@ -422,8 +584,12 @@ def _same_map(server, a, b):
 
 def _can_show(server, subject, receiver):
     """Re-checked under the receiver's lock: both in world on the same map (the registry, not
-    a snapshot taken before), different uids, and the receiver may see the subject."""
+    a snapshot taken before), different uids, and the receiver may see the subject. Neither
+    may be in the Item Mall (premium_cash-presence, P8 stage 4: a player in the mall is
+    hidden from his map until his own EXIT - mall.py "Presence"; the mall already takes him
+    off the map, this keeps it true whatever else runs)."""
     return (subject is not receiver and worldmod.reachable(subject) and worldmod.reachable(receiver)
+            and not subject.get('in_cash_shop') and not receiver.get('in_cash_shop')
             and subject.get('uid') is not None and subject.get('uid') != receiver.get('uid')
             and _same_map(server, subject, receiver) and visible_to(subject, receiver))
 
@@ -637,6 +803,22 @@ def to_holders(server, subject, key, fields, tag='PRESENCE'):
     return _to_holders_only(server, subject, key, fields, tag)
 
 
+def reshow_to_holders(server, subject):
+    """touch(subject), then replace the subject's entity on every peer whose client holds it:
+    its 0x06, then a fresh record (spawn) built after the touch. For a change no in-place
+    packet can show without a side effect - a level-DOWN, since 0x22 plays the level-up
+    effect and heal on every receipt (livetest bug 8: observers kept the old level). A peer
+    the subject stops being visible to between the two (it left the map) keeps only the
+    0x06, which is what it needed anyway. Never the subject. Returns how many peers got the
+    new record."""
+    touch(subject)
+    shown = 0
+    for peer in holders(server, subject):
+        if despawn(server, subject, peer):
+            shown += bool(spawn(server, subject, peer))
+    return shown
+
+
 def to_map_holders(server, subject, map_code, key, fields, tag='PRESENCE'):
     """touch(subject), then S2C `key` to every session on `map_code` whose client holds the
     subject - to_holders for a subject that may already be OFF that map (the stall sign
@@ -654,28 +836,113 @@ def to_map_holders(server, subject, map_code, key, fields, tag='PRESENCE'):
     return sent
 
 
-def relay(server, session, rec):
+def _config(server, key, default):
+    cfg = getattr(server, 'config', None)
+    return cfg.get(key, default) if cfg is not None else default
+
+
+def move_lock(session):
+    """The mover's move lock (state['lock'], desync fix P2): relay() holds it around its
+    decision and push, settle_node() around its check and push. Taken under the world lock at
+    most, never under a presence lock or a send_lock (module docstring "Movement relay").
+    Creates session['move'] and the lock when missing - so only the session's own paths call
+    it; the settle tick uses the lock relay() made or skips the mover (settle_node)."""
+    state = move_state(session)
+    lock = state.get('lock')
+    if lock is None:
+        lock = state.setdefault('lock', threading.Lock())
+    return lock
+
+
+def relay(server, session, rec, now=None):
     """C2S 0x0D -> S2C 0x1B for every peer whose client holds the mover. Never the mover.
-    Returns how many peers got it."""
+    Every accepted packet - a keepalive it drops too - stamps state['rx_t'] (the settle
+    clock); a relayed one re-arms the settle node (state['settled'] False). Returns how many
+    peers got it."""
     uid = session.get('uid')
     if uid is None or not worldmod.reachable(session):
         return 0
+    now = time.monotonic() if now is None else now
+    gap = int(_config(server, 'RELAY_START_HOLD_GAP_MS', START_HOLD_GAP_MS))
     state = move_state(session)
-    last = state.get('relayed')
-    if is_keepalive(rec, last):
-        return 0
-    state['relayed'] = masked(rec.get('state_lo', 0), rec.get('state_hi', 0))
-    fields = relay_fields(uid, rec, None if last is None else last[0])
-    sent = 0
-    for peer in server.world.peers(session):
-        with _lock(peer):
-            if _held(peer).get(uid) is session and worldmod.reachable(peer):
-                sent += bool(server._push(peer, '0x1B', fields, 'MOVE'))
-    lo = state['relayed'][0]
+    with move_lock(session):
+        state['rx_t'] = now
+        last = state.get('relayed')
+        if is_keepalive(rec, last):
+            return 0
+        words = masked(rec.get('state_lo', 0), rec.get('state_hi', 0))
+        state['relayed'] = words
+        state['settled'] = False
+        prev = None if last is None else last[0]
+        fields = relay_fields(uid, rec, prev, gap)
+        sent = 0
+        for peer in server.world.peers(session):
+            with _lock(peer):
+                if _held(peer).get(uid) is session and worldmod.reachable(peer):
+                    sent += bool(server._push(peer, '0x1B', fields, 'MOVE'))
+    # The words decided under the lock, never state['relayed'] again: once the lock is let go
+    # a map transfer on another thread (a GM's !warp -> on_enter_world -> reset_estimate) may
+    # have set it to None already.
+    lo = words[0]
+    elapsed = max(0, int(rec.get('logic_elapsed_ms', 0) or 0))
+    if (gap > 0 and sent and start_hold_applies(prev, lo, elapsed, 0)
+            and fields['hold_ms'] > START_HOLD_MS):
+        # desync fix P1: the line a live check looks for - a node after BUSY idle words that
+        # the legacy clamp would have cut to 30 ms keeps the mover's own time.
+        log.info(f'[MOVE] start hold kept: {_who(session)} lo {lo:#x} after idle words '
+                 f'{elapsed} ms <= {gap} ms -> hold {fields["hold_ms"]} (legacy {START_HOLD_MS}), '
+                 f'0x1B to {sent} peer(s)')
     if is_cast_pose(lo) and (last is None or not is_cast_pose(last[0])):
         # cs-cast-anim-relay: the one line a live check looks for (P6 exit criterion 6).
         log.info(f'[MOVE] cast pose of {_who(session)} (variant {cast_variant(lo)}, lo {lo:#x}) '
                  f'relayed as 0x1B to {sent} peer(s)')
+    return sent
+
+
+def settle_fields(uid, words, hold_ms=SETTLE_HOLD_MS):
+    """The settle node (desync fix P2): S2C 0x1B {uid, hold, the last relayed lo, hi} - the
+    mover's final idle node again with a long hold, no tail (idle words carry no ae / ie).
+    uid 1, words 0/0, hold 990: 01 00 00 00 DE 03 00 00 00 00 00 00 00 00 00 00."""
+    lo, hi = masked(*words)
+    return {'uid': int(uid) & 0xFFFFFFFF, 'hold_ms': int(hold_ms),
+            'state_blob': struct.pack('<II', lo, hi)}
+
+
+def settle_node(server, mover, now=None):
+    """Desync fix P2 (config RELAY_SETTLE_NODE, module docstring "Movement relay"): when the
+    mover's last relayed words are idle and no C2S 0x0D arrived for RELAY_SETTLE_AFTER_MS,
+    send every peer that holds the mover the settle node (settle_fields: that node again
+    with hold RELAY_SETTLE_HOLD_MS), exactly once per stop - relay() re-arms it. A copy that
+    is idle zeroes the hold on its next pass; one left in the air or mid-animation by any
+    shortfall simulates the idle input until it lands, then zeroes it. Never the mover
+    (_to_holders_only), never ae / ie words. The check and the push run under the mover's
+    move lock, as relay()'s decision and push do, so a settle never lands behind a newer
+    non-idle node. Runs on the tick thread, so it creates nothing: a mover with no move state
+    or no move lock yet - not in the world yet (on_enter_world's reset_estimate has not run)
+    or nothing relayed since - has nothing to settle and is skipped untouched ('relayed' is
+    only ever set by relay(), under that lock). Returns how many peers got it."""
+    uid = mover.get('uid')
+    if uid is None or not bool(_config(server, 'RELAY_SETTLE_NODE', True)):
+        return 0
+    state = mover.get('move')
+    lock = state.get('lock') if isinstance(state, dict) else None
+    if lock is None:
+        return 0
+    now = time.monotonic() if now is None else now
+    after = float(_config(server, 'RELAY_SETTLE_AFTER_MS', SETTLE_AFTER_MS)) / 1000.0
+    hold = int(_config(server, 'RELAY_SETTLE_HOLD_MS', SETTLE_HOLD_MS))
+    with lock:
+        last, rx_t = state.get('relayed'), state.get('rx_t')
+        if (last is None or state.get('settled') or rx_t is None or not is_idle(last[0])
+                or now - float(rx_t) < after):
+            return 0
+        state['settled'] = True
+        fields = settle_fields(uid, last, hold)
+        sent = _to_holders_only(server, mover, '0x1B', fields, 'MOVE')
+        quiet_ms = (now - float(rx_t)) * 1000.0
+    if sent:
+        log.info(f'[MOVE] settle node: {_who(mover)} quiet {quiet_ms:.0f} ms after idle words lo '
+                 f'{last[0]:#x} hi {last[1]}: 0x1B hold {hold} to {sent} peer(s)')
     return sent
 
 

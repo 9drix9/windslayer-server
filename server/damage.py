@@ -28,8 +28,18 @@ grid slots in 2008 (+0x13C) and 15 in 2009 (+0x150); cash/costume slots add noth
     hit = DMG.damage(hero, mob, DMG.EV_WEAK, cap=monster.hp)
     hit.total, hit.b, hit.e                                # 8, 8, 0 for TestHero -> Monkey Soldier
 
-No randomness: the client's grade roll (0.75/1/1.25/1.5) is on its DISPLAYED digit only, so
-the server takes the base value off HP. Nothing here sends a packet or takes a lock.
+The grade roll (config DAMAGE_GRADE_ROLL, livetest bug 10): the client patch (combo HUD v2,
+cave A at 0x41A55A in WindSlayer2009/combo_hud_2009.py) rolls each digit of a local player's
+hit on a monster at the >= 1 clamp: CRITICAL! x1.5 (5%), BAD x0.75 (13%), GOOD x1.25 (13%),
+else x1.0, times a uniform 900..1100 per-mille jitter, truncated, >= 1 except for BAD. That
+changed only what is SHOWN, so kill counts never varied the way the digits did. grade_roll()
+is the same table, applied by the server at the same point of damage() (`roll`), so the HP
+the server takes off has the same distribution - but it is an INDEPENDENT draw: the digit
+and the server's value agree in distribution and mean (~1.025 x the base before the
+truncation, GRADE_MEAN), not per hit. A per-hit match would need a seed shared with the
+client (an open design question). Only the 2009 patch rolls its digit, so the server rolls by
+default only for the 2009 build (config.grade_roll_on). Without `roll` damage() has no
+randomness. Nothing here sends a packet or takes a lock.
 
 Precision (x87 control word): derivations triggered by S2C packets run on Fireway's socket
 thread at the default PC_53 (plain Python doubles, FSTP float stores rounded to float32);
@@ -306,16 +316,48 @@ def level_scale(A, D, la, lv, pc=24):
 
 # One resolved hit. total: what comes off the victim (HP, or MP when to_mp); 0 = no digit.
 # b / e: the physical and element terms; fire: an event-9 fire skill hit (it opens the
-# attacker's FIRE_WINDOW_SECS window); reflect: B the victim's Wicked Protection sent back.
-Hit = namedtuple('Hit', 'total b e fire reflect to_mp note')
+# attacker's FIRE_WINDOW_SECS window); reflect: B the victim's Wicked Protection sent back;
+# grade: the grade_roll() word when the hit was rolled (None: not rolled).
+Hit = namedtuple('Hit', 'total b e fire reflect to_mp note grade', defaults=(None,))
 
 
 def _no_hit(note):
     return Hit(0, 0, 0, False, 0, False, note)
 
 
+# ---- the grade roll (config DAMAGE_GRADE_ROLL; the client patch's cave A, module docstring) ----
+GRADE_NONE, GRADE_BAD, GRADE_GOOD, GRADE_CRITICAL = 'none', 'BAD', 'GOOD', 'CRITICAL!'
+# (grade, rate per mille, multiplier per mille), tested in this order against r = 0..999 -
+# the client patch's thresholds (combo_hud_2009.py RATE_*_PM / MULT_*_PM).
+GRADE_TABLE = ((GRADE_CRITICAL, 50, 1500), (GRADE_BAD, 130, 750), (GRADE_GOOD, 130, 1250))
+GRADE_JITTER_PM = (900, 1100)                        # uniform, inclusive (JITTER_LO/HI_PM)
+# The mean multiplier (before the truncation): 0.05 x 1.5 + 0.13 x 0.75 + 0.13 x 1.25 + 0.69.
+GRADE_MEAN = (sum(rate * mult for _, rate, mult in GRADE_TABLE)
+              + (1000 - sum(rate for _, rate, _m in GRADE_TABLE)) * 1000) / 1e6
+
+
+def grade_roll(value, rng):
+    """(grade, rolled damage) of one hit worth `value` (the >= 1 clamped damage): r =
+    rng.randrange(1000) picks the grade (GRADE_TABLE; else GRADE_NONE x1.0), J =
+    rng.randint(900, 1100) the jitter, and the damage is trunc(value x M x J / 10^6) in
+    integers, as the client patch computes it. Only BAD may come out 0; every other grade
+    stays >= 1. `rng`: a random.Random (or the random module)."""
+    r = rng.randrange(1000)
+    grade, mult, edge = GRADE_NONE, 1000, 0
+    for g, rate, m in GRADE_TABLE:
+        edge += rate
+        if r < edge:
+            grade, mult = g, m
+            break
+    jitter = rng.randint(*GRADE_JITTER_PM)
+    rolled = max(0, int(value)) * mult * jitter // 1_000_000
+    if grade != GRADE_BAD:
+        rolled = max(1, rolled)
+    return grade, rolled
+
+
 def damage(att, vic, event, skill=None, *, pc=24, cap=None, direct=0, splash=False,
-           vic_buffs=(), vic_mp=None):
+           vic_buffs=(), vic_mp=None, roll=None):
     """One hit of `att` on `vic` (derive_player / derive_monster dicts).
 
     event   the victim's +0x9DC (1..10); 5/8/10 are remapped, 2/3 do nothing
@@ -327,6 +369,9 @@ def damage(att, vic, event, skill=None, *, pc=24, cap=None, direct=0, splash=Fal
     splash  the attacker's fire window is open (a fire event-9 hit then gets B = 0, E / 3)
     vic_buffs / vic_mp   the victim's buff ids and MP (Holy Protection, Magic Shield, Wicked
             Protection)
+    roll    fn(clamped damage) -> (grade, damage): the grade roll at the >= 1 clamp (0x41A55A,
+            where the client patch rolls its digit), before the victim buffs and the HP cap;
+            None = no roll (monster hits, reflections, DoT - the caller decides)
     """
     r = _r(pc)
     ev = EVENT_REMAP.get(event, event)
@@ -400,9 +445,15 @@ def damage(att, vic, event, skill=None, *, pc=24, cap=None, direct=0, splash=Fal
         total = 2 * _int(skill['vampiric_hp'])
         note.append('vampiric')
     total = max(1, total)                            # 0x41A55A
+    grade = None
+    if roll is not None:
+        base = total
+        grade, total = roll(total)                   # the client patch's cave A, same point
+        if grade != GRADE_NONE:
+            note.append(f'{grade} {base}->{total}')
     to_mp = False
     if any(_in(b, HOLY_PROTECTION) for b in vic_buffs):
-        return Hit(0, B, E, fire, reflect, False, 'holy protection')
+        return Hit(0, B, E, fire, reflect, False, 'holy protection', grade)
     if any(_in(b, MAGIC_SHIELD) for b in vic_buffs) and vic_mp:
         to_mp = True
         total = min(total, _int(vic_mp))
@@ -410,7 +461,7 @@ def damage(att, vic, event, skill=None, *, pc=24, cap=None, direct=0, splash=Fal
     hp = vic.get('hp') if cap is None else cap
     if not to_mp and hp is not None:
         total = min(total, max(0, _int(hp)))         # 0x41A689
-    return Hit(total, B, E, fire, reflect, to_mp, ', '.join(note))
+    return Hit(total, B, E, fire, reflect, to_mp, ', '.join(note), grade)
 
 
 # ---- the skill term: (p5, class, job) -> family (switch 0x41980E, tables 0x41A978..) ---------

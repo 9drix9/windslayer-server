@@ -528,7 +528,9 @@ class VillageTransfer(Server):
         self.assertEqual(result, {'result': 1, 'gold': GOLD - 2840})
         self.assertEqual(self.gold(), GOLD - 2840)
         self.assertEqual(c.session['current_map'], 201)
-        self.assertEqual(c.session['pos'], (50.0, 1612.0))       # 201 has no Garan Maria
+        # 201 has no Garan Maria: its revive-town point (50, 1612), 100 px above the floor,
+        # settled onto it (livetest bug 5)
+        self.assertEqual(c.session['pos'], (50.0, 1712.0))
         self.assertEqual((rec['pos_x'], self.char()['map']), (50.0, 201))
         # relog: still in Popola with the fee paid exactly once
         c, _, _ = self.relog(c)
@@ -537,10 +539,15 @@ class VillageTransfer(Server):
     def test_a_transfer_to_a_garan_maria_town_lands_next_to_her(self):
         self.place(701, 3935.0, 360.0)                              # Balderan
         c, _, _ = self.enter()
-        self.transfer(c, 5, 1000)                                  # -> Amakusa
-        result, _ = self.arrive(c, 501)
+        with self.assertLogs('WS', logging.INFO) as cm:
+            self.transfer(c, 5, 1000)                              # -> Amakusa
+            result, _ = self.arrive(c, 501)
         self.assertEqual(result['gold'], GOLD - 1000)
-        self.assertEqual(c.session['pos'], (2332.0, 565.0))
+        # next to her: (2332, 565), 100 px above her floor line, settled onto it (livetest bug 5)
+        self.assertEqual(c.session['pos'], (2332.0, 665.0))
+        # and the [VILLAGE] line names that point, not the raw one (review of bug 5)
+        line = next(m for m in cm.output if '[VILLAGE]' in m and 'arrival' in m)
+        self.assertIn('arrival (2332, 665)', line)
 
     def test_manner_500_pays_ninety_percent(self):
         self.server.store.adjust_manner('test', 500)
@@ -624,8 +631,8 @@ class VillageConfig(Server):
         for index, town, fee in ((2, 201, 2840), (5, 501, 2840)):
             c.send_c2s('0x44ADE3/0x5D', {'village_index': index, 'fee': fee})
             c.expect(0x81, 0x08, 0x03, 0x07, 0x28, 0x44, *F.mob_packets(len(EC.map_spawns(town))))
-            if town == 201:
-                self.assertEqual(c.session['pos'], (700.0, 1500.0))
+            if town == 201:        # the config point, settled onto the floor (livetest bug 5)
+                self.assertEqual(c.session['pos'], (700.0, 1562.0))
         self.assertEqual(self.gold(), GOLD - 2 * 2840)
 
     def test_bad_config_rows_are_refused_at_load(self):

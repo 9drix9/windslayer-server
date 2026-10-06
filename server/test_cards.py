@@ -63,6 +63,8 @@ PUPU_CARD, BLUE_PUPU_CARD = 2030, 2031       # Monster Card <Pupu> / 2009 <Ssiyo
 HERB, STICK, OPEN_STALL = 5, 179, 194
 TOWN, PUPU_MAP, FLEA = 101, 102, 9701
 FLEA_ARRIVAL = (1500.0, 2168.0)              # 201_178 etc. -> 9701: the 9701_76 exit-portal line
+# where the map load puts him: FLEA_ARRIVAL is 100 px above that line, settled onto it (livetest bug 5)
+FLEA_FLOOR = (1500.0, 2268.0)
 
 KEYS = {
     B8: {'login': '0x44D8BF/0x01', 'enter': '0x42F904/0x2B', 'move': '0x42CE94/0x0D',
@@ -500,7 +502,7 @@ class StallFlow:
     def warp_to_market(self, c):
         self.chat(c, b'/warp 9701')
         pkts = c.expect(0x15, 0x08, 0x03, 0x07, 0x28, 0x44)
-        self.assertEqual(self.text(c, pkts[0])[-len('at (1500.0, 2168.0).'):], 'at (1500.0, 2168.0).')
+        self.assertEqual(self.text(c, pkts[0])[-len('at (1500.0, 2268.0).'):], 'at (1500.0, 2268.0).')
         self.assertEqual(c.s2c(pkts[1])['map_code'], FLEA)
         self.assertTrue(c.wait_session(lambda s: s.get('in_world') and s.get('current_map') == FLEA))
         return pkts
@@ -519,14 +521,17 @@ class StallFlow:
     def test_slash_warp_lands_on_the_market_arrival_point(self):
         c, _ = self.enter()
         self.warp_to_market(c)
-        self.assertEqual(tuple(c.session['pos']), FLEA_ARRIVAL)
-        self.assertEqual((self.char()['map'], self.char()['x'], self.char()['y']), (FLEA,) + FLEA_ARRIVAL)
+        self.assertEqual(tuple(c.session['pos']), FLEA_FLOOR)
+        self.assertEqual((self.char()['map'], self.char()['x'], self.char()['y']), (FLEA,) + FLEA_FLOOR)
         self.chat(c, b'/warp 9701')
         self.assertIn('already on map 9701', self.text(c, c.expect(0x15)))
-        # an explicit point still wins; `!warp` and `/warp` are the same command
+        # an explicit point still wins, settled onto the floor below it like any arrival
+        # (livetest bug 5: 101's floor under x 1300 is y 814); `!warp` and `/warp` are the
+        # same command
         self.chat(c, b'!warp 101 1300 700')
         self.assertTrue(self.text(c, c.expect(0x15, 0x08, 0x03, 0x07, 0x28, 0x44)[0]).endswith(
-            'at (1300.0, 700.0).'))
+            'at (1300.0, 814.0).'))
+        self.assertEqual(tuple(c.session['pos']), (1300.0, 814.0))
         self.assertEqual(self.server._warp_point(TOWN)[:2], (700.0, 812.0))       # START on 101
         self.assertEqual(self.server._warp_point(FLEA)[:2], FLEA_ARRIVAL)
 
@@ -598,7 +603,9 @@ class StallFlow:
         pkts = c.expect(0x08, 0x03, 0x07, 0x28, 0x44)
         self.assertEqual(c.s2c(pkts[0])['map_code'], ozi)
         self.assertTrue(c.wait_session(lambda s: s.get('in_world') and s.get('current_map') == ozi))
-        self.assertEqual(tuple(c.session['pos']), home)
+        # the remembered point, 100 px above the entry portal's line, settled onto that line
+        # (livetest bug 5)
+        self.assertEqual(tuple(c.session['pos']), (home[0], line[1]))
         # no remembered town (an older save): the map file's own destination, 101
         c.send_c2s(self.keys['portal'], {'portal_line_index': into})
         c.expect(0x08, 0x03, 0x07, 0x28, 0x44)

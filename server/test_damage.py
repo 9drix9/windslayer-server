@@ -16,7 +16,13 @@ under Unicorn at both x87 control words, plus hand-checked level-scale values. F
 - the server through fakeclient: TestHero's live case (a Lv14 Berserker hits a Monkey
   Soldier for 8, not 1), the monster's hits on him per event (event 5 is no longer free),
   the victim buffs, the fire window, and DAMAGE_FORMULA 'placeholder' bringing the old numbers
-  back.
+  back;
+- the grade roll (config DAMAGE_GRADE_ROLL, livetest bug 10): damage.grade_roll's table,
+  jitter and truncation with fixed dice, its distribution with a seeded RNG, and the server
+  rolling a player's hits on a monster (reported swings, skills) but never a monster's hit
+  on the player or a DoT tick - forced on for 2008, by the default (auto) for 2009 - and the
+  default leaving a 2008 server's hits unrolled (no 2008 exe rolls its digit). The rig pins
+  the roll off everywhere else (fakeclient).
 
 No port is bound and the live accounts.json is never opened (temp copies; checked at the
 end of the module).
@@ -25,6 +31,7 @@ import copy
 import hashlib
 import logging
 import os
+import random
 import shutil
 import struct
 import sys
@@ -39,11 +46,13 @@ sys.path.insert(0, os.path.dirname(HERE))
 import buffs as B  # noqa: E402
 import config as cfgmod  # noqa: E402
 import damage as DMG  # noqa: E402
+import debuffs as D  # noqa: E402
 import en_content as EC  # noqa: E402
 import fakeclient as F  # noqa: E402
 import hpmp  # noqa: E402
 import packets as P  # noqa: E402
 import progression  # noqa: E402
+import skills as SK  # noqa: E402
 
 W = F.import_server()
 logging.getLogger('WS').setLevel(logging.WARNING)
@@ -217,7 +226,7 @@ class Derivation(unittest.TestCase):
 
 
 class Hits(unittest.TestCase):
-    """Spec section 7 'Hits' (base digit, before the client's display-only grade roll)."""
+    """Spec section 7 'Hits' (the base value, before the grade roll: GradeRoll below)."""
 
     def setUp(self):
         self.hero = player(1, 14, (12, 6, 6, 10), TESTHERO_ITEMS)
@@ -539,6 +548,84 @@ class Adapters(unittest.TestCase):
         self.assertIsNone(DMG.trap_skill(dict(thief, skills=[])))
 
 
+# =========================================================================== grade roll
+class Dice:
+    """A random.Random stand-in for grade_roll: randrange(1000) gives `r`, randint(900, 1100)
+    gives `j`; the calls are recorded."""
+
+    def __init__(self, r, j=1000):
+        self.r, self.j, self.calls = r, j, []
+
+    def randrange(self, n):
+        self.calls.append(('randrange', n))
+        return self.r
+
+    def randint(self, a, b):
+        self.calls.append(('randint', a, b))
+        return self.j
+
+
+class GradeRoll(unittest.TestCase):
+    """livetest bug 10: the client patch's digit roll (combo_hud_2009.py cave A) on the server."""
+
+    def test_the_table_the_jitter_and_the_truncation(self):
+        dice = Dice(0)
+        self.assertEqual(DMG.grade_roll(8, dice), (DMG.GRADE_CRITICAL, 12))
+        self.assertEqual(dice.calls, [('randrange', 1000), ('randint', 900, 1100)])
+        # the thresholds, in the client patch's order: CRITICAL! < 50 <= BAD < 180 <= GOOD < 310
+        for r, grade, value in ((49, DMG.GRADE_CRITICAL, 150), (50, DMG.GRADE_BAD, 75),
+                                (179, DMG.GRADE_BAD, 75), (180, DMG.GRADE_GOOD, 125),
+                                (309, DMG.GRADE_GOOD, 125), (310, DMG.GRADE_NONE, 100),
+                                (999, DMG.GRADE_NONE, 100)):
+            with self.subTest(r=r):
+                self.assertEqual(DMG.grade_roll(100, Dice(r)), (grade, value))
+        # jitter 0.9 .. 1.1, then trunc(value x M x J / 10^6)
+        self.assertEqual(DMG.grade_roll(100, Dice(999, 900)), (DMG.GRADE_NONE, 90))
+        self.assertEqual(DMG.grade_roll(100, Dice(999, 1100)), (DMG.GRADE_NONE, 110))
+        self.assertEqual(DMG.grade_roll(11, Dice(100, 1099)), (DMG.GRADE_BAD, 9))     # 9.07
+        self.assertEqual(DMG.grade_roll(11, Dice(200, 900)), (DMG.GRADE_GOOD, 12))    # 12.375
+        # only BAD may reach 0; every other grade stays >= 1
+        self.assertEqual(DMG.grade_roll(1, Dice(100, 900)), (DMG.GRADE_BAD, 0))
+        for r in (0, 200, 500):
+            self.assertEqual(DMG.grade_roll(1, Dice(r, 900))[1], 1)
+        self.assertAlmostEqual(DMG.GRADE_MEAN, 1.025)
+
+    def test_the_distribution_with_a_seeded_rng(self):
+        rng = random.Random(20260925)
+        rolls = [DMG.grade_roll(1000, rng) for _ in range(20000)]
+        share = {g: sum(1 for x, _ in rolls if x == g) / len(rolls)
+                 for g in (DMG.GRADE_CRITICAL, DMG.GRADE_BAD, DMG.GRADE_GOOD, DMG.GRADE_NONE)}
+        for grade, want in ((DMG.GRADE_CRITICAL, 0.05), (DMG.GRADE_BAD, 0.13), (DMG.GRADE_GOOD, 0.13),
+                            (DMG.GRADE_NONE, 0.69)):
+            self.assertAlmostEqual(share[grade], want, delta=0.01, msg=grade)
+        for grade, lo, hi in ((DMG.GRADE_CRITICAL, 1350, 1650), (DMG.GRADE_BAD, 675, 825),
+                              (DMG.GRADE_GOOD, 1125, 1375), (DMG.GRADE_NONE, 900, 1100)):
+            got = [v for g, v in rolls if g == grade]
+            self.assertTrue(lo <= min(got) and max(got) <= hi, (grade, min(got), max(got)))
+        mean = sum(v for _, v in rolls) / len(rolls) / 1000
+        self.assertAlmostEqual(mean, DMG.GRADE_MEAN, delta=0.01)
+        # a seed replays the same rolls (what the server tests pin)
+        again = random.Random(20260925)
+        self.assertEqual([DMG.grade_roll(1000, again) for _ in range(50)], rolls[:50])
+
+    def test_damage_rolls_at_the_clamp_before_the_buffs_and_the_cap(self):
+        hero, ms = player(1, 14, (12, 6, 6, 10), TESTHERO_ITEMS), DMG.derive_monster(MONKEY_SOLDIER)
+
+        def crit(v):                                            # always CRITICAL! x1.5
+            return DMG.grade_roll(v, Dice(0, 1000))
+        h = hit(hero, ms, 7, roll=crit)
+        self.assertEqual((h.total, h.b, h.grade, h.note), (12, 8, DMG.GRADE_CRITICAL, 'CRITICAL! 8->12'))
+        self.assertEqual(hit(hero, ms, 7, roll=crit, cap=10).total, 10)          # the HP cap after it
+        self.assertEqual(hit(hero, ms, 7).grade, None)                           # no roll, no grade
+        self.assertEqual(hit(hero, ms, 7, roll=lambda v: (DMG.GRADE_BAD, 0)).total, 0)
+        self.assertEqual(hit(hero, ms, 7, roll=lambda v: DMG.grade_roll(v, Dice(100, 900))).total,
+                         5)                                                      # trunc(8 x 0.675)
+        holy = hit(ms, hero, 6, roll=crit, vic_buffs=[0x913])                     # Holy Protection
+        self.assertEqual((holy.total, holy.grade), (0, DMG.GRADE_CRITICAL))
+        none = hit(hero, ms, 7, roll=lambda v: DMG.grade_roll(v, Dice(999, 1000)))
+        self.assertEqual((none.total, none.grade, none.note), (8, DMG.GRADE_NONE, ''))
+
+
 # =========================================================================== server
 ACCOUNTS = {
     'test': {'password': 'test',
@@ -559,6 +646,7 @@ class DamageServer:
     Wooden Blade, shirt and skirt - on map 102 and monster #1 made a Monkey Soldier."""
     build = B8
     overrides = {}
+    grade_roll = False                  # the rig's pin (fakeclient.make_server); GradeRollFlows: on
 
     def setUp(self):
         if not HAVE[self.build]:
@@ -566,7 +654,8 @@ class DamageServer:
         self.tmp = tempfile.mkdtemp(prefix='ws_damage_')
         cfg = cfgmod.from_dict({'CLIENT_BUILD': self.build, 'MOB_AGGRO': False,
                                 'MOB_CONTACT_AGGRO_ONLY': False, **self.overrides})
-        self.server = F.make_server(self.tmp, accounts=copy.deepcopy(ACCOUNTS), config=cfg)
+        self.server = F.make_server(self.tmp, accounts=copy.deepcopy(ACCOUNTS), config=cfg,
+                                    grade_roll=self.grade_roll)
         self.keys = KEYS[self.build]
         self.clients = []
         with self.server.store.lock:
@@ -616,7 +705,8 @@ class DamageServer:
     def struck(self, action):
         """The victim's report of the Monkey Soldier hitting him: action event `action`."""
         with self.server._combat_lock(self.c.session):
-            self.c.session['contact_t'] = 0.0
+            self.c.session.pop('contact_t', None)                # the contact and swing slots
+            self.c.session.pop('swing_t', None)
         self.move(action << 12, event_source_uid=self.mob.uid)
 
     def hp_after(self, action):
@@ -715,7 +805,105 @@ class Placeholder2008(PlaceholderFlows, unittest.TestCase):
     build = B8
 
 
+class GradeRollFlows(DamageServer):
+    """config DAMAGE_GRADE_ROLL on: the server's value of a player's hit on a monster is rolled
+    with GameServer.DAMAGE_RNG - a seeded Random here - and nothing else is."""
+    grade_roll = True
+    SEED = 1025
+
+    def test_reported_hits_follow_the_seeded_dice(self):
+        self.assertIsNotNone(self.server._grade_roller())
+        self.server.DAMAGE_RNG = random.Random(self.SEED)
+        twin = random.Random(self.SEED)
+        hp = self.mob.hp
+        for event, base in ((7, 8), (9, 24), (7, 8), (7, 8), (9, 24)):
+            with self.subTest(event=event):
+                grade, rolled = DMG.grade_roll(base, twin)
+                self.report(event)
+                self.c.expect(0x2A)
+                hp = max(0, hp - rolled)
+                self.assertEqual(self.mob.hp, hp, grade)
+        # the formula's own value is the base: off again, the numbers are back
+        self.server.config = cfgmod.from_dict({**dict(self.server.config), 'DAMAGE_GRADE_ROLL': False})
+        self.mob.hp = self.mob.max_hp                            # no HP cap in the way
+        self.assertEqual((self.server._compute_damage(self.c.session, 0, self.mob),
+                          self.server._compute_damage(self.c.session, 1, self.mob)), (8, 24))
+
+    def test_skills_are_rolled_but_monster_hits_and_dot_ticks_are_not(self):
+        self.server.DAMAGE_RNG = Dice(0, 1100)                   # always CRITICAL! x1.65
+        # a player's hits on the monster: swing 8 -> 13, strong 24 -> 39, Ice Spear 37 -> 61
+        self.assertEqual(self.server._compute_damage(self.c.session, 0, self.mob), 13)
+        self.assertEqual(self.server._compute_damage(self.c.session, 1, self.mob), 39)
+        with self.server._combat_lock(self.c.session):
+            dmg, text = self.server._skill_hit_damage(self.c.session, SK.skill_def(260), self.mob)
+        self.assertEqual(dmg, 61)
+        self.assertIn('CRITICAL! 37->61', text)
+        self.assertEqual(self.server._graded(10), 16)            # the placeholder formula's path
+        # the Monkey Soldier's hits on TestHero: never rolled (contact 9, strong 17)
+        hp = self.c.session['hp']
+        self.assertEqual(self.hp_after(6), hp - 9)
+        self.assertEqual(self.hp_after(9), hp - 9 - 17)
+        # a DoT tick: the rule's own number (Poison 9 a tick), never rolled
+        now = time.monotonic()
+        with self.server._combat(self.c.session):
+            rec, _ = D.apply(self.mob, SK.skill_def(391), now, src=1, tick_damage=9)
+        hp = self.mob.hp
+        self.assertEqual(self.server._tick_debuffs(rec['next_tick']), 1)
+        self.assertEqual(self.mob.hp, hp - 9)
+
+
+class GradeRoll2008(GradeRollFlows, unittest.TestCase):
+    """DAMAGE_GRADE_ROLL true forced on a 2008 server (a 2008 exe given a rolling digit)."""
+    build = B8
+
+
+class GradeRoll2009(GradeRollFlows, unittest.TestCase):
+    """The shipped default (null, auto) on a 2009 server: its combo HUD v2 digit rolls, so
+    the server rolls too."""
+    build = B9
+    grade_roll = None                   # the config's own value: the default null
+
+
+class GradeRollAuto2008(DamageServer, unittest.TestCase):
+    """The shipped default (null, auto) on a 2008 server: no 2008 exe rolls its digit, so the
+    server takes exactly the formula's value the client draws (review of livetest bug 10: a
+    roll here made the HP taken disagree with the exact digit - bug 10 in reverse)."""
+    build = B8
+    grade_roll = None                   # the config's own value: the default null
+
+    def test_the_default_keeps_the_formula_value(self):
+        self.assertIsNone(self.server.config.DAMAGE_GRADE_ROLL)
+        self.assertIsNone(self.server._grade_roller())
+        self.server.DAMAGE_RNG = Dice(0, 1100)                   # would be CRITICAL! x1.65
+        self.assertEqual(self.server._compute_damage(self.c.session, 0, self.mob), 8)
+        self.assertEqual(self.server._compute_damage(self.c.session, 1, self.mob), 24)
+        with self.server._combat_lock(self.c.session):
+            dmg, text = self.server._skill_hit_damage(self.c.session, SK.skill_def(260), self.mob)
+        self.assertEqual(dmg, 37)                                # Ice Spear, unrolled
+        self.assertNotIn('CRITICAL', text)
+        self.assertEqual(self.server._graded(10), 10)            # the placeholder formula's path
+        self.report(7)
+        self.c.expect(0x2A)
+        self.assertEqual(self.mob.hp, 104 - 8)                   # the digit the 2008 exe draws
+        self.assertEqual(self.server.DAMAGE_RNG.calls, [])       # the dice were never touched
+
+
 class ConfigKey(unittest.TestCase):
+    def test_the_grade_roll_key(self):
+        self.assertIsNone(cfgmod.defaults().DAMAGE_GRADE_ROLL)  # auto
+        for value in (True, False, None):
+            with self.subTest(value=value):
+                self.assertIs(cfgmod.from_dict({'DAMAGE_GRADE_ROLL': value}).DAMAGE_GRADE_ROLL, value)
+        for bad in (1, 0, 'auto', 'true'):
+            with self.subTest(bad=bad), self.assertRaises(cfgmod.ConfigError):
+                cfgmod.from_dict({'DAMAGE_GRADE_ROLL': bad})
+        # auto follows the build; true / false force it on either build
+        on = cfgmod.grade_roll_on
+        self.assertEqual([on(cfgmod.from_dict({'CLIENT_BUILD': b})) for b in (B8, B9)], [False, True])
+        for value in (True, False):
+            self.assertEqual([on(cfgmod.from_dict({'CLIENT_BUILD': b, 'DAMAGE_GRADE_ROLL': value}))
+                              for b in (B8, B9)], [value, value])
+
     def test_the_formula_key(self):
         self.assertEqual(cfgmod.defaults().DAMAGE_FORMULA, 'client')
         self.assertEqual(cfgmod.from_dict({'DAMAGE_FORMULA': 'placeholder'}).DAMAGE_FORMULA, 'placeholder')

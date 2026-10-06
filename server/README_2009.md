@@ -143,6 +143,17 @@ Run these with `CLIENT_BUILD "2009"` in `config.json` and the patched exe built.
     - `wsdev --build 2009 down` leaves the 2008 client running.
 11. Regression: with `CLIENT_BUILD "2008"`, `python wsdev.py up` still logs in through the ID
     and password form exactly as before.
+12. The P8 carry-ins (`ROADMAP_2009_ADDENDUM.md` section 2; offline in `test_carryins.py`):
+    - `!cash box 3381` in the world: the client pops "Congratulation. You received an event
+      item.." (S2C 0x6C, origin 3, T-E6) and the next `!mall` lists the Megaphone in the box;
+      the Wind Cash / Mileage labels do not change.
+    - `!cash item 4294`: Picky lands in the equipment tab as a bound pet record (limit_type 3).
+      With the stock hii no sprite can appear (pet B1). Double-clicking it sends C2S 0x82, which
+      stays unanswered until P15 (no lock).
+    - Using Pet Food 20 (`!cash item 4289`) from the bag on the unpatched exe opens the generic
+      "use" dialog; its OK must close again with the food kept (no pet worn).
+    - If the Spark Shop's sell-to-player window (0x4B8) can be opened: its OK must end in "Your
+      target user does not exist in the server." and its Cancel must close the window.
 
 ## 5. Offline tests
 
@@ -158,4 +169,6 @@ Run these with `CLIENT_BUILD "2009"` in `config.json` and the patched exe built.
 - sendspec and cap with the 2009 spec
 
 The login and world flows of the 2009 build are in `test_client2009.py` and
-`test_world2009.py`.
+`test_world2009.py`; the P8 carry-ins C1-C8 (pet records, the worn pet in every 0x6F, the
+KR -> EN item id shift, the rename hook, the 0x73 builder, the pet items through C2S 0x48, the
+origin-3 box grant, the 2009-only cash opcodes) in `test_carryins.py`.

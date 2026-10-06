@@ -196,6 +196,37 @@ class Codec2009(unittest.TestCase):
         self.assertEqual(len(enter), 43)
         self.assertEqual(set(rec.candidates), {ENTER, ENTER_RELOGIN})   # byte-identical sites
 
+    def test_a_packet_several_send_sites_decode_is_logged_with_every_candidate(self):
+        """livetest bug 12: the 2009 W-key pickup (0x43DA4E/0x1F) and the pet auto-loot
+        (0x42EA76/0x1F, first in the spec) have one grammar, and the log named the pickup
+        "pet auto-loot". A record several sites decode gets a neutral name and every key."""
+        pet, key = '0x42EA76/0x1F', '0x43DA4E/0x1F'
+        body = P.build(key, {'ground_item_uid': 7}, direction='C2S', client_build=B9)
+        rec, err = registry.decode(0x1F, body, B9)
+        self.assertIsNone(err)
+        self.assertEqual(rec.candidates, (pet, key))
+        self.assertEqual(registry.record_label(rec, B9), f'GroundItemPickupRequest ({pet} | {key})')
+        # one candidate: the site's own name and key, as before
+        one = registry.decode(0x1F, P.build('0x43D80F/0x1F', {'ground_item_uid': 7}, direction='C2S'))[0]
+        self.assertEqual(registry.record_label(one), 'GroundItemPickupRequest (0x43D80F/0x1F)')
+        # names that share nothing but a prefix, or nothing at all
+        self.assertEqual(registry._neutral_name(['ShopBuy (npc)', 'ShopBuyBack'], 2), 'ShopBuy')
+        self.assertEqual(registry._neutral_name(['Alpha', 'Beta'], 2), 'one of 2 send sites')
+
+        class _Server:                                          # what dispatch reads of a server
+            client_build = B9
+            DEAD_C2S_KEYS = {}
+        with self.assertLogs('WS', logging.INFO) as cm:
+            registry.dispatch(_Server(), {}, None, {}, 0x1F, body)
+        text = '\n'.join(cm.output)
+        self.assertIn(f'Unhandled opcode 0x1F GroundItemPickupRequest ({pet} | {key}) 2B', text)
+        self.assertNotIn('pet auto-loot', text)
+        with self.assertLogs('WS', logging.DEBUG) as cm:           # a routed packet's debug line
+            registry.dispatch(_Server(), {0x1F: registry.Route(log='consumed')}, None, {}, 0x1F, body)
+        text = '\n'.join(cm.output)
+        self.assertIn(f'[C2S] 0x1F GroundItemPickupRequest ({pet} | {key}) ground_item_uid=7', text)
+        self.assertNotIn('pet auto-loot', text)
+
 
 # ============================================================ version reply ===
 class VersionReply2009(unittest.TestCase):
@@ -341,7 +372,8 @@ class Login2009(Server2009Test):
         me = spawn['repeat[player_count]'][0]
         self.assertEqual((me['name'], me['uid'], me['gender'], me['gm_or_guild_id']), ('Lady', 1, 1, 0))
         self.assertEqual(len(me['repeat[17]']), 17)
-        self.assertEqual((me['pos_x'], me['pos_y']), (700.0, 812.0))
+        # the start point (700, 812) settled onto 101's floor (livetest bug 5)
+        self.assertEqual((me['pos_x'], me['pos_y']), (700.0, 912.0))
         self.assertTrue(me['cur_hp'] > 0)
         self.assertEqual(c.session['char_name'], 'Lady')
         self.assertIs(self.server.world.by_char_name('lady'), c.session)

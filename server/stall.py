@@ -188,6 +188,8 @@ def parse_open(rec, catalog=None):
     which the client never lists), or a quantity outside 1..999 / 1 / 1..99 - result 9
     ("Invalid information transaction"). A KR gamedef NotTrade item gets 2 instead: the EN
     client does not know that flag, so listing one is no tampering (trade.py refuses it too).
+    The KR row is the one en_content.gamedef_item finds for the EN id (a 2009 id above 4248
+    is KR + 4: ROADMAP_2009_ADDENDUM C3).
     Ownership is market.py's (it needs the bag)."""
     catalog = catalog if catalog is not None else EC.items()
     title = cut_title(rec.get('shop_name', b''))

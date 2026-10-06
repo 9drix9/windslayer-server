@@ -72,6 +72,15 @@ reward is rolled from the node's hni `item:` / `Drop:` columns: every node's rat
 GATHER_RATE_DIVISOR (0 = always a reward, weighted by the same column). The tool goes on
 EVERY result (the client removes it before it looks at the result), the reward is added
 only on result 1.
+
+Elemental stone extraction (F14; item_inventory-stone-extraction, P8 stage 4)
+----------------------------------------------------------------------------
+Not client-timed: window 0x473 (opened by an Element Separator from the cash bag) sends C2S
+0x72 {tool, equipment, picked stone, the 6 record words} and closes. extract() takes the
+stone out of the bag instance (the first equal socket, the rest shift down) and bags it;
+GameServer._handle_stone_extract consumes one use of the tool's cash record (cash.consume,
+the client's own consume-by-serial of the 0x9C serial) and sends S2C 0x9C then the 0x18
+that grants the stone. Any refusal changes nothing and is 0x9C {0}.
 """
 from collections import namedtuple
 import random as _random
@@ -121,7 +130,17 @@ ELEMENTIRIUM_FIRST, ELEMENTIRIUM_LAST = 0xB9F, 0xBA3      # 2975..2979
 OPTION_STONE_FIRST = 2945         # 2945..2974 elemental option stones
 OPTION_STONE_GRADES = 5           # Chipped, Flawed, -, Flawless, Perfect (hii Lv 1..5)
 OPTION_STONE_GROUPS = 6
+OPTION_STONE_LAST = OPTION_STONE_FIRST + OPTION_STONE_GROUPS * OPTION_STONE_GRADES - 1     # 2974
 DEFAULT_REINFORCE_SUCCESS_PCT = 70
+
+# ------------------------------------------------------ extraction content ---
+# The Element Separators (item_inventory F14, I-20 / Q12; hii Type 5 cash items, Cash_Cls 14,
+# Cash_T 1 counted, Cash_V 1 or 6 uses - the same rows in the 2008 and 2009 hii). C2S 0x72
+# mode_id IS the tool the window 0x473 was opened with. The selective ones need a picked
+# stone (the client itself refuses 0xF70 / 0xD6D without one, "Select the elemental stone to
+# extract."); the random ones send stone 0 and the server rolls the socket. 4378 is KR-only.
+EXTRACT_SELECTIVE = frozenset({0xF70, 0xD6D})      # 3952 Selective x1, 3437 Selective x6
+EXTRACT_RANDOM = frozenset({0xF6F, 0xD6C})         # 3951 Random x1, 3436 Random x6
 
 # ---------------------------------------------------------- gather content ---
 HERB_GATHERING_SKILL = 0x56       # 86
@@ -140,6 +159,7 @@ MIN_INTERVAL_SECS = 4.0
 Material = namedtuple('Material', 'item_id count tab')
 CraftOutcome = namedtuple('CraftOutcome', 'result product kind skill_level pct consumed granted why')
 ReinforceOutcome = namedtuple('ReinforceOutcome', 'result equip_id stone_id old_words new_option why')
+ExtractOutcome = namedtuple('ExtractOutcome', 'result equip_id old_words stone_id why')
 GatherOutcome = namedtuple('GatherOutcome', 'result tool_id reward node tool_removed why')
 
 
@@ -210,11 +230,15 @@ def materials(item_def, catalog=None):
     return list(merged.values())
 
 
-def _scratch(char):
-    """A throw-away copy of the character's bag to simulate a change on (the product's room
-    is checked AFTER the materials leave, the order the client applies them)."""
+def _scratch(bag):
+    """A throw-away copy of the character's bag `bag` (an INV.Inventory) to simulate a change
+    on (the product's room is checked AFTER the materials leave, the order the client applies
+    them). The copy holds `inventory` alone, so it carries the real bag's pet count: a 2009
+    bagged pet takes an equipment-tab slot (INV.Inventory `pets`), and without it a pet-filled
+    tab would pass the check and the product be lost after the materials were consumed."""
     import copy
-    return {'inventory': copy.deepcopy(char.get('inventory')), 'equipped': {}}
+    return INV.Inventory({'inventory': copy.deepcopy(bag.char.get('inventory')), 'equipped': {}},
+                         bag.catalog, pets=bag.pet_slots())
 
 
 def _remove_materials(bag, mats):
@@ -255,7 +279,7 @@ def craft(char, product_id, catalog=None, rng=None):
             f'{m.item_id} x{m.count} (have {bag.count(m.item_id) if m.tab else "no record"})' for m in short),
             kind, level, pct)
     # Room for the product once the materials are gone (the client removes them first).
-    scratch = INV.Inventory(_scratch(char), catalog)
+    scratch = _scratch(bag)
     _remove_materials(scratch, mats)
     full = scratch.fits(product_id, 1)
     if full is not None:
@@ -273,6 +297,12 @@ def craft(char, product_id, catalog=None, rng=None):
 # ============================================================ reinforcement ===
 def is_elementirium(item_id):
     return ELEMENTIRIUM_FIRST <= _int(item_id) <= ELEMENTIRIUM_LAST
+
+
+def is_option_stone(item_id):
+    """An elemental option stone 2945..2974: the only word a socket gets from the client's
+    reinforcement (option_stone) and the only one an extraction may hand back."""
+    return OPTION_STONE_FIRST <= _int(item_id) <= OPTION_STONE_LAST
 
 
 def option_stone(stone_id, group):
@@ -344,6 +374,90 @@ def reinforce(char, equip_id, stone_id, words, catalog=None, rng=None, success_r
     instance['w'] = block
     bag.remove(stone_id, 1)
     return out(RESULT_OK, f'{pct}%', new_option)
+
+
+# ================================================================ extraction ===
+def extract_tool_kind(mode_id):
+    """'selective' / 'random' for an Element Separator id (C2S 0x72 mode_id), else None."""
+    mode_id = _int(mode_id)
+    if mode_id in EXTRACT_SELECTIVE:
+        return 'selective'
+    if mode_id in EXTRACT_RANDOM:
+        return 'random'
+    return None
+
+
+def extract(char, mode_id, equip_id, stone_id, words, catalog=None, rng=None, tool_owned=True):
+    """Decide and apply one elemental stone extraction (item_inventory F14; C2S 0x72, spec
+    0x46C0B8/0x72, 2009 0x4765EE/0x72). `words` = the six u16 the request carried (socket
+    words w0..w4 + equip_extra = the bag record's +0x02..+0x0C), `tool_owned` whether the
+    caller found a usable cash record of the tool (the premium_cash serial the 0x9C names).
+
+    Success (ExtractOutcome.result 1) has already changed the model the way S2C 0x9C + 0x18
+    change the client: the stone word is taken out of the matched bag instance and the later
+    words shift toward w0 (FUN_00424260 / 2009 FUN_00425690: the FIRST socket equal to
+    stone_id, then the shift, w5 untouched), and the stone is added to the etc tab (0x18 -
+    0x9C itself grants nothing). old_words are the six words the client sent: the 0x9C
+    echoes them, because the client finds its slot by a memcmp of exactly those 12 bytes.
+    stone_id is the stone actually removed and is never 0: a 0 would make the client pick
+    rand() % count on its own (a desync), and with every socket empty divide by zero
+    (0x42430D / 0x42573D). A random tool (3951 / 3436) sends stone 0; the server rolls the
+    socket among the words that are elemental option stones (is_option_stone): a socket word
+    that is none (GM-made or corrupt data, P8 review) is never handed out through the 0x18 as a
+    "stone" - a selective pick of it is refused. Any other result changes nothing (the caller
+    answers 0x9C {0}: "Elemental stone extraction failed.", the client consumes no tool)."""
+    catalog = _catalog(catalog)
+    rng = rng or _random
+    mode_id, equip_id, stone_id = _int(mode_id), _int(equip_id), _int(stone_id)
+    words = [_int(w) & 0xFFFF for w in list(words or [])][:INV.OPTION_WORDS]
+    words += [0] * (INV.OPTION_WORDS - len(words))
+
+    def out(result, why, stone=0):
+        return ExtractOutcome(result, equip_id, list(words), stone, why)
+
+    kind = extract_tool_kind(mode_id)
+    if kind is None:
+        return out(RESULT_FAILED, f'mode {mode_id} is no Element Separator '
+                                  f'({sorted(EXTRACT_SELECTIVE | EXTRACT_RANDOM)})')
+    if not tool_owned:
+        return out(RESULT_FAILED, f'no usable {mode_id} record in the cash inventory')
+    bag = INV.Inventory(char, catalog)
+    if not catalog.exists(equip_id) or bag.tab_of(equip_id) != 'equip':
+        return out(RESULT_FAILED, f'{equip_id} is not EN equipment')
+    if not packed(words):
+        return out(RESULT_FAILED, f'socket words {words} are not packed')
+    sockets = [w for w in words[:INV.WIRE_OPTION_WORDS] if w]
+    if not sockets:
+        # the client's own gate ("The equipment doesn't have without elemental stone..")
+        return out(RESULT_FAILED, f'no stone in the sockets of {equip_id}')
+    instance = bag.instance(equip_id, words)
+    if instance is None:
+        return out(RESULT_FAILED, f'no bag instance of {equip_id} with block {words}')
+    if kind == 'selective':
+        if not stone_id:
+            return out(RESULT_FAILED, 'a selective separator needs a picked stone')
+        if stone_id not in sockets:
+            return out(RESULT_FAILED, f'stone {stone_id} is not in the sockets {sockets}')
+        if not is_option_stone(stone_id):
+            return out(RESULT_FAILED, f'socket word {stone_id} is not an elemental option stone '
+                                      f'({OPTION_STONE_FIRST}..{OPTION_STONE_LAST})')
+        taken = stone_id
+    else:
+        stones = [w for w in sockets if is_option_stone(w)]
+        if not stones:
+            return out(RESULT_FAILED, f'no elemental option stone among the socket words {sockets}')
+        taken = stones[rng.randrange(len(stones))]
+    full = bag.fits(taken, 1)
+    if full is not None:
+        return out(RESULT_FAILED, f'the stone {taken} does not fit: {full}')
+    block = INV.pack_words(instance['w'])
+    head = block[:INV.WIRE_OPTION_WORDS]
+    head.remove(taken)                       # the first equal word; the later ones shift down
+    instance['w'] = head + [0] + [block[5]]
+    bag.add(taken, 1)
+    how = 'picked' if kind == 'selective' else f'rolled from {sockets}' + (
+        f' (client named {stone_id})' if stone_id else '')
+    return out(RESULT_OK, f'{kind} separator, stone {taken} {how}', taken)
 
 
 # ================================================================ gathering ===

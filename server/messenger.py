@@ -28,7 +28,8 @@ Server state (all under Messenger.lock):
             session['room_id'] is the member's room. Room ids count from 1 (0 = "no room").
 Session keys: msgr_online, msgr_name, msgr_uid, msgr_status (0/2/3), room_id, msgr_synced
 (a 0x2F answered since the last 0x03), memo_ids_on_client (the memo ids that client was
-shown: C2S 0x44 deletes only those), dev_notes ({item: [serial, count]}, `!note`).
+shown: C2S 0x44 deletes only those). The Notes themselves are records of the character's
+cash inventory (P8 stage 1, cash.py via server.cash): a sent note names and uses up one.
 
 Lock order (world.py "Locks"): world_lock -> combat_lock -> MapMonsters.lock ->
 Messenger.lock -> store.lock (db) -> send_lock. Nothing here takes a combat or monster lock
@@ -172,20 +173,7 @@ class Messenger:
                 if char is None:
                     return
                 social.ensure(char)
-                rows, keep, dropped = [], [], []
-                for name in list(char['friends']):
-                    found = self.store.character_by_name(name)
-                    if found is None:
-                        dropped.append(name)
-                        continue
-                    _user, acc, fchar = found
-                    canonical = fchar['name']
-                    keep.append(canonical)
-                    live = self.find(canonical, viewer=session)
-                    if live is not None:
-                        rows.append(self._row_of(live))
-                    else:
-                        rows.append(social.friend_row(canonical, 0, acc.get('uid') or 0, social.STATUS_OFFLINE))
+                rows, keep, dropped = self._friend_rows(session, char)
                 mentees, keep_mentees = [], []
                 for name in list(char['mentees']):
                     found = self.store.character_by_name(name)
@@ -222,6 +210,72 @@ class Messenger:
         log.info(f'[MSGR] {self.name_of(session)!r}: 0x0B {len(rows)}/{cap} friend(s) ({online} online)'
                  + (f', 0x7E {len(mentees)} mentee(s)' if mentees else '')
                  + (f', 0x78 {len(memos)} memo(s)' if memos else ''))
+
+    def _friend_rows(self, session, char):
+        """(S2C 0x0B rows, the canonical names kept, the names whose character is gone) of
+        `char`'s stored friend list as `session` may see it. Caller holds self.lock and
+        store.lock."""
+        rows, keep, dropped = [], [], []
+        for name in list(char['friends']):
+            found = self.store.character_by_name(name)
+            if found is None:
+                dropped.append(name)
+                continue
+            _user, acc, fchar = found
+            canonical = fchar['name']
+            keep.append(canonical)
+            live = self.find(canonical, viewer=session)
+            if live is not None:
+                rows.append(self._row_of(live))
+            else:
+                rows.append(social.friend_row(canonical, 0, acc.get('uid') or 0, social.STATUS_OFFLINE))
+        return rows, keep, dropped
+
+    def renamed(self, session, old, new):
+        """premium_cash-rename (P8 stage 3; the world.ON_RENAME hook, ROADMAP_2009_ADDENDUM C4):
+        the store already points every friend list, mentor and mentee name at the new name
+        (store.rewrite_social_references). Each online watcher whose client has its list
+        (msgr_synced: a 0x2F was answered since its last 0x03 - one still loading gets the new
+        list from its own coming 0x2F) is sent its whole S2C 0x0B again: 0x0B replaces the
+        list, while 0x60 finds an entry by NAME (the old one) and could never rename it.
+        The mentor: an online, synced mentor's client holds this character as a mentee row
+        found by UID, which S2C 0x7B zeroes and refills in place (spec 0x7B) - so the row takes
+        the new name (the client also prints its "<name> has logged in. (Menti)" line; no
+        packet renames the row silently). The mentees: their client holds the mentor from the
+        S2C 0x03 mentor block (mentor_fields_03) and nothing renames it in place (0x7D sets
+        the status only, 0x7A appends a second record), so they see the new name at their
+        next map load. Returns the sessions told (watchers, then the mentor)."""
+        told = []
+        with self.lock:
+            for w in self.watchers(session):
+                if not w.get('msgr_synced'):
+                    continue
+                with self.store.lock:
+                    char = self.char_of(w)
+                    if char is None:
+                        continue
+                    social.ensure(char)
+                    rows, _keep, _dropped = self._friend_rows(w, char)
+                    cap = social.capacity(char)
+                rows = rows[:social.LIST_MAX]
+                if self._push(w, '0x0B', {'friend_capacity': cap, 'friend_count': len(rows),
+                                          'repeat[friend_count]': rows}, 'FRIEND'):
+                    told.append(w)
+            with self.store.lock:
+                own = self.char_of(session)
+                mentor = (own or {}).get('mentor')
+            m = self.find(mentor, viewer=session) if mentor else None
+            mentor_told = False
+            if m is not None and m.get('msgr_synced'):
+                mentor_told = self._push(m, '0x7B', {'mentee_uid': session.get('msgr_uid') or _uid(session),
+                                                     'channel': social.SAME_CHANNEL,
+                                                     'mentee_name': chatmod.name_bytes(new)}, 'MENTOR')
+                if mentor_told:
+                    told.append(m)
+        log.info(f'[MSGR] {old!r} is now {new!r}: 0x0B friend list re-sent to '
+                 f'{[self.name_of(w) for w in told if w is not m]}'
+                 + (f', 0x7B mentee row renamed on mentor {self.name_of(m)!r}' if mentor_told else ''))
+        return told
 
     # ================================================================ F2 ===
     def friend_add(self, sock, session, rec):
@@ -723,7 +777,9 @@ class Messenger:
             log.info(f'[MENTOR] {self.name_of(mentee)!r} +{gained} exp: mentor {mentor!r} not in world, no share')
             return 0
         bonus = max(1, gained * pct // 100)
-        applied = self.server.grant_exp(m, bonus, menti_id=mentee.get('msgr_uid') or _uid(mentee))
+        # arch09-exp-pipeline source 'mentor': `gained` already went through the event stage,
+        # so the share is not scaled again (events.EXP_UNSCALED_SOURCES); 0x7F, never a tail.
+        applied = self.server.award_exp(m, bonus, 'mentor', menti_id=mentee.get('msgr_uid') or _uid(mentee))
         log.info(f'[MENTOR] {self.name_of(m)!r} gets {applied:+d} exp from mentee {self.name_of(mentee)!r} '
                  f'({pct}% of {gained}, 0x7F)')
         return applied
@@ -818,20 +874,24 @@ class Messenger:
                  f'{", delivered (0x78)" if delivered else ""}; no reply (chat_mail_gm F7)')
 
     def _note_serial(self, session, item):
-        """The premium serial of the Note the player used, or None when he owns none. There
-        is no cash inventory before P8 (premium_cash-cash-inventory-api): with DEV_FREE_NOTES
-        (roadmap 1.12, D6) the serial `!note` handed out is used, else 0 - which the client
-        answers with the success box and no consumption (spec correction C14)."""
-        notes = session.get('dev_notes') or {}
-        if item in notes and notes[item][1] > 0:
-            return notes[item][0]
-        return 0 if self.server.config.get('DEV_FREE_NOTES', True) else None
+        """The cash serial of the Note the player uses, or None when he owns none
+        (premium_cash-cash-inventory-api, P8 stage 1): the record the client's own lookup picks
+        (cash.CashInventory.find = FUN_0045E760: that id, quantity > 0). The P6 dev flag
+        DEV_FREE_NOTES, which let a player without one send with serial 0, is retired (P8
+        stage 4, roadmap P8 "Turn off DEV_FREE_NOTES"; config.RETIRED_KEYS): no Note, no
+        memo - the caller answers 0x77 {0}."""
+        rec = self.server.cash.find(self.char_of(session), item)
+        return None if rec is None else rec['serial']
 
-    @staticmethod
-    def _use_note(session, item, serial):
-        notes = session.get('dev_notes') or {}
-        if serial and item in notes and notes[item][0] == serial:
-            notes[item][1] -= 1
+    def _use_note(self, session, item, serial):
+        """The sent note is used up on both sides: the 0x77 success names its serial and the
+        client's consume-by-serial (2008 FUN_00464380, 2009 FUN_0046df70) takes one off a
+        limit_type 1 record and frees it at 0 - the model does the same (cash.consume)."""
+        if not serial:
+            return
+        left = self.server.cash.consume(self.char_of(session), serial, 1, what=f'note {item}')
+        state = 'not in the model' if left is None else f'{left} left' if left else 'record gone'
+        log.info(f'[NOTE] {self.name_of(session)!r} used Note {item} (serial {serial:#x}): {state}')
 
     def memo_delete(self, session):
         """C2S 0x44 (the memo window closed with "All the messages will be deleted"): the
@@ -897,7 +957,8 @@ class Messenger:
 # ------------------------------------------------------------------ hooks ---
 def register(hooks, messenger):
     """The lifecycle hooks (world.py): a map load resets what 0x03 resets, the first entry
-    announces the character, leaving the world / closing announces it gone."""
+    announces the character, leaving the world / closing announces it gone, a rename renames
+    its rows on the friends' and the mentor's clients (ON_RENAME, the C4 hook)."""
     def before_map_load(server, session, reason=None, **_):
         messenger.before_map_load(session, reason or '')
 
@@ -911,8 +972,12 @@ def register(hooks, messenger):
     def on_disconnect(server, session, reason=None, **_):
         messenger.go_offline(session, reason or '', superseded=server.world.superseded(session))
 
+    def on_rename(server, session, old=None, new=None, **_):
+        messenger.renamed(session, old, new)
+
     hooks.register(worldmod.BEFORE_SERVER_MAP_LOAD, before_map_load)
     hooks.register(worldmod.ON_ENTER_WORLD, on_enter_world)
     hooks.register(worldmod.ON_LEAVE_WORLD, on_leave_world)
     hooks.register(worldmod.ON_DISCONNECT, on_disconnect)
-    return before_map_load, on_enter_world, on_leave_world, on_disconnect
+    hooks.register(worldmod.ON_RENAME, on_rename)
+    return before_map_load, on_enter_world, on_leave_world, on_disconnect, on_rename

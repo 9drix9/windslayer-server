@@ -119,7 +119,8 @@ class ExitCriterion1(unittest.TestCase):
 
     def test_wsdev_sendspec_question_describes_resolvers(self):
         _, out = self._sendspec('72', '?')
-        self.assertIn('<gamedef items.Cash_T(item_id) == 2', out)
+        # P8 stage 1 (premium_cash-catalog): the client's own hii Cash_T, gamedef only as fallback
+        self.assertIn('<client def+0x1F6 (hii Cash_T) of item_id == 2', out)
         _, out = self._sendspec('3B', '?')
         self.assertIn('<0x0A31 <= item_or_skill_id <= 0x0A3B', out)
 
@@ -208,6 +209,51 @@ class AssumeTable(unittest.TestCase):
         rec = {'mover_uid': 2, 'target_uid': 1, 'move_bits_lo': 9 << 12, 'action_flag': 1, 'pos_x': 5.0}
         self.assertEqual(len(P.build(0x2A, rec, receiver_uid=3)), 34)
         self.assertEqual(len(P.build(0x2A, rec, receiver_uid=1)), 17)
+
+    def test_0x2a_hit_relay_with_knockback_is_33_bytes(self):
+        """Desync fix M1: the hit relay to a watcher keeps action 7 (no u8 action_flag, which
+        9 / 10 would add) and reaction 0 while it carries facing2 (bits 20-21) and the hurt
+        ms (hi): 33 bytes, byte for byte the plan's example (monster 0x000F0009, attacker
+        uid 1 facing right, hurt 360, at (656.25, 1901.375)), in both builds. To the attacker
+        himself (target == receiver) it would be the 16-byte self-form - which is why he only
+        ever gets his release."""
+        want = bytes.fromhex('09 00 0F 00 00 70 20 00 68 01 00 00 01 00 00 00 00 00 00 00 00 82 84 40 '
+                             '00 00 00 00 80 B5 9D 40 00')
+        for build in ('2008', '2009'):
+            with self.subTest(build=build):
+                rec = {'mover_uid': 0x000F0009, 'move_bits_lo': 0x00207000, 'move_bits_hi': 360,
+                       'target_uid': 1, 'pos_x': 656.25, 'pos_y': 1901.375, 'airborne': 0}
+                raw = P.build('0x2A', dict(rec), receiver_uid=2, client_build=build)
+                self.assertEqual((len(raw), raw), (33, want))
+                back = P.parse(0x2A, raw, direction='S2C', client_build=build)
+                self.assertEqual((struct.unpack('<II', P.to_bytes(back['move_bits'])), back['target_uid'],
+                                  back['pos_x'], back['pos_y'], back['airborne']),
+                                 ((0x00207000, 360), 1, 656.25, 1901.375, 0))
+                self.assertEqual(len(P.build('0x2A', dict(rec, move_bits_lo=0x00107000), receiver_uid=2,
+                                             client_build=build)), 33)             # facing left
+                self.assertEqual(len(P.build('0x2A', dict(rec), receiver_uid=1, client_build=build)), 16)
+
+    def test_0x2a_skill_hit_relay_carries_the_cast_variant(self):
+        """Desync fix M3 (HIT_STUN_PER_SWING_RE 6.3): the case-9 hit relay to a watcher is
+        34 bytes - action 9, facing2 left, hurt 1020, target = the attacker, then the u8
+        action_flag = his cast variant (Ice Spear 1) BEFORE the position block - byte for byte
+        the report's example (monster 0x000F0000, uid 1, at (861, 1920)), in both builds.
+        The flag is read in the self-form too (17 bytes), so the attacker never gets it."""
+        want = bytes.fromhex('00 00 0F 00 00 90 10 00 FC 03 00 00 01 00 00 00 01 00 00 00 00 00 E8 8A 40 '
+                             '00 00 00 00 00 00 9E 40 00')
+        for build in ('2008', '2009'):
+            with self.subTest(build=build):
+                rec = {'mover_uid': 0x000F0000, 'move_bits_lo': 0x00109000, 'move_bits_hi': 1020,
+                       'target_uid': 1, 'action_flag': 1, 'pos_x': 861.0, 'pos_y': 1920.0, 'airborne': 0}
+                raw = P.build('0x2A', dict(rec), receiver_uid=2, client_build=build)
+                self.assertEqual((len(raw), raw), (34, want))
+                back = P.parse(0x2A, raw, direction='S2C', client_build=build)
+                self.assertEqual((struct.unpack('<II', P.to_bytes(back['move_bits'])), back['target_uid'],
+                                  back['action_flag'], back['pos_x'], back['pos_y'], back['airborne']),
+                                 ((0x00109000, 1020), 1, 1, 861.0, 1920.0, 0))
+                self.assertEqual(len(P.build('0x2A', dict(rec, move_bits_lo=0x0010A000), receiver_uid=2,
+                                             client_build=build)), 34)             # 10: airborne
+                self.assertEqual(len(P.build('0x2A', dict(rec), receiver_uid=1, client_build=build)), 17)
 
     def test_0x1b_state_blob_helper_is_derived(self):
         lo = (7 << 12) | (4 << 9) | (1 << 16)

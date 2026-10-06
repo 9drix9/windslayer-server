@@ -125,7 +125,7 @@ def import_server():
 
 
 def make_server(tmpdir, accounts=None, config=None, portal_cooldown=0.0, client_build=None,
-                ground_loot=False):
+                ground_loot=False, grade_roll=False, drop_mode='legacy'):
     """A GameServer whose accounts file is a fresh copy in tmpdir (never the live one).
     Nothing is bound and no background thread (combat driver, admin port, ticks) starts.
     The fixture is the pre-P1 schema, so every server also runs the store migration (its
@@ -145,6 +145,17 @@ def make_server(tmpdir, accounts=None, config=None, portal_cooldown=0.0, client_
     written for it and a random drop would otherwise add a 0x12 to some runs. True runs the
     shipped default (monster loot on the ground, test_ground.py); None keeps the config's
     own value.
+
+    grade_roll: the rig pins DAMAGE_GRADE_ROLL false - the suites assert the formula's exact
+    numbers (a Monkey Soldier hit for 8 then 24, a Pupu killed in one hit), which the server's
+    grade roll (livetest bug 10: x0.75..x1.5, x0.9..1.1 jitter) would scatter. True forces it
+    on (test_damage seeds GameServer.DAMAGE_RNG); None keeps the config's value - the shipped
+    default null is auto: on for a 2009 server only (config.grade_roll_on).
+
+    drop_mode: the rig pins DROP_MODE 'legacy' - the P0 roll (60 %, one entry picked with
+    random.choice) the older suites force with random.random 0.0 + random.choice; under the
+    shipped per-entry rolls (P13 boss-b2, 'rates') that 0.0 would drop the whole table.
+    test_bosses.py runs 'rates' / 'single'; None keeps the config's own value.
 
     With no `config` the server also runs without the monster AI (MOB_AGGRO false): the
     rig's byte-exact flows were written for the server that answers a hit with nothing but
@@ -167,6 +178,12 @@ def make_server(tmpdir, accounts=None, config=None, portal_cooldown=0.0, client_
         config = cfgmod.from_dict({'MOB_SERVER_CONTROLLED': True, 'MOB_AGGRO': False})
     if ground_loot is not None and bool(config.get('GROUND_LOOT')) != bool(ground_loot):
         config = cfgmod.from_dict({**dict(config), 'GROUND_LOOT': bool(ground_loot)}, getattr(config, 'path', None))
+    # Compared by identity: the default null (auto) is neither pin, so it is always replaced.
+    if grade_roll is not None and config.get('DAMAGE_GRADE_ROLL') is not bool(grade_roll):
+        config = cfgmod.from_dict({**dict(config), 'DAMAGE_GRADE_ROLL': bool(grade_roll)},
+                                  getattr(config, 'path', None))
+    if drop_mode is not None and config.get('DROP_MODE') != drop_mode:
+        config = cfgmod.from_dict({**dict(config), 'DROP_MODE': str(drop_mode)}, getattr(config, 'path', None))
     server = W.GameServer(host='127.0.0.1', port=0, db_file=db, config=config)
     server.PORTAL_COOLDOWN_SECS = float(portal_cooldown)
     return server

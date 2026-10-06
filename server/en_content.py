@@ -58,6 +58,7 @@ CardCatalog come up empty and every quest/card path refuses. Each fallback logs 
 import json
 import logging
 import os
+import pathlib
 import re
 import sqlite3
 import threading
@@ -185,8 +186,8 @@ class ItemDef:
     __slots__ = ('id', 'title_text', 'type', 'sprite', 'hp', 'mp', 'job', 'job2', 'kind',
                  'spr_num', 'gender', 'con', 'skill_lv', 'text', 'lv', 'buy', 'sell',
                  'pmoney', 'ct', 'card_spr', 'card_npc', 'cash', 'cash_cls', 'cash_t',
-                 'cash_p', 'union_ids', 'union_counts', 'union_kind', 'w_att', 'defense',
-                 's_att', 'stat_str', 'stat_dex', 'stat_int', 'stat_tol', 'mhp', 'mmp',
+                 'cash_p', 'cash_v', 'cash_b', 'cash_st', 'union_ids', 'union_counts', 'union_kind',
+                 'w_att', 'defense', 's_att', 'stat_str', 'stat_dex', 'stat_int', 'stat_tol', 'mhp', 'mmp',
                  'attribute', 'attri_atk', 'attri_def', 'skill_p_a', 'skill_p_d',
                  'skill_a_a', 'skill_a_d')
 
@@ -216,7 +217,11 @@ class ItemDef:
         self.cash = _int(f.get('Cash'))                     # def+0x1F0: no sell/drop/trade
         self.cash_cls = _int(f.get('Cash_Cls'))
         self.cash_t = _int(f.get('Cash_T'))
-        self.cash_p = _int(f.get('Cash_P'))
+        self.cash_p = _int(f.get('Cash_P'))                 # def+0x1FC Item Mall price (Wind Cash)
+        # premium_cash-catalog (P8): the rest of the mall columns the hii carries (cash.py).
+        self.cash_v = _int(f.get('Cash_V'))                 # count (Cash_T 1) or days (Cash_T 2)
+        self.cash_b = _int(f.get('Cash_B'))                 # shop badge 0..5
+        self.cash_st = _int(f.get('Cash_ST'))               # 0 / 1 / 2 / 5, meaning unknown
         self.union_ids = _digit_groups(f.get('Union', []), 8, 4)
         self.union_counts = _digit_groups(f.get('Union_Cnt', []), 8, 4)
         self.union_kind = _int(f.get('Union_Kind'))
@@ -984,11 +989,60 @@ def item_name(item_id):
 
 
 # ------------------------------------------------------------- KR gamedef ---
+# arch09-id-shift (ROADMAP_2009_ADDENDUM 3.0 / carry-in C3; systems_2009/pet.md B2 and
+# _work/pet/align_kr_en.txt): the EN 2009 hii inserts four EN event items at 4249..4252, so
+# the KR gamedef and the EN 2009 table agree up to 4248 and above it EN id = KR idx + 4
+# (every one of the 56 new 2009 mall rows equals its KR row once shifted). The client indexes
+# items by line order only, so the EN hii of the running build is THE authority for an id;
+# every KR row an item id is looked up by goes through kr_item_idx, and every item id read
+# out of a KR column goes through en_item_id. The 2008 hii has 4248 rows and no shift.
+#
+# The audit of every KR-derived number the server uses (C3):
+#   - item rows: gamedef_item (below) - stall.py / trade.py NotTrade, packets.cash_duration_type's
+#     Cash_T fallback (a server without the client files) - all shifted here;
+#   - mall data (prices, Cash_Cls 17-19 pet tabs, gift certificates 3327..3332, the pet food /
+#     name ticket / bell ids of cash.py): the EN hii itself (cash.CashDef), never KR;
+#   - monster stats and drops, shop lists, quests, cards: the EN hni / hqi / hii (this module);
+#     gamedef_npc rows carry KR item ids in `item` - nothing reads that column, and a caller
+#     that does must map each id through en_item_id;
+#   - portals.json / data.map_codes: map codes only (no item ids);
+#   - quest_defs.py: retired (KR quests, hex-decoded, KR item ids); nothing imports it.
+# Exe constants are fixed only by the client patch cp-2 (P15).
+KR_SHIFT_ABOVE = EN_ITEM_MAX_ID              # 4248: the last id KR and EN 2009 share
+KR_SHIFT = 4
+EN_ONLY_IDS_2009 = range(KR_SHIFT_ABOVE + 1, KR_SHIFT_ABOVE + KR_SHIFT + 1)   # 4249..4252
+
+
+def _id_build(client_build):
+    return _client_build if client_build is None else str(client_build)
+
+
+def kr_item_idx(item_id, client_build=None):
+    """The KR gamedef idx of an EN item id of `client_build` (None = the loaded build), or None
+    for the four EN-only 2009 event items 4249..4252 (no KR row)."""
+    item_id = int(item_id)
+    if _id_build(client_build) != '2009' or item_id <= KR_SHIFT_ABOVE:
+        return item_id
+    return None if item_id in EN_ONLY_IDS_2009 else item_id - KR_SHIFT
+
+
+def en_item_id(kr_idx, client_build=None):
+    """The EN item id of `client_build` (None = the loaded build) for a KR gamedef item idx:
+    +4 above 4248 in 2009 (KR 4282 Pet Food 250 = EN 4286)."""
+    kr_idx = int(kr_idx)
+    if _id_build(client_build) != '2009' or kr_idx <= KR_SHIFT_ABOVE:
+        return kr_idx
+    return kr_idx + KR_SHIFT
+
+
 def _gamedef():
+    """The KR content DB, opened READ-ONLY: a server without gamedef.sqlite3 gets an error
+    (every row None) instead of sqlite creating an empty file next to it."""
     global _gamedef_conn
     with _lock:
         if _gamedef_conn is None:
-            _gamedef_conn = sqlite3.connect(GAMEDEF_PATH, check_same_thread=False)
+            uri = pathlib.Path(os.path.abspath(GAMEDEF_PATH)).as_uri() + '?mode=ro'
+            _gamedef_conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
             _gamedef_conn.row_factory = sqlite3.Row
         return _gamedef_conn
 
@@ -996,14 +1050,16 @@ def _gamedef():
 def gamedef_row(table, idx, columns='*'):
     """One row of the KR content DB, cached. Only for numbers the EN client files do not
     carry (monster HP/Def/Exp/Lv/drops, NotTrade/PvPItem); never for an id or a price
-    (F7: the EN files are the authority)."""
+    (F7: the EN files are the authority). `idx` is the KR idx: an item row goes through
+    gamedef_item (the 2009 id shift)."""
     key = (table, columns, int(idx))
     if key in _gamedef_cache:
         return _gamedef_cache[key]
     row = None
     try:
-        cur = _gamedef().execute(f'SELECT {columns} FROM {table} WHERE idx=?', (int(idx),))
-        found = cur.fetchone()
+        with _lock:                  # one connection shared by every thread: one query at a time
+            cur = _gamedef().execute(f'SELECT {columns} FROM {table} WHERE idx=?', (int(idx),))
+            found = cur.fetchone()
         row = dict(found) if found else None
     except (sqlite3.Error, OSError) as e:
         log.warning(f'[CONTENT] gamedef {table}[{idx}]: {e}')
@@ -1012,15 +1068,21 @@ def gamedef_row(table, idx, columns='*'):
 
 
 def gamedef_npc(npccode):
-    """KR `npcs` row for a monster npccode (HP, Def, Exp, Lv, item drop list)."""
+    """KR `npcs` row for a monster npccode (HP, Def, Exp, Lv, item drop list). Its item ids
+    are KR idx: map them with en_item_id before using one."""
     return gamedef_row('npcs', npccode)
 
 
-def gamedef_item(item_id):
-    """KR `items` row. Use it ONLY for columns the hii lacks (NotTrade, PvPItem) and only
-    for ids <= EN_ITEM_MAX_ID: its Kind differs from EN for 289 items and its ids diverge
-    above the EN table (item_inventory 3.1)."""
-    return gamedef_row('items', item_id)
+def gamedef_item(item_id, client_build=None, columns='*'):
+    """The KR `items` row of an EN item id of `client_build` (None = the loaded build): KR idx
+    = kr_item_idx (a 2009 id above 4248 is KR + 4; 4249..4252 have none -> None). Use it ONLY
+    for columns the hii lacks (NotTrade, PvPItem; Cash_T without the client files): its Kind
+    differs from EN for 289 items (item_inventory 3.1)."""
+    try:
+        kr_id = kr_item_idx(item_id, client_build)
+    except (TypeError, ValueError):
+        return None
+    return None if kr_id is None or kr_id < 1 else gamedef_row('items', kr_id, columns)
 
 
 # ------------------------------------------------------------------ portals ---

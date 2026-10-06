@@ -137,6 +137,33 @@ _KIND_TABLES = {
 }
 
 
+# cash.KIND_PET (cash imports this module): a 2009 pet record in char['cash_items'].
+PET_RECORD_KIND = 3
+
+
+PET_BUILD = '2009'           # the only client with pets (en_content.ItemCatalog.client_build)
+
+
+def bagged_pets(char):
+    """Pet records (cash.KIND_PET) the character owns but does not wear: the 2009 0x6F puts
+    each one in the client's EQUIPMENT tab (cash.bagged_pets is the same count). Build-blind:
+    pet_slots() is what a bag counts."""
+    return sum(1 for r in list((char or {}).get('cash_items') or [])
+               if isinstance(r, dict) and _int(r.get('kind')) == PET_RECORD_KIND and not r.get('equipped'))
+
+
+def pet_slots(char, catalog=None):
+    """Equipment-tab slots the character's bagged pets take in the client whose item table
+    `catalog` is (None = the loaded one): bagged_pets under the 2009 table, 0 under any other.
+    Both builds can share one accounts.json (config CLIENT_BUILD), and the 2008 0x6F leaves a
+    pet record out (cash.owned_list_packets), so the 2008 client's tab never holds one - a
+    count there would be a phantom full slot refusing pickups and trades the client allows."""
+    catalog = catalog if catalog is not None else EC.items()
+    if getattr(catalog, 'client_build', None) != PET_BUILD:
+        return 0
+    return bagged_pets(char)
+
+
 def kind_tables(catalog=None):
     """(Kind -> slot, cash Kind -> slot, ring Kind) of the client build whose item table
     `catalog` is (en_content.ItemCatalog.client_build; 2008 when unset)."""
@@ -459,12 +486,23 @@ class Wallet:
 # ----------------------------------------------------------------- inventory ---
 class Inventory:
     """The three bag tabs plus the equipment grid of one character. Every mutation writes
-    straight into the character record; the caller marks the store dirty."""
+    straight into the character record; the caller marks the store dirty.
 
-    def __init__(self, char, catalog=None):
+    `pets`: the equipment-tab slots bagged pets take, for a SCRATCH bag built over a copy of
+    `inventory` alone (crafting._scratch, trade.simulate, the quest room check): pass the real
+    bag's pet_slots(), or the copy would count none and pass an add the real bag refuses.
+    None (a character's own bag) counts the character's records live (pet_slots)."""
+
+    def __init__(self, char, catalog=None, pets=None):
         self.data = ensure(char)
         self.char = char
         self.catalog = catalog if catalog is not None else EC.items()
+        self._pets = None if pets is None else max(0, _int(pets))
+
+    def pet_slots(self):
+        """Equipment-tab slots this bag's bagged pets take (module pet_slots; fixed for a
+        scratch bag built with `pets`)."""
+        return pet_slots(self.char, self.catalog) if self._pets is None else self._pets
 
     # ------------------------------------------------------------- content ---
     def tab_of(self, item_id):
@@ -499,7 +537,12 @@ class Inventory:
         return out
 
     def used_slots(self, tab):
-        return len(self.slots(tab))
+        """Slots the client's tab holds. The 2009 equipment tab also holds every pet record of
+        the character that is not worn (pet_slots): the 2009 0x6F files a pet there
+        (FUN_00464e00 case 6), after the 0x03 list - so a full tab refuses the same add on both
+        sides (a scratch bag gets the count through `pets`)."""
+        n = len(self.slots(tab))
+        return n + self.pet_slots() if tab == 'equip' else n
 
     def free_slots(self, tab):
         return max(0, self.capacity(tab) - self.used_slots(tab))

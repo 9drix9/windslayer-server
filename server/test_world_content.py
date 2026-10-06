@@ -398,21 +398,25 @@ class PortalHandler(unittest.TestCase):
         return pkts, (row['pos_x'], row['pos_y'])
 
     def test_walk_101_102_101_102_103_102(self):
+        """Each 0x07 puts him ON the reverse portal's floor line: the table's arrival points
+        stand ARRIVAL_ABOVE_LINE (100 px) above it and the map load settles them onto it
+        (livetest bug 5: the 2009 client does not drop an idle local player)."""
         c = self.enter()
         with self.assertLogs('WS', logging.INFO) as cm:
             pkts, pos = self.portal(c, 23, 102)
-            self.assertEqual(pos, (50.0, 712.0))
+            self.assertEqual(EC.portal(101, 23), (102, 50.0, 712.0))
+            self.assertEqual(pos, (50.0, 812.0))
             blocks = F.FakeClient.decode(pkts[5])['repeat[count]']
             self.assertEqual([b['template_index'] for b in blocks], [1] * 8)
             self.assertEqual({(b['action_state'], b['facing'], b['effect_count'], b['server_controlled'])
                               for b in blocks}, {(8, 8, 0, 1)})
             self.assertEqual({m.name for m in c.session['monsters'].values()}, {'Pupu'})
-            self.assertEqual(self.portal(c, 31, 101)[1], (1405.0, 714.0))
+            self.assertEqual(self.portal(c, 31, 101)[1], (1405.0, 814.0))     # arrival y 714
             self.portal(c, 23, 102)
-            self.assertEqual(self.portal(c, 17, 103)[1], (50.0, 512.0))
+            self.assertEqual(self.portal(c, 17, 103)[1], (50.0, 612.0))       # arrival y 512
             # 103_0 is a genuine index-0 portal (its first collision line is the floor of
             # the portal back to 102), so a 0 here is honoured.
-            self.assertEqual(self.portal(c, 0, 102)[1], (2356.0, 576.0))
+            self.assertEqual(self.portal(c, 0, 102)[1], (2356.0, 676.0))      # arrival y 576
         self.assertFalse([l for l in cm.output if 'refused' in l or 'no portal table' in l])
         self.assertTrue(any('Novice Hunting Park' in l for l in cm.output))
 
@@ -422,11 +426,12 @@ class PortalHandler(unittest.TestCase):
         self.assertTrue(self.server._map_transfer(s['sock'], s, 201, 1000.0, 1100.0, reason='test'))
         c.expect(0x08, 0x03, 0x07, 0x28, 0x44)                 # a town: no monsters
         pos = self.portal(c, 192, 9701)[1]
-        self.assertEqual(pos, (1500.0, 2168.0))                 # 9701's only portal line
+        # 9701's only portal line: arrival (1500, 2168), on the line (livetest bug 5)
+        self.assertEqual(pos, (1500.0, 2268.0))
         # world-flea-return: the exit tile names 101, but the player goes back to the town
-        # market portal he came through (201_192: line x 1600..1700 at y 1912, 100 px above)
+        # market portal he came through - 100 px above its line, settled onto it (bug 5)
         line = EC.portal_line(201, 192)
-        self.assertEqual(self.portal(c, 76, 201)[1], ((line[0] + line[2]) / 2, line[1] - 100.0))
+        self.assertEqual(self.portal(c, 76, 201)[1], ((line[0] + line[2]) / 2, line[1]))
 
 
 if __name__ == '__main__':

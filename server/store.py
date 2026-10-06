@@ -10,15 +10,20 @@ writer; GameServer keeps no separate copy.
     with st.lock:                            # db_lock: every read-modify-write
         char['exp'] = 60
     st.mark_dirty('exp')                     # on disk within debounce_secs
-    st.save_now()                            # create/delete: immediately
+    st.save_now()                            # create/delete: immediately (outside db_lock)
 
 Guarantees
 ----------
 - Atomic write (fixes S1-08b / login_character B17): JSON goes to a temp file next to
   accounts.json, is fsynced, then os.replace()s the old file. A crash or exception at any
   point leaves either the old or the new complete file, never a torn one.
-- db_lock (RLock) guards the dict and the write, so a save serializes one consistent
-  snapshot; writes never interleave.
+- db_lock (RLock) guards the dict; a save takes one consistent snapshot under it and writes
+  it outside it, one writer at a time (_save_mutex), an older snapshot never replacing a
+  newer one (generation numbers). A failed write stays dirty and is retried by the tick
+  scheduler with exponential backoff (0.25 s .. 30 s). A Windows reader holding the file gets
+  ~3 s of in-call backoff on a shutdown / admin / create-delete save, but the tick thread's
+  saves never sleep more than ~0.1 s under the world lock, nor wait for another writer
+  (livetest bug 7 and its review).
 - Debounce: the first mark_dirty() after a save schedules one flush debounce_secs later
   (a change is on disk at most that long after it was made); autosave every autosave_secs
   as a backstop. Without a scheduler, callers flush explicitly.
@@ -68,6 +73,32 @@ character: stall_escrow[{id, qty, price, w?}] (the items of the character's open
            take back at a close - merged back into the bag at the next Start or login,
            market.Market._restore_kept / recover). The first load that adds it
            writes the one-time accounts.json.bak-pre-p7.
+P8 adds (premium_cash-wallet-model, P8 stage 1), through cash.ensure_account / cash.ensure:
+account:   cash (Wind Cash), mileage (both u32 on the wire, clamped 0..0x7FFFFFFF),
+           first_purchase_done, first_purchase_notice (the S2C 0x02 / 0x70 popup flag),
+           cash_box [record] (the Item Mall box), gift_inbox [{sender, message, item_id, serial,
+           delivered}] (written by `!gift` since P5, normalized now)
+character: cash_items [record + equipped] (the owned cash list S2C 0x6F carries)
+           record = {serial (u32, unique store-wide, >= 0x1000), item_id, kind (1 count /
+           2 period / 0 permanent / 3 a 2009 pet, which also carries pet {exp, awake, level,
+           gauge, name}: ROADMAP_2009_ADDENDUM C1), qty, expire (ISO local time | null), origin}
+The first load that adds them writes the one-time accounts.json.bak-pre-p8.
+ROADMAP_2009_ADDENDUM C4 / X14 adds (the P8 rename hook):
+character: cid (ids.CHARACTER: a stable per-character id, unique store-wide and never reused;
+           migrate_accounts gives a record without a valid unique one max + 1 in file order,
+           new_character / add_character allocate the next). A rename changes the name, never
+           the cid, so the groups that key a character by it (P14 guild membership, P12
+           blacklist entries) follow a renamed character; the name stays display-only. The
+           first load that adds it writes the one-time accounts.json.bak-pre-cid.
+account:   retired_cid (the highest cid a DELETED character of the account held; written by
+           remove_character, absent until then). The "max + 1" of next_cid / assign_cids
+           counts it, so deleting the top-cid character never hands its cid to the next new
+           one after a restart - a stale blacklist entry or guild row keyed by it (dropped
+           lazily, blacklist_channels A.8) can never resolve to an unrelated character.
+P13 adds (ev-e3 event login gifts, P13 stage 1), through events.ensure:
+character: event_gifts_claimed{event id: UTC time of the grant} (a claimed event never grants
+           its gift again). The first load that adds it writes the one-time
+           accounts.json.bak-pre-p13.
 `map`, `x`, `y`, `hp` and `mp` existed but were never written back (world-persistence): the
 server now saves them on every map transfer, on disconnect and on the world-state tick.
 client-2009-login adds, only in a store opened for the 2009 build (Store(client_build='2009'),
@@ -95,6 +126,8 @@ import time
 import auth
 import bank_tabs as bankmod
 import buffs as buffmod
+import cash as cashmod
+import events as eventmod
 import ids
 import inventory as invmod
 import privacy
@@ -111,7 +144,14 @@ BACKUP_SUFFIX = '.bak-pre-p1'
 # bytes the first time a migration rewrites it. Each name is written at most once ever, so
 # re-running a migration (which is itself idempotent) never overwrites an earlier snapshot.
 BACKUP_SUFFIXES = (BACKUP_SUFFIX, '.bak-pre-p2', '.bak-pre-p3', '.bak-pre-p4', '.bak-pre-p5',
-                   '.bak-pre-p6', '.bak-pre-p7')
+                   '.bak-pre-p6', '.bak-pre-p7', '.bak-pre-p8')
+# P13 (ev-e3, events.py): the per-character login-gift claims. Appended on its own line so
+# the phases built in parallel (P8 on master) each add theirs without touching the others'.
+BACKUP_SUFFIX_P13 = '.bak-pre-p13'
+BACKUP_SUFFIXES = BACKUP_SUFFIXES + (BACKUP_SUFFIX_P13,)
+# ROADMAP_2009_ADDENDUM C4 / X14: the stable character id (`cid`).
+BACKUP_SUFFIX_CID = '.bak-pre-cid'
+BACKUP_SUFFIXES = BACKUP_SUFFIXES + (BACKUP_SUFFIX_CID,)
 # client-2009-login: the 2009 schema step (per-character gender, look_ext) - written only by
 # a store of the 2009 build (Store.backup_paths).
 BACKUP_SUFFIX_2009 = '.bak-pre-client2009'
@@ -321,6 +361,22 @@ def migrate_character(char, gender=0, defaults=None):
         changes.append(f'{name}: stall_escrow created')
     elif had != _json_shape(char['stall_escrow']):
         changes.append(f'{name}: stall_escrow normalized')
+    # P8 (premium_cash-wallet-model): the owned cash list. Structural (no catalog lookups, so
+    # a server started without the hii never drops a record); .bak-pre-p8 on the first add.
+    had = _json_shape(char['cash_items']) if 'cash_items' in char else _MISSING
+    cashmod.ensure(char)
+    if had is _MISSING:
+        changes.append(f'{name}: cash_items created')
+    elif had != _json_shape(char['cash_items']):
+        changes.append(f'{name}: cash_items normalized')
+    # P13 (ev-e3): the login-gift claims {event id: UTC time}, so a relog never grants an
+    # event's gift twice. Structural; the first load that adds it writes .bak-pre-p13.
+    had = _json_shape(char[eventmod.CLAIMS_KEY]) if eventmod.CLAIMS_KEY in char else _MISSING
+    eventmod.ensure(char)
+    if had is _MISSING:
+        changes.append(f'{name}: {eventmod.CLAIMS_KEY} created')
+    elif had != _json_shape(char[eventmod.CLAIMS_KEY]):
+        changes.append(f'{name}: {eventmod.CLAIMS_KEY} normalized')
     return changes
 
 
@@ -386,6 +442,16 @@ def migrate_accounts(accounts, hash_passwords=True, defaults=None, client_build=
             changes.append(f'{username}: social created')
         elif had != _json_shape(acc['social']):
             changes.append(f'{username}: social normalized')
+        # P8 (premium_cash-wallet-model): Wind Cash, Mileage, the mall box and the gift inbox
+        # (per ACCOUNT: the box is account storage and both balances are the mall's).
+        before = {k: _json_shape(acc[k]) if k in acc else _MISSING for k in cashmod.ACCOUNT_FIELDS}
+        cashmod.ensure_account(acc)
+        for label in cashmod.ACCOUNT_FIELDS:
+            old, new = before[label], _json_shape(acc[label])
+            if old is _MISSING:
+                changes.append(f'{username}: {label} created')
+            elif old != new or type(old) is not type(new):
+                changes.append(f'{username}: {label} normalized')
         if hash_passwords and auth.needs_upgrade(acc.get('password')):
             # Never log the value, only that it moved (login_character.md 3.1).
             acc['password'] = auth.hash_password(acc.get('password') or '')
@@ -402,27 +468,116 @@ def migrate_accounts(accounts, hash_passwords=True, defaults=None, client_build=
             if client_build == BUILD_2009:
                 changes.extend(f'{username}/{c}'
                                for c in migrate_character_2009(char, acc.get('gender', 0)))
+    changes.extend(assign_cids(accounts))
+    return changes
+
+
+def rewrite_social_references(store, username, char, old, new):
+    """The messenger's stored references (P6): every OTHER character's friend list, mentor
+    and mentee names (social.rename_references). Caller holds db_lock. Returns the records
+    rewritten."""
+    touched = 0
+    for acc in store.accounts.values():
+        for other in acc.get('characters', []):
+            if other is not char and social.rename_references(other, old, new):
+                touched += 1
+    return touched
+
+
+def valid_cid(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value in ids.CHARACTER
+
+
+RETIRED_CID = 'retired_cid'     # account: the highest cid a deleted character of it held
+
+
+def retired_cid(accounts):
+    """The cid high-water mark the deletes left (the largest valid account `retired_cid`),
+    0 when no character with a cid was ever deleted."""
+    return max([0] + [acc.get(RETIRED_CID) for acc in accounts.values()
+                      if isinstance(acc, dict) and valid_cid(acc.get(RETIRED_CID))])
+
+
+def assign_cids(accounts):
+    """ROADMAP_2009_ADDENDUM C4 / X14: every character gets a stable id (`cid`, ids.CHARACTER).
+    A record whose cid is missing, invalid or already taken by an earlier record (file order)
+    gets max + 1 - the max over the stored cids AND the deleted ones (retired_cid), so a
+    deleted character's cid is never handed out again; a valid unique one is never changed.
+    Returns the change list."""
+    changes, seen, needs = [], set(), []
+    for username, acc in accounts.items():
+        for char in acc.get('characters') or []:
+            cid = char.get('cid')
+            if valid_cid(cid) and cid not in seen:
+                seen.add(cid)
+            else:
+                needs.append((username, char))
+    top = max([retired_cid(accounts)] + list(seen))
+    for username, char in needs:
+        top += 1
+        if top not in ids.CHARACTER:
+            top = ids.lowest_free(ids.CHARACTER, seen)
+        seen.add(top)
+        old = char.get('cid', _MISSING)
+        char['cid'] = top
+        changes.append(f'{username}/{char.get("name", "?")}: cid {top}'
+                       + ('' if old is _MISSING else f' (was {old!r})'))
     return changes
 
 
 # ------------------------------------------------------------------- writing ---
-def atomic_write(path, data, retries=5):
-    """Write bytes to `path` so readers only ever see the old or the new complete file."""
+# os.replace onto a file another process holds open fails on Windows with PermissionError
+# (WinError 5): an editor, antivirus, the indexer, a test harness reading accounts.json. The
+# retries back off exponentially from REPLACE_BACKOFF_SECS, the sleeps summing to
+# REPLACE_BUDGET_SECS (livetest bug 7: the old five tries, ~0.5 s in all, gave up while the
+# holder still had the file).
+REPLACE_BACKOFF_SECS = 0.05
+REPLACE_BUDGET_SECS = 3.0
+
+
+def replace_delays(first=REPLACE_BACKOFF_SECS, budget=REPLACE_BUDGET_SECS):
+    """The sleeps between os.replace attempts: first, 2x, 4x, ... while the total stays within
+    `budget`, the last one trimmed to end exactly on it (0.05 .. 0.8, 1.45: 3.0 s, 7 tries).
+    A planned total, not a clock, so a mocked sleep cannot turn it into an endless loop."""
+    out, total, delay = [], 0.0, float(first)
+    while delay > 0 and budget - total > 1e-9:
+        delay = min(delay, budget - total)
+        out.append(delay)
+        total += delay
+        delay *= 2
+    return out
+
+
+# The short backoff (0.02, 0.04, 0.04: ~0.1 s, 4 tries) of a save that must not sleep: the tick
+# thread's saves (the debounce, the retry, the autosave backstop - ticks.py runs every callback
+# under the world lock and forbids time.sleep) and a save a caller makes while holding a lock
+# every handler waits on (a trade / stall commit under store.lock). A failure there is left to
+# Store's scheduled retry instead of the full ~3 s in-call backoff, which froze monster AI,
+# regen, DoT, buff expiry and the login claim for 3 s of every 4 while a reader held the file
+# (review of livetest bug 7).
+QUICK_REPLACE_BUDGET_SECS = 0.1
+QUICK_REPLACE_DELAYS = tuple(round(d, 6) for d in replace_delays(0.02, QUICK_REPLACE_BUDGET_SECS))
+
+
+def atomic_write(path, data, delays=None):
+    """Write bytes to `path` so readers only ever see the old or the new complete file.
+    `delays`: the sleeps between replace attempts (default replace_delays())."""
     tmp = f'{path}.{os.getpid()}.{threading.get_ident()}.tmp'
+    delays = replace_delays() if delays is None else list(delays)
     try:
         with open(tmp, 'wb') as f:
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
-        for attempt in range(retries):
+        for attempt in range(len(delays) + 1):
             try:
                 os.replace(tmp, path)
                 return
             except PermissionError:
                 # Windows: a reader (editor, antivirus, the backup copy) holds the target open.
-                if attempt == retries - 1:
+                if attempt == len(delays):
                     raise
-                time.sleep(0.05 * (attempt + 1))
+                time.sleep(delays[attempt])
     except BaseException:
         try:
             os.remove(tmp)
@@ -456,6 +611,28 @@ class Store:
         self._scheduler = None
         self._pending = None
         self._autosave = None
+        # The save (livetest bug 7, "Saving" below): one writer on disk at a time. Lock order:
+        # db_lock -> _save_mutex, never the other way (a writer takes db_lock again only
+        # after it let the mutex go).
+        self._save_mutex = threading.Lock()
+        self._snap_gen = 0                       # generation of the last snapshot taken
+        self._disk_gen = 0                       # generation of the snapshot on disk
+        self._changes = 0                        # mark_dirty() count: what a snapshot covers
+        self._failures = 0                       # failed writes in a row (the retry backoff)
+        self._failure_logged = False             # the traceback of this run of failures is out
+        self._cid_next = None                    # next_cid(): seeded from the stored max on first use
+        # The rename hook's STORED half (ROADMAP_2009_ADDENDUM C4): fn(store, username, char, old,
+        # new) -> records rewritten, run by rename_character under db_lock before the save, so
+        # every stored reference to the character follows the new name in the same write. The
+        # messenger's friend / mentor / mentee references come first; P12 (blacklist entries)
+        # and P14 (guild members, master, applications) append theirs. The LIVE half - telling
+        # the clients - is the world hook world.ON_RENAME, fired by cashuse.CashUse.rename.
+        # A rewriter touches STORED DATA ONLY: no group lock (Guild.lock, Party.lock, the
+        # messenger's...), no packet, no I/O. It runs under db_lock, and the groups' documented
+        # order is Group.lock -> store.lock: a rewriter taking a group lock would invert it and
+        # can deadlock against that group's handler. Live state and packets belong in the
+        # ON_RENAME subscriber, which fires after db_lock is let go (cashuse.CashUse.rename).
+        self.rename_rewriters = [rewrite_social_references]
 
     @classmethod
     def from_config(cls, cfg, path=None):
@@ -502,6 +679,7 @@ class Store:
             changes = migrate_accounts(accounts, self.hash_passwords, self.record_defaults(),
                                        client_build=self.client_build)
             self.accounts = accounts
+            self._cid_next = None
             self.migration_changes = changes
             self._rebuild_name_index()
             if changes:
@@ -528,40 +706,169 @@ class Store:
         }
         for acc in accounts.values():
             social.ensure_account(acc)
+            cashmod.ensure_account(acc)
         if self.hash_passwords:
             for acc in accounts.values():
                 acc['password'] = auth.hash_password(acc['password'])
         return accounts
 
-    def save_now(self):
-        """Serialize and atomically replace the file now (create/delete/shutdown).
+    # Saving (livetest bug 7). A save used to hold db_lock through the whole write, including
+    # atomic_write's replace retries, so a reader holding accounts.json open stalled every
+    # handler; and a save that failed waited for the next change or the 60 s autosave. Now:
+    #   1. _take_snapshot(): under db_lock, a snapshot() of the records, a generation number
+    #      and the change count it covers - the only part that holds the lock. An immediate
+    #      save (save_now; create / delete / !gm) counts as a change itself: its mutation came
+    #      with no mark_dirty(), and an older snapshot's write must not clear the dirty flag
+    #      its failed write set;
+    #   2. _write_snapshot(): json.dumps and the atomic write OUTSIDE db_lock, under
+    #      _save_mutex (one writer on disk at a time). A snapshot older than the one on disk
+    #      is dropped, so an older snapshot never replaces a newer one whatever order two
+    #      savers reach the disk in;
+    #   3. the file is clean only when the snapshot on disk covers the last change; a change
+    #      made during the write keeps it dirty (its own debounce timer saves it), and so does
+    #      a failed write (it counts as a change: no snapshot taken before it can clear it).
+    # A failed write keeps the store dirty and schedules another flush on the scheduler,
+    # RETRY_SECS after the first failure and twice as long after each further one, up to
+    # RETRY_MAX_SECS; the traceback is logged once per run of failures, then one line each.
+    # The tick thread's saves (the debounce, that retry, the autosave backstop: tick_flush)
+    # get only QUICK_REPLACE_DELAYS of in-call backoff - never the ~3 s one, which held the
+    # world lock (review of livetest bug 7) - and never wait for _save_mutex either: while
+    # another writer (a create / delete / !gm save in its ~3 s backoff) is on disk they leave
+    # the store dirty and schedule the retry (`wait`, _write_snapshot). create_account /
+    # add_character / remove_character / set_gm snapshot under db_lock and write after
+    # letting it go; a caller that must validate and mutate under db_lock itself passes
+    # save=False and calls save_now() after its own `with` (the create / delete / register
+    # handlers). A trade / stall commit, which must save under store.lock, passes the quick
+    # delays and a wait of QUICK_REPLACE_BUDGET_SECS.
+    RETRY_SECS = 0.25
+    RETRY_MAX_SECS = 30.0
+
+    def save_now(self, delays=None, wait=None):
+        """Serialize and atomically replace the file now (create/delete/shutdown). Raises
+        when the write fails (the store stays dirty and a retry is scheduled). `delays`:
+        atomic_write's replace backoff (default ~3 s; QUICK_REPLACE_DELAYS for a caller that
+        holds a lock other threads wait on). `wait`: how long to wait for another writer
+        (default: as long as it takes; a caller holding such a lock passes
+        QUICK_REPLACE_BUDGET_SECS - past it the store stays dirty, the retry writes it and
+        this returns False). Returns True when this snapshot or a newer one is on disk. Call
+        it WITHOUT db_lock held, or the write and its backoff run under it.
 
         The encoder never walks the live records: json.dumps is pure Python, so it gives
         the interpreter a chance to switch threads inside a dict it is iterating, and a
         handler thread adding a bag stack or repairing a field right then raised
         "dictionary changed size during iteration" (reproduced in seconds under load).
         It serializes a snapshot() instead, which every mutator is safe against."""
-        with self.lock:
-            data = json.dumps(snapshot(self.accounts), indent=2, ensure_ascii=False).encode('utf-8')
-            atomic_write(self.path, data)
-            self.dirty = False
-            self.saves += 1
+        return self._write_snapshot(*self._take_snapshot(change=True), delays=delays, wait=wait)
 
-    def flush(self):
-        """Save if anything changed since the last save. Returns True when it wrote."""
+    def _take_snapshot(self, change=False):
+        """(generation, snapshot, change count covered), taken under db_lock. change=True
+        (an immediate save) counts one change first and marks the store dirty, so the dirty
+        flag survives until this snapshot or a newer one is on disk."""
+        with self.lock:
+            if change:
+                self._changes += 1
+                self.dirty = True
+            self._snap_gen += 1
+            return self._snap_gen, snapshot(self.accounts), self._changes
+
+    def _immediate_snapshot(self, save, reason):
+        """(Caller holds db_lock.) The snapshot of an immediate save, to write once db_lock is
+        let go; with save=False only mark_dirty() - the caller calls save_now() after its own
+        `with` (and the debounce saves it anyway if it does not). Returns None then."""
+        if save:
+            return self._take_snapshot(change=True)
+        self.mark_dirty(reason)
+        return None
+
+    def _write_snapshot(self, gen, snap, covers, delays=None, wait=None):
+        """Write one snapshot of _take_snapshot() unless a newer one is on disk already.
+        Returns True when this snapshot or a newer one is on disk. Takes db_lock only for the
+        bookkeeping after _save_mutex is released (the lock order).
+
+        `wait`: seconds to wait for _save_mutex while another writer holds it; None = as long
+        as it takes. Past it nothing is written: the store stays dirty, the retry is
+        scheduled and this returns False. The tick thread passes 0 - a create / delete save
+        can hold the mutex through its whole ~3 s backoff, and the tick thread waiting for
+        it held the world lock that long (review of livetest bug 7)."""
+        data = json.dumps(snap, indent=2, ensure_ascii=False).encode('utf-8')
+        wrote = False
+        if wait is None:
+            self._save_mutex.acquire()
+        elif not self._save_mutex.acquire(timeout=max(0.0, float(wait))):
+            with self.lock:
+                self.dirty = True
+            self._retry_later()
+            log.info(f'[STORE] another save is writing {self.path}; snapshot {gen} left to the retry')
+            return False
+        try:
+            try:
+                if gen > self._disk_gen:
+                    atomic_write(self.path, data, delays)
+                    self._disk_gen = gen
+                    wrote = True
+            finally:
+                self._save_mutex.release()
+        except OSError:
+            with self.lock:
+                self.dirty = True
+                # Counted as a change: a snapshot taken before this failure covers less, so
+                # its write can no longer mark the store clean (review of livetest bug 7).
+                self._changes += 1
+                self._failures += 1
+            self._retry_later()
+            raise
+        with self.lock:
+            if wrote:
+                self.saves += 1
+                if self._failures:
+                    log.info(f'[STORE] {self.path} saved after {self._failures} failed attempt(s)')
+                self._failures = 0
+                self._failure_logged = False
+            else:
+                log.debug(f'[STORE] snapshot {gen} dropped: snapshot {self._disk_gen} is on disk already')
+            if self._changes == covers:
+                self.dirty = False
+        return True
+
+    def flush(self, delays=None, wait=None):
+        """Save if anything changed since the last save. Returns True when it wrote. A failed
+        save is logged, stays dirty and is retried with backoff (with a scheduler). `delays`:
+        atomic_write's replace backoff - default ~3 s (shutdown, admin); `wait`: as
+        _write_snapshot. The tick thread uses tick_flush()."""
         with self.lock:
             if not self.dirty:
                 return False
-            try:
-                self.save_now()
-            except Exception:                            # noqa: BLE001 - stays dirty; next flush retries
-                log.exception(f'[STORE] save of {self.path} failed; kept dirty for the next attempt')
-                return False
-            return True
+        try:
+            return self._write_snapshot(*self._take_snapshot(), delays=delays, wait=wait)
+        except Exception as e:                           # noqa: BLE001 - stays dirty; retried
+            self._log_failure(e)
+            return False
+
+    def tick_flush(self):
+        """flush() for the tick thread (the debounced save, its retry, the autosave backstop,
+        the maintenance save): only QUICK_REPLACE_DELAYS of in-call backoff and no wait for
+        another writer, so a reader holding accounts.json never keeps the world lock more than
+        ~0.1 s; the scheduled retry takes it from there."""
+        return self.flush(delays=QUICK_REPLACE_DELAYS, wait=0)
+
+    def _log_failure(self, e):
+        """A failed flush: the traceback once per run of failures, then one line each."""
+        with self.lock:
+            n, first = self._failures, not self._failure_logged
+            self._failure_logged = True
+            t, sched = self._pending, self._scheduler
+            nxt = ('retried at the next flush' if t is None or sched is None
+                   else f'next attempt in {max(0.0, t.when - sched.clock()):.3g} s')
+        if first:
+            log.exception(f'[STORE] save of {self.path} failed; kept dirty, {nxt}')
+        else:
+            log.warning(f'[STORE] save of {self.path} failed again'
+                        f'{f" ({n} in a row)" if n > 1 else ""}: {e}; kept dirty, {nxt}')
 
     def mark_dirty(self, reason=''):
         with self.lock:
             self.dirty = True
+            self._changes += 1
             if self._scheduler is None or self._pending is not None:
                 return
             self._pending = self._scheduler.call_later(self.debounce_secs, self._debounced_flush,
@@ -572,7 +879,24 @@ class Store:
     def _debounced_flush(self):
         with self.lock:
             self._pending = None
-            self.flush()
+        self.tick_flush()                                # the write runs outside db_lock
+
+    def retry_delay(self):
+        """Seconds until the retry of the current run of failures: RETRY_SECS after the first,
+        doubling per failure, at most RETRY_MAX_SECS (0.25, 0.5, 1, 2, 4, 8, 16, 30, 30 ...)."""
+        with self.lock:
+            n = max(1, self._failures)
+        return min(self.RETRY_MAX_SECS, self.RETRY_SECS * 2 ** min(n - 1, 16))
+
+    def _retry_later(self):
+        """A save failed: flush again retry_delay() from now (once; a pending debounce or retry
+        covers it)."""
+        delay = self.retry_delay()
+        with self.lock:
+            if self._scheduler is None or self._pending is not None:
+                return
+            self._pending = self._scheduler.call_later(delay, self._debounced_flush,
+                                                       name='store-save-retry')
 
     def attach(self, scheduler, autosave=True):
         """Run debounced saves (and the autosave backstop) on `scheduler` (ticks.Scheduler)."""
@@ -580,7 +904,8 @@ class Store:
             self.detach()
             self._scheduler = scheduler
             if autosave:
-                self._autosave = scheduler.call_every(self.autosave_secs, self.flush, name='store-autosave')
+                self._autosave = scheduler.call_every(self.autosave_secs, self.tick_flush,
+                                                      name='store-autosave')
             if self.dirty:
                 self._pending = scheduler.call_later(self.debounce_secs, self._debounced_flush,
                                                      name='store-save')
@@ -609,10 +934,11 @@ class Store:
                     return username, acc
             return None
 
-    def create_account(self, username, password, gender=0):
+    def create_account(self, username, password, gender=0, save=True):
         """New account with the next free uid (F3: max + 1), password hashed when the
-        config asks for it. Saved immediately. Who may register (AUTO_REGISTER) is the
-        login handler's decision (lc-login-errors)."""
+        config asks for it. Saved immediately, after db_lock is let go (save=False: the caller
+        holds db_lock and calls save_now() once it let it go). Who may register
+        (AUTO_REGISTER) is the login handler's decision (lc-login-errors)."""
         with self.lock:
             if username in self.accounts:
                 raise StoreError(f'account {username!r} exists')
@@ -623,9 +949,12 @@ class Store:
                    'uid': uid, 'gender': int(gender), 'manner': 0,
                    'banned': False, 'deleted': False, 'characters': []}
             social.ensure_account(acc)
+            cashmod.ensure_account(acc)
             self.accounts[username] = acc
-            self.save_now()
-            return acc
+            snap = self._immediate_snapshot(save, f'account {username}')
+        if snap is not None:
+            self._write_snapshot(*snap)                  # outside db_lock (livetest bug 7)
+        return acc
 
     def verify_password(self, username, password):
         """True when `password` is this account's (auth.verify: hashed or a hand-edited
@@ -701,8 +1030,37 @@ class Store:
             char['gm'] = int(level)
             if hidden is not None:
                 char['gm_hidden'] = int(bool(hidden))
-            self.save_now()
+            snap = self._take_snapshot(change=True)
+        self._write_snapshot(*snap)                      # outside db_lock (livetest bug 7)
         return username, char
+
+    # ---------------------------------------------------- character ids (C4) ---
+    def next_cid(self):
+        """A fresh character id (ids.CHARACTER): max(every stored cid, every deleted one -
+        the accounts' retired_cid -, every one handed out by this store) + 1 - never reused,
+        even for a record that was never added or one deleted before a restart."""
+        with self.lock:
+            if self._cid_next is None:
+                used = [c.get('cid') for acc in self.accounts.values() for c in acc.get('characters') or []]
+                self._cid_next = max([retired_cid(self.accounts)] + [c for c in used if valid_cid(c)]) + 1
+            cid = self._cid_next
+            if cid not in ids.CHARACTER:
+                raise ids.IdSpaceExhausted(f'{ids.CHARACTER.name}: past {ids.CHARACTER.hi}')
+            self._cid_next = cid + 1
+            return cid
+
+    def character_by_cid(self, cid):
+        """(username, account, character) of the character with this stable id, or None - how
+        a group that stores characters by cid (P12 blacklist, P14 guild) finds one whatever it is
+        called now."""
+        if not valid_cid(cid):
+            return None
+        with self.lock:
+            for username, acc in self.accounts.items():
+                for char in acc.get('characters') or []:
+                    if char.get('cid') == cid:
+                        return username, acc, char
+            return None
 
     def _rebuild_name_index(self):
         self.name_index = {}
@@ -725,6 +1083,7 @@ class Store:
         s_str, s_dex, s_int, s_spr = (int(v) for v in stats)
         char = {
             'name': name,
+            'cid': self.next_cid(),
             'created_at': int(time.time() if now is None else now),
             'class': 0, 'job2': 0, 'exp': 0,
             'look': compose_look(s10, s1, s6, s5, s9),
@@ -746,6 +1105,8 @@ class Store:
         privacy.ensure(char)
         social.ensure(char)
         stallmod.ensure(char)
+        cashmod.ensure(char)
+        eventmod.ensure(char)
         # cs-hp-mp-model: born at the client's own maxima (a default Novice is 140/87), not
         # the old flat 100/50 - which spawned every new character hurt. `hp`/`mp` stay the
         # CURRENT values; the maxima are never stored (hpmp.derive computes them). Imported
@@ -811,27 +1172,75 @@ class Store:
         self.mark_dirty(f'{reason} {char.get("name")}')
         return True
 
-    def add_character(self, username, char):
-        """Append (select-screen order) and save immediately. Validation (name rules,
+    def add_character(self, username, char, save=True):
+        """Append (select-screen order) and save immediately, after db_lock is let go
+        (save=False: the caller holds db_lock and calls save_now() once it let it go - the
+        create handler validates and adds under one lock). Validation (name rules,
         uniqueness, the 5-character cap, 0x1C results) is lc-create."""
         with self.lock:
             acc = self.accounts.get(username)
             if acc is None:
                 raise StoreError(f'no account {username!r}')
+            cid = char.get('cid')
+            if not valid_cid(cid) or self.character_by_cid(cid) is not None:
+                char['cid'] = self.next_cid()            # a record not made by new_character
             acc['characters'].append(char)
             self.name_index.setdefault(str(char.get('name', '')).lower(), username)
-            self.save_now()
-            return char
+            snap = self._immediate_snapshot(save, f'new character {char.get("name")}')
+        if snap is not None:
+            self._write_snapshot(*snap)                  # outside db_lock (livetest bug 7)
+        return char
 
-    def remove_character(self, username, name):
+    def rename_character(self, username, old, new, save=True):
+        """premium_cash-rename (P8 stage 3, cashuse.py): the character `old` of `username` is
+        called `new` from now on. Under the store lock: the uniqueness check once more (the
+        caller checked before; a create may have taken the name since), the record's name
+        (its `cid` stays: ROADMAP_2009_ADDENDUM C4 / X14), every stored reference to it through
+        the rename_rewriters (the friend / mentor / mentee lists first: social.rename_references;
+        a failing rewriter is logged and skipped, the rename stands), the name index; then an
+        immediate save - enter world and every name-addressed packet resolve through the stored
+        name - written after db_lock is let go (save=False: as add_character). Returns how many
+        other records the rewriters changed, or None when `new` belongs to another character
+        (or `old` is gone)."""
+        with self.lock:
+            char = self.find_character(username, old)
+            owner = self.name_owner(new)
+            if char is None or (owner is not None and not (owner == username and str(new).lower() == str(old).lower())):
+                return None
+            char['name'] = new
+            touched = 0
+            for fn in list(self.rename_rewriters):
+                try:
+                    touched += int(fn(self, username, char, old, new) or 0)
+                except Exception:                        # noqa: BLE001 - one group must not undo the rename
+                    log.exception(f'[STORE] rename {old!r} -> {new!r}: rewriter {getattr(fn, "__name__", fn)!r} failed')
+            self._rebuild_name_index()
+            snap = self._immediate_snapshot(save, f'renamed character {old} -> {new}')
+        if snap is not None:
+            self._write_snapshot(*snap)                  # after this `with` (livetest bug 7)
+        return touched
+
+    def remove_character(self, username, name, save=True):
         """Remove by exact name keeping the order of the rest (the client shifts later
-        select entities left, lc-delete F4 2d). Saves immediately. Returns True if removed."""
+        select entities left, lc-delete F4 2d). The record's cid goes into the account's
+        retired_cid high-water mark first (ROADMAP_2009_ADDENDUM C4: never reused, also after
+        a restart). Saves immediately, after db_lock is let go (save=False: as
+        add_character). Returns True if removed."""
         with self.lock:
             chars = self.characters(username)
             for i, char in enumerate(chars):
                 if char.get('name') == name:
+                    cid = char.get('cid')
+                    if valid_cid(cid):
+                        acc = self.accounts[username]
+                        old = acc.get(RETIRED_CID)
+                        acc[RETIRED_CID] = max(cid, old) if valid_cid(old) else cid
                     del chars[i]
                     self._rebuild_name_index()
-                    self.save_now()
-                    return True
-            return False
+                    break
+            else:
+                return False
+            snap = self._immediate_snapshot(save, f'deleted character {name}')
+        if snap is not None:
+            self._write_snapshot(*snap)                  # outside db_lock (livetest bug 7)
+        return True

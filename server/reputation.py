@@ -71,9 +71,10 @@ in-flight spawn record rebuild with the new karma, and every later 0x02 / 0x04 /
 
 Locks (world.py "Locks"): compliment: store.lock only (both accounts' limits and the target's
 manner are checked and moved in one step, so two givers racing for the last received slot
-cannot both pass), packets sent after it is released. Report: the reporter's combat_lock (its
-wallet is mutated under it everywhere) -> store.lock; Trades.lock is only taken by
-gold_refusal before that. The audit file has its own leaf lock.
+cannot both pass), packets sent after it is released. Report: a first once-a-day read under
+store.lock alone (F9 order: before the fee checks), then Trades.lock in gold_refusal, then
+the reporter's combat_lock (its wallet is mutated under it everywhere) -> store.lock, where
+the once-a-day rule is checked again and the fee paid. The audit file has its own leaf lock.
 
 Audit: reports.jsonl next to accounts.json (git-ignored user data), one JSON line per accepted
 report; `!reports [n]` shows the last ones to a GM, `!rep` a player's manner and limits.
@@ -331,6 +332,16 @@ class Reputation:
             log.info(f'[REPORT] {me!r} reported its own account\'s {other!r} - dropped (the client blocks it)')
             return
         day = self.today()
+        # F9 step 3.3 before the fee and gold checks (3.4-3.5): a second report the same day
+        # gets 0x95 {7} even while its fee could not be paid. A first read only - the
+        # authoritative check is the one under combat_lock -> store.lock below.
+        with self.store.lock:
+            acc = self.store.account(session.get('username'))
+            reported = acc is not None and social.ensure_account(acc).get('report_day') == day
+        if reported:
+            self._send(sock, session, '0x95', {'result': REPORT_ONCE_A_DAY})
+            log.info(f'[REPORT] {me!r} report on {other!r} (uid {uid}): 0x95 {{7}} (already reported today, {day})')
+            return
         char = self.server._session_char(session)
         level = R.level_of(char)
         fee = report_fee(level)

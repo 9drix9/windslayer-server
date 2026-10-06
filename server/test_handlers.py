@@ -322,6 +322,10 @@ class RegistryPolicy(ServerTest):
         0x47: ({'item_code': 100, 'recipient_name': 'Bob'}, [(0x71, 1, {'result': 0})]),
         0x48: ({'item_id': 3000}, [(0x72, 10, {'player_uid': 1, 'item_id': 0})]),
         0x49: ({'new_name': 'Renamed'}, [(0x73, 1, {'result': 0})]),
+        # premium_cash-stat-reset (P8 stage 3): item 0 is no stat reset item -> the 18 B owner
+        # form with the stored stats (the migrated TestHero's 3/2/1/3), serial 0, count 0.
+        0x4A: ({}, [(0x76, 18, {'target_uid': 1, 'str': 3, 'dex': 2, 'int': 1, 'spi': 3,
+                                'cash_item_serial': 0, 'consume_count': 0})]),
         0x4B: ({'recipient_name': 'Bob'}, [(0x77, 1, {'result': 0})]),
         0x46: ({}, [(0x70, 9, {'cash_balance': 0, 'mileage_balance': 0, 'first_purchase_bonus': 0})]),
         0x51: ({'password': 'x', 'target_window_id': 0x1A7}, [(0x80, 1, {'result': 0})]),
@@ -334,7 +338,6 @@ class RegistryPolicy(ServerTest):
         0x5F: ({}, [(0x83, 1, {'result': 1})]),
         0x61: ({'stall_owner_uid': 7}, [(0x87, 1, {'result': 0})]),
         0x62: ({'seller_uid': 7, 'item_id': 5, 'qty': 1}, [(0x88, 1, {'result': 0})]),
-        0x72: ({'equip_item_id': 179}, [(0x9C, 1, {'result': 0})]),
         # shop_storage-sell-parse: not owned -> resync (item 0 grants nothing) + warning, never 0x19
         0x0C: ({'item_id': 3, 'qty': 5},
                # The resync carries the STORED wallet (shop_storage-wallet); the old
@@ -365,6 +368,8 @@ class RegistryPolicy(ServerTest):
         0x69: 'test_crafting.CraftFlow: item_inventory-gathering answers 0x8F 1/0/0x11',
         # P4 stage 4: the Card Deck register handler (cards.py)
         0x64: 'test_cards.CardFlow: quest_cards_misc-card-register answers 0x8B 1/2/3/6',
+        # P8 stage 4: the last interim craft stub became GameServer._handle_stone_extract
+        0x72: 'test_cashextras.Extraction: item_inventory-stone-extraction answers 0x9C 1 (+ 0x18) / 0',
     }
 
     def test_must_reply_requests_get_exactly_their_refusal(self):
@@ -409,16 +414,22 @@ class RegistryPolicy(ServerTest):
         self.enter_world(c)                                  # the select screen still works
 
     def test_refusal_without_builder_is_logged(self):
-        # 0x2E had no refusal until cs-player-death (P3 stage 4); the stat-reset request is
-        # the remaining row without one (its truthful 0x76 needs premium_cash-stat-reset).
+        # 0x2E had no refusal until cs-player-death (P3 stage 4) and the stat reset 0x4A until
+        # premium_cash-stat-reset (P8 stage 3): every row has one now, so the "no automatic
+        # refusal yet" path is checked on a stand-in: 0x4A with no refusal and a log-only route.
+        self.assertTrue(all(m.refusal is not None for m in registry.MUST_REPLY.values()))
         c = self.client()
         self.login(c)
         self.enter_world(c)
-        with self.assertLogs('WS', logging.WARNING) as cm:
-            c.send(0x4A, P.build(P.variants(0x4A, 'C2S')[0]['key'], {}, direction='C2S'))
-            c.expect_silence()
-        self.assertTrue(any('C2S 0x4A no reply and has no automatic refusal yet' in line
-                            and 'premium_cash-stat-reset' in line for line in cm.output))
+        op = 0x4A
+        row = registry.MustReply('modal', None, 'a refusal nobody built', 'some-owner')
+        stub = W.Route(log='[0x4A] stand-in - consumed')
+        with mock.patch.dict(registry.MUST_REPLY, {op: row}), mock.patch.dict(W.GameServer.ROUTES, {op: stub}):
+            with self.assertLogs('WS', logging.WARNING) as cm:
+                c.send(op, P.build(P.variants(op, 'C2S')[0]['key'], {}, direction='C2S'))
+                c.expect_silence()
+        self.assertTrue(any('C2S 0x4A stub route and has no automatic refusal yet' in line
+                            and 'some-owner' in line for line in cm.output), cm.output)
 
     def test_no_refusal_before_login(self):
         c = self.client()
@@ -575,7 +586,9 @@ class ChatGmDispatchRig(ServerTest):
     def test_note_send_is_refused_but_gift_reply_9999_is_not(self):
         # The 0x4B handler answers (not the exception fallback): since P6 stage 2
         # (social_friend-memos) a note to an unknown name is 0x77 {0}; the 9999 gift reply to
-        # one is dropped with no reply (test_messenger.py has the delivered cases).
+        # one is dropped with no reply (test_messenger.py has the delivered cases). The Note is
+        # a cash inventory record since P8 stage 1 (DEV_FREE_NOTES retired), so TestHero owns one.
+        self.server.cash.grant(self.server.store.find_character('test', 'TestHero'), 1894, 1)
         with self.assertLogs('WS', logging.INFO) as cm:
             self.c.send_c2s('0x461064/0x4B', {'item_id': 1894, 'recipient_name': 'Bob', 'contents': 'hi'})
             self.assertEqual(self.s2c(self.c.expect(0x77), 1)['result'], 0)
@@ -831,7 +844,8 @@ class StallStub(InWorldTest):
 
 class CraftStubs(InWorldTest):
     """item_inventory-interim-craft-replies (B12): one reply per completion. Since P4 stage 3
-    only 0x72 is still the stub; 0x67 / 0x68 / 0x69 have their handlers (test_crafting.py)."""
+    0x67 / 0x68 / 0x69 have their handlers (test_crafting.py), since P8 stage 4 0x72 too
+    (test_cashextras.py): no stub route is left."""
 
     def test_gather_failure_mirrors_the_tool_the_client_removes(self):
         tool = 2215                                                   # Crude Garden Shovel (EN Type 2)
@@ -847,20 +861,22 @@ class CraftStubs(InWorldTest):
         self.assertEqual(self.s2c(self.c.expect(0x8F), 3)['tool_item_id'], 2216)
         self.assertNotIn(2216, self.server._inventory(self.c.session))
 
-    def test_extraction_is_a_stub_route_and_crafting_is_handled(self):
+    def test_extraction_and_crafting_are_handled(self):
+        # 0x72 without an owned Element Separator: the handler's own 0x9C {0}, not the stub
         cases = [(0x67, {'product_item_id': 2975}, 0x8D, '[CRAFT]'),
                  (0x68, {'equip_item_id': 179, 'stone_item_id': 900}, 0x8E, '[REINFORCE]'),
-                 (0x72, {'mode_id': 0xF70, 'equip_item_id': 179, 'stone_item_id': 900}, 0x9C, '[0x72]')]
+                 (0x72, {'mode_id': 0xF70, 'equip_item_id': 179, 'stone_item_id': 900}, 0x9C, '[EXTRACT]')]
         for op, fields, reply, tag in cases:
             with self.subTest(opcode=f'0x{op:02X}'):
                 with self.assertLogs('WS', logging.INFO) as cm:
                     self.c.send_c2s(P.variants(op, 'C2S')[0]['key'], fields)
-                    self.s2c(self.c.expect(reply))
+                    rec = self.s2c(self.c.expect(reply))
                 text = '\n'.join(cm.output)
                 self.assertIn(tag, text)
-                stub = f'[MUST-REPLY] C2S 0x{op:02X} stub route: sent refusal'
-                (self.assertIn if op == 0x72 else self.assertNotIn)(stub, text)
+                self.assertNotIn(f'[MUST-REPLY] C2S 0x{op:02X}', text)
                 self.assertNotIn('Unhandled opcode', text)
+                if op == 0x72:
+                    self.assertEqual(rec, {'result': 0})
 
 
 class ChatBuilders(InWorldTest):
@@ -1727,7 +1743,7 @@ class ExpRecordsCharList(ServerTest):
     def test_character_list_is_the_store(self):
         with self.server.store.lock:
             account = self.server.store.account('test')
-            account.update(gender=1, manner=-7, cash_first_purchase=1)
+            account.update(gender=1, manner=-7, first_purchase_notice=True)   # P8 wallet field
             account['characters'].append(
                 self.server.store.new_character('Tier2', s10=2, s1=3, s6=4, s5=5, s9=3,
                                                 stats=(3, 2, 1, 3), now=0))
@@ -1773,7 +1789,8 @@ class ExpRecordsCharList(ServerTest):
                          (7, 6, 5, 4))
         self.assertEqual((row['cur_hp'], row['cur_mp']), (63, 21))    # 0 would render dead
         self.assertEqual(self.s2c(hp)['hp'], 63)
-        self.assertEqual((row['pos_x'], row['pos_y']), (1411.0, 714.0))
+        # the saved (1411, 714), 100 px above 101's floor, settled onto it (livetest bug 5)
+        self.assertEqual((row['pos_x'], row['pos_y']), (1411.0, 814.0))
         # composed from the worn items at login (GameServer._compose_looks), as the client's
         # own 0x1D composition would have: the sword (Spr 5) and the hat (Spr 360)
         expect = list(look)
@@ -1797,8 +1814,9 @@ class ExpRecordsCharList(ServerTest):
         self.assertEqual(self.s2c(pkts[1], 64)['exp_total'], 30_485)
         row = self.s2c(pkts[2], 369)['repeat[player_count]'][0]
         self.assertEqual((row['uid'], row['level'], row['name']), (1, 13, 'TestHero'))
-        self.assertEqual((row['pos_x'], row['pos_y']),
-                         tuple(float(v) for v in self.server._get_portals()['101_23'][1:]))
+        # the portal's arrival point, settled onto 102's floor 100 px below it (livetest bug 5)
+        ax, ay = (float(v) for v in self.server._get_portals()['101_23'][1:])
+        self.assertEqual((row['pos_x'], row['pos_y']), (ax, ay + 100.0))
         self.assertEqual({k: row[k] for k in W.R.IDLE_MOTION}, W.R.IDLE_MOTION)
 
     def test_level_up_happens_once_at_the_client_threshold(self):
@@ -2088,7 +2106,8 @@ class CharacterSelectFlows(ServerTest):
         pkts = c.expect(0x03, 0x07, 0x15, 0x28, 0x44, *F.mob_packets(8))   # map 102 has Pupus
         self.assertEqual(self.s2c(pkts[0], 64)['map_code'], 102)
         row = self.s2c(pkts[1], 369)['repeat[player_count]'][0]
-        self.assertEqual((row['pos_x'], row['pos_y']), (700.0, 500.0))
+        # the saved x, and y settled onto the floor below the saved point (livetest bug 5)
+        self.assertEqual((row['pos_x'], row['pos_y']), (700.0, 635.0))
         self.assertEqual(c.session['current_map'], 102)
 
     def test_enter_world_with_another_accounts_character_is_refused(self):
@@ -2199,6 +2218,38 @@ class CharacterSelectFlows(ServerTest):
         self.assertNotIn('secret', json.dumps(self.disk()))
         self.assertTrue(W.auth.verify(acc['password'], 'secret'))
         self.assertEqual(self.login_result('bad name!', 'x')[0], 0x11)   # not auto-registered
+
+    def test_register_create_and_delete_write_outside_the_store_lock(self):
+        """Review of livetest bug 7: the AUTO_REGISTER, create and delete saves ran - and
+        backed off up to ~3 s while a reader held accounts.json - under store.lock, which
+        every handler takes. The handlers validate and change the records under it and write
+        after letting it go; a failed write still answers (the store keeps it dirty and
+        retries)."""
+        self.reconfigure(AUTO_REGISTER=True)
+        store, real, seen = self.server.store, W.storemod.atomic_write, []
+
+        def writer(path, data, delays=None):
+            t = threading.Thread(target=lambda: (store.lock.acquire(), store.lock.release()), daemon=True)
+            t.start()
+            t.join(2.0)
+            seen.append('blocked' if t.is_alive() else 'free')
+            return real(path, data, delays)
+        with mock.patch.object(W.storemod, 'atomic_write', side_effect=writer):
+            result, c = self.login_result('newbie', 'secret')
+            self.assertEqual(result, 1)
+            self.create(c, 'Nova')
+            self.delete(c, 'Nova', password='secret')
+        self.assertEqual(seen, ['free'] * 3)
+        self.assertEqual(self.disk()['newbie']['characters'], [])
+        # a held file: the reply still goes out, the record is in memory and still to save
+        with mock.patch.object(W.storemod, 'atomic_write', side_effect=PermissionError(13, 'held by a reader')):
+            with self.assertLogs('WS', logging.ERROR):
+                self.create(c, 'Held')
+        self.assertIsNotNone(store.find_character('newbie', 'Held'))
+        self.assertNotIn('Held', json.dumps(self.disk()))
+        self.assertTrue(store.dirty)
+        self.assertTrue(store.flush())
+        self.assertEqual([ch['name'] for ch in self.disk()['newbie']['characters']], ['Held'])
 
     def test_passwords_are_hashed_at_rest_and_plaintext_records_still_log_in(self):
         with open(self.server.db_file, encoding='utf-8') as f:

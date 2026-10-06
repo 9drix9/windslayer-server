@@ -115,8 +115,9 @@ def arrival(index, *, overrides=None, fallback=None, map_data=None):
     Arrival points are not in the client (world doc 1.6 / T-5D-3), so:
     1. config VILLAGE_ARRIVALS {"<town map>": [x, y]} wins (a live fix needs no code);
     2. else next to Garan Maria in the town's own EN map file: the middle of the floor line
-       her tile stands on, lifted by en_maps.ARRIVAL_ABOVE_LINE like a portal arrival, so
-       the body drops onto it (she is on 501/601/701/801/901/1001/1101);
+       her tile stands on, lifted by en_maps.ARRIVAL_ABOVE_LINE like a portal arrival (the
+       map load settles every arrival back onto its floor line, livetest bug 5; she is on
+       501/601/701/801/901/1001/1101);
     3. else `fallback(town)` -> (x, y) - the server passes the revive-town point
        (combat.revive_point: START for 101, the first incoming portal for 201/401).
     map_data(town) -> en_maps.MapData or None (tests pass a stub)."""

@@ -60,17 +60,20 @@ EN 2009 build (client-2009-login, protocol_spec_2009.json)
 - 0x07 (own record at enter world): gm_or_guild_id instead of gm_level (no guilds yet, so
   0 or the GM value 1), 17 appearance words, 15 equip slots, 10 cash slots of (id, attr0),
   the motion block under its 2009 names (same values; spec_2009 0x07 order puts pos_x/pos_y
-  after the skill list) and the per-receiver pet block (no pets: has_pet 0 on a remote row,
-  absent on the receiver's own row - packets.DEFAULT_ASSUME_2009).
+  after the skill list) and the per-receiver pet block (has_pet 0 on a remote row - no
+  viewer is sent a pet_info yet, the arch09-receiver-mirror of P15 pet-s1 - and absent on
+  the receiver's own row: packets.DEFAULT_ASSUME_2009).
 - client-2009-world: the equip grid keeps its 25 positions; 2009 sends slots 0..14 with
-  their option blocks and slots 15..24 as (id, attr0) rows, slot 15 being the pet slot
-  (cash_rows_2009). 0x04 = player_list of 2009 rows built per receiver (the pet block
+  their option blocks and slots 15..24 as (id, attr0) rows, slot 15 being the pet slot:
+  the worn pet record's item (pet_slot_2009, ROADMAP_2009_ADDENDUM C2), the same record every
+  0x6F carries first. 0x04 = player_list of 2009 rows built per receiver (the pet block
   exists only on rows that are not the receiver's own); 0x05 = to_0x05(rec, '2009') with
   the pet block always present.
 """
 import time
 
 import buffs as B
+import cash as cashmod
 import progression
 import store as storemod
 
@@ -430,18 +433,28 @@ def _grid_entry(session, char, slot):
     return _int(entry) & 0xFFFF, [0] * EQUIP_OPTION_WORDS
 
 
+def pet_slot_2009(char):
+    """The 2009 grid slot 15 (the PET slot, entity+0x16E): the item id of the character's worn
+    pet record (cash.equipped_pet), else 0. The record, not the stored grid, is the source: a
+    carried-over 2008 slot-15 item (Kind 18) is no pet and must never be looked up as one, and
+    one source for this slot and the 0x6F's is_equipped pet row keeps the two in step
+    (ROADMAP_2009_ADDENDUM C2): the own 0x07 binds +0x1628 = FUN_00462c80(slot 15) from the
+    equipped list and every later 0x6F frees that record and must re-bind it."""
+    pet = cashmod.equipped_pet(char) if isinstance(char, dict) else None
+    return _int(pet['item_id']) & 0xFFFF if pet is not None else 0
+
+
 def cash_rows_2009(session, char):
     """The ten 2009 (id, attr0) rows of grid slots 15..24 (spec_2009 0x07 cash_equip_item_id
     x10 + cash_equip_item_attr0 = word 0 of the slot's 12-byte record, entity+0x236+12*i).
 
     Slot 15 is the 2009 PET slot (entity+0x16E; FUN_00462c80 binds the local pet from that
-    item id and FUN_00447f40 spawns it): there is no pet model, so it is always 0 - a
-    carried-over 2008 slot-15 item (Kind 18) is no pet and must not be looked up as one.
-    Slots 16..24 are the cash half as in 2008 (16..22 costumes; 2009 adds the pet hat /
-    glasses in 23 / 24, inventory.KIND_TO_CASH_SLOT_2009): a grid entry there, else the 2008
-    +0x15C cash list (`cash_equip`) those ids used to travel in."""
+    item id and FUN_00447f40 spawns it): the worn pet record's item (pet_slot_2009), no
+    option word. Slots 16..24 are the cash half as in 2008 (16..22 costumes; 2009 adds the pet
+    hat / glasses in 23 / 24, inventory.KIND_TO_CASH_SLOT_2009): a grid entry there, else the
+    2008 +0x15C cash list (`cash_equip`) those ids used to travel in."""
     legacy = _legacy_cash_ids(session, char)
-    rows = [{'cash_equip_item_id': 0, 'cash_equip_item_attr0': 0}]                 # slot 15: pet
+    rows = [{'cash_equip_item_id': pet_slot_2009(char), 'cash_equip_item_attr0': 0}]   # slot 15: pet
     for i, slot in enumerate(range(EQUIP_SLOTS, EQUIP_SLOTS + CASH_EQUIP_SLOTS)):  # 16..24
         item_id, words = _grid_entry(session, char, slot)
         if not item_id:
@@ -470,6 +483,9 @@ def _record_2009(rec, session, char, account):
     out[f'repeat[{LOOK_SLOTS_2009}]'] = [{'appearance_part': v} for v in appearance_2009(char, gender)]
     out[f'repeat[{EQUIP_SLOTS_2009}]'] = rec[f'repeat[{EQUIP_SLOTS}]'][:EQUIP_SLOTS_2009]
     out[f'repeat[{CASH_EQUIP_SLOTS_2009}]'] = cash_rows_2009(session, char)
+    # TODO(P15 pet-s1): has_pet = worn && awake (+ level, name) per receiver, recorded in the
+    # receiver's pet_info_seen mirror (pet F3, H1) - until then no viewer gets a pet_info, so no
+    # later 0xAC / 0xAD(0) may ever be sent to one.
     out['has_pet'] = 0
     return out
 
@@ -523,9 +539,10 @@ def info_equipment(session, char, client_build=None):
     in grid order - the window appends them in entry order and skips item_id 0.
 
     Regular slots are the grid with its stored option words (same precedence as
-    equip_grid). 2009 slot 15 is the pet slot (no pet model: always empty, cash_rows_2009).
-    Slots 16..24 are the cash half: a grid entry there, else the legacy `cash_equip` list,
-    exactly what the owner's 0x07 / 0x04 / 0x05 row carries (cash_equip / cash_rows_2009)."""
+    equip_grid). 2009 slot 15 is the pet slot: the worn pet's item (pet_slot_2009, as in
+    cash_rows_2009). Slots 16..24 are the cash half: a grid entry there, else the legacy
+    `cash_equip` list, exactly what the owner's 0x07 / 0x04 / 0x05 row carries (cash_equip /
+    cash_rows_2009)."""
     regular = EQUIP_SLOTS_2009 if client_build == BUILD_2009 else EQUIP_SLOTS
     legacy = _legacy_cash_ids(session, char)
     rows = []
@@ -533,7 +550,7 @@ def info_equipment(session, char, client_build=None):
         if slot < regular:
             rows.append(_grid_entry(session, char, slot))
         elif slot < EQUIP_SLOTS:                               # 2009 slot 15: the pet
-            rows.append((0, [0] * EQUIP_OPTION_WORDS))
+            rows.append((pet_slot_2009(char), [0] * EQUIP_OPTION_WORDS))
         else:
             item_id, words = _grid_entry(session, char, slot)
             if not item_id:
@@ -635,7 +652,10 @@ def character_list(uid, account, *, result=1, transfer_status=TRANSFER_STATUS_NO
     fields = {
         'result': result,
         'account_id': _int(uid) & 0xFFFFFFFF,
-        'cash_first_purchase_flag': 1 if account.get('cash_first_purchase') else 0,
+        # premium_cash-wallet-model (F1 step 2): the popup owed after a first purchase (the
+        # account's first_purchase_notice, cash.ensure_account); mall+0x00 shows it at the next
+        # 0x6A and clears it.
+        'cash_first_purchase_flag': 1 if account.get('first_purchase_notice') else 0,
         'account_gender_flag': 1 if account.get('gender') else 0,
         'manner_points': _int(account.get('manner')),
         'char_count': len(chars),

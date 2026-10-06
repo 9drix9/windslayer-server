@@ -19,7 +19,10 @@ Every packet is wire-identical in the two builds (spec_2009 C2S 0x44A9D6/0x20, 0
 0x473E14/0x22 + 0x476BF5/0x22, 0x473ABA/0x23, 0x473B5B/0x24, 0x473E14/0x25, 0x476E62/0x26
 and S2C 0x45..0x4D: "identical"; the 2009 0x45 adds a client-side blacklist gate that needs
 nothing from the server). Parsing goes through packets.parse with the server's build, so the
-2009 send-site keys are the ones decoded there.
+2009 send-site keys are the ones decoded there. Known gap until a blacklist model exists
+(ROADMAP_2009_ADDENDUM P12, blacklist_channels A.7): a 2009 invitee who blacklisted the
+requester drops the 0x45 without a dialog, but the server's one pending prompt per invitee
+stays, so other requesters get 0x47 {6} "Trading." for up to INVITE_TTL.
 
 Who moves what (trade.md 0, 1.4)
 --------------------------------
@@ -50,13 +53,20 @@ of the commit, a 0x49, or - the FIRST of the two confirms - nothing yet, declare
 registry.defer_reply so the policy does not cancel a trade the partner is about to complete.
 
 Lock order (world.py "Locks"): world_lock -> combat_lock -> MapMonsters.lock ->
-Trades.lock -> store.lock (db) -> send_lock. The commit is the one path that needs BOTH
-players' combat locks (their bags and wallets are mutated under them everywhere else: the
-combat driver credits gold and loot under them): it takes world_lock first, then the two
-combat locks in (uid, id) order - no other path nests two combat locks, and every combat-lock
-holder that wants Trades.lock (a death cancels the trade) holds just one - then Trades.lock
-and store.lock. Nothing here takes a combat lock or world_lock while holding Trades.lock, and
-every packet is QUEUED (flush=False), also a reply on the requester's own thread.
+Trades.lock -> store.lock (db) -> send_lock. The commit needs BOTH players' combat locks
+(their bags and wallets are mutated under them everywhere else: the combat driver credits
+gold and loot under them, the quest accept / turn-in mirrors its items and gold under them):
+it takes world_lock first, then the two combat locks in (uid, id) order - only the stall buy
+(market.py) nests two combat locks too, in the same order, and every combat-lock holder that
+wants Trades.lock (a death cancels the trade) holds just one - then Trades.lock and
+store.lock. Market.open re-checks busy() while it holds Market.lock (Market.lock ->
+Trades.lock; the reverse never happens: selling() reads the stall table lock-free). Nothing
+here takes a combat lock, world_lock or Market.lock while holding Trades.lock, and every
+packet is QUEUED (flush=False), also a reply on the requester's own thread.
+
+Commit counter: every commit bumps session[COMMITS_KEY] of both sides (commits()), so a map
+load that built its 0x03 before a partner's confirm committed can tell and rebuild it
+(GameServer._map_transfer).
 
 The escrow guards (trade-escrow-guards, trade.md 3.6) use available = owned - offered: an
 item can be sold, used, equipped, dropped, banked or handed in for a quest only from the part
@@ -98,6 +108,7 @@ MANNER_FLOOR = -60           # the client refuses to trade at manner <= -60 (FUN
 RESULT_REFUSING = 4          # S2C 0x47 4 "The player is rejecting trade."
 RESULT_BUSY = 6              # S2C 0x47 6 "Trading."
 LOG_NAME = 'trade_log.jsonl'
+COMMITS_KEY = 'trade_commits'    # session: trades this session committed (commits())
 
 OPEN, CONFIRMING, DONE, CANCELED = 'OPEN', 'CONFIRMING', 'DONE', 'CANCELED'
 
@@ -215,6 +226,14 @@ def key(name):
     return chatmod.name_text(name).lower()
 
 
+def commits(session):
+    """How many trades `session` has committed (bumped under Trades.lock by the commit).
+    GameServer._map_transfer reads it before it builds the 0x03 and again after the map-load
+    hooks: a different value means a partner's confirm committed in between, so the bag and
+    gold the 0x03 was built from are stale."""
+    return int((session or {}).get(COMMITS_KEY) or 0)
+
+
 def descriptor(rec):
     """(item_id, qty, count, opts, extra) of a decoded C2S 0x22 / 0x26 item descriptor.
     Both send sites of 0x22 share the grammar family: the equipment drag (2008 0x46C6B5,
@@ -237,10 +256,13 @@ def simulate(char, give, take, catalog=None):
     """None when `char` can hand over `give` and then receive `take` (Offers), else why not.
     Runs the model's own remove/add on a SNAPSHOT of the bag (store.snapshot: safe against a
     concurrent mutation), in the commit's order - the gives free the slots the takes use, so
-    a swap of two full tabs still fits (trade.md 3.6 can_receive)."""
+    a swap of two full tabs still fits (trade.md 3.6 can_receive). The snapshot holds
+    `inventory` alone, so the bag gets the character's pet count (a 2009 bagged pet takes an
+    equipment-tab slot: inventory.pet_slots) - else an offer into a pet-filled tab passes
+    here and the commit's real add refuses it."""
     scratch = {'inventory': storemod.snapshot(char.get('inventory') or {}), 'equipped': {},
                'gold': 0, 'victy': 0}
-    bag = invmod.Inventory(scratch, catalog)
+    bag = invmod.Inventory(scratch, catalog, pets=invmod.pet_slots(char, catalog))
     for o in give:
         words = o.words if o.equip else None
         if bag.remove(o.item_id, o.qty, words) != o.qty:
@@ -538,6 +560,7 @@ class Trades:
             return f'Type {info.type} is no tradeable bag item', NO_TRADE_ITEM_TEXT
         if info.is_cash:
             return 'cash item (hii Cash, itemdef+0x1F0 != 0: the client never offers one, C24)', NO_TRADE_ITEM_TEXT
+        # the KR row of this EN id (en_content.gamedef_item: 2009 ids above 4248 are KR + 4, C3)
         row = EC.gamedef_item(item) if item <= EC.item_max_id() else None
         if row and int(row.get('NotTrade') or 0):
             return 'KR gamedef NotTrade', NO_TRADE_ITEM_TEXT
@@ -757,11 +780,17 @@ class Trades:
             wa.gold, wb.gold = gold_a, gold_b
             store.dirty = True
             try:
-                store.save_now()
+                # The short replace backoff and writer wait only: this runs under world_lock
+                # and store.lock, and a failure or a busy file is retried by the store
+                # (review of livetest bug 7).
+                store.save_now(delays=storemod.QUICK_REPLACE_DELAYS,
+                               wait=storemod.QUICK_REPLACE_BUDGET_SECS)
             except Exception:                       # noqa: BLE001 - the model is committed; the next flush retries
                 log.exception(f'[TRADE] #{t.tid}: the accounts.json save failed; kept dirty for the next flush')
                 store.mark_dirty(f'trade {t.tid}')
             after = {t.a.name: self._holdings(ca), t.b.name: self._holdings(cb)}
+        for s in t.sides():
+            s.session[COMMITS_KEY] = commits(s.session) + 1
         t.state = DONE
         self._close(t)
         self._push(t.a.session, '0x4A', {'gold': gold_a})
@@ -825,6 +854,17 @@ class Trades:
         with self.lock:
             self._forget(session)
         self.cancel(session, reason, notify_self=False)
+
+    def map_load(self, session, reason):
+        """A server map load (trade.md 2.9 step 2), BEFORE its lead packet: both sides get
+        their 0x49 (the mover's while window 0x4E still exists to put its offered items back),
+        and every prompt the session made or received is dropped - the 0x08 / 0x03 close the
+        invitee's window 0x70 with the requester's entity, and a prompt left behind would
+        answer later requesters 0x47 {6} or open a trade across two maps. Returns True when a
+        trade was cancelled."""
+        with self.lock:
+            self._forget(session)
+        return self.cancel(session, reason)
 
     # ================================================== trade-escrow-guards ===
     def offered(self, session, item, words=None):
@@ -926,9 +966,10 @@ def register(hooks, trades):
     village transfer, revive, a repeated C2S 0x2B) cancels BEFORE its lead packet - 0x08 /
     0x03 destroy the partner's entity and window 0x4E, and the 0x49 has to land while the
     client can still put its offered items back; leaving the world or closing the
-    connection cancels too (the partner's window closes)."""
+    connection cancels too (the partner's window closes). Each also drops every prompt that
+    names the session (Trades.map_load / gone)."""
     def before_server_map_load(server, session, map_code=None, reason=None, **_):
-        trades.cancel(session, f'map load ({reason}) to {map_code}')
+        trades.map_load(session, f'map load ({reason}) to {map_code}')
 
     def on_leave_world(server, session, reason=None, **_):
         trades.gone(session, reason or 'left the world')

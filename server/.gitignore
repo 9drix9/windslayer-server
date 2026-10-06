@@ -21,3 +21,7 @@ stall_log.jsonl
 
 # player reports (P7 stage 3, reputation.py): the append-only report journal for GMs (user data)
 reports.jsonl
+
+# boss ledger (P13 stage 3, bosses.py): field-boss respawn times next to accounts.json (server data)
+boss_ledger.json
+boss_ledger.json.bad-*

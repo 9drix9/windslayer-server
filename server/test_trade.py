@@ -17,7 +17,9 @@ trade-request-accept / -offer / -lock-commit / -cancel-lifecycle / -escrow-guard
   exit 3 - the offered stick cannot be sold (0x18 + 0x15), used, equipped, dropped or banked;
   locked gold cannot be spent;
   plus the refusals (0x47 4 / 6, 0x15, 0x4D), take-back 0x26 -> 0x4C, the echo mismatch,
-  the commit re-validation, simultaneous confirms, the audit log and `!trade`.
+  the commit re-validation, simultaneous confirms, the audit log and `!trade`;
+  P7 review: a map load drops the prompts naming the mover, and a partner's commit that
+  lands while a portal is being built is in that portal's 0x03.
 
 No port is bound, no client is started and the live accounts.json is never opened (temp
 copies; the module checks its hash at the end).
@@ -32,6 +34,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -490,6 +493,71 @@ class _Trade(_Base):
         self.assertIsNone(self.server.trade.trade_of(a.session))
         self.assertEqual(self.bag('TestHero'), {STICK: 1})
 
+    def test_a_map_load_drops_the_prompts_that_name_the_session(self):
+        """trade.md 2.9: the map-load hook drops every prompt the mover made or received, as
+        a disconnect does - the 0x08 / 0x03 closed the invitee's window 0x70, and a prompt
+        left behind answered the next requester 0x47 {6} for up to INVITE_TTL (P7 review)."""
+        a, b = self.a, self.b
+        trades = self.server.trade
+        self.send(a, 'request', {'target_uid': 2})                  # A's prompt on B
+        b.expect(0x45)
+        self.assertIn(2, trades.invites)
+        b.send(0x7E, PORTAL_101_TO_102)                             # the invitee leaves
+        self.assertTrue(_wait(lambda: self.server.world.map_of(b.session) == 102))
+        b.recv_until_quiet(0.3)
+        a.recv_until_quiet(0.2)
+        self.assertEqual(trades.invites, {})
+        self.send(b, 'accept', {'requester_name': 'TestHero'})      # a stale window 0x70
+        self.assertIn(TR.EXPIRED_TEXT, self.notice(b.expect(0x15), b))
+        # the requester leaving drops its prompt as well
+        carol = self.carol()
+        self.send(carol, 'request', {'target_uid': 1})
+        a.expect(0x45)
+        self.assertIn(1, trades.invites)
+        carol.send(0x7E, PORTAL_101_TO_102)
+        self.assertTrue(_wait(lambda: self.server.world.map_of(carol.session) == 102))
+        self.assertTrue(_wait(lambda: not trades.invites))
+        self.assertEqual(trades.trades, {})
+
+    def test_a_commit_that_races_the_portal_is_in_its_0x03(self):
+        """P7 review: _map_transfer builds the 0x03 BEFORE the map-load hook cancels the
+        trade. When A has confirmed and B's confirm commits in between, the hook finds no
+        trade to cancel and the 0x03 built from the old bag would show the stick and 1000
+        gold on a client that just got 0x4A {900}. The commit counter makes the transfer
+        rebuild it."""
+        a, b = self.a, self.b
+        self.stick_for_potions()
+        self.confirm(a, 100, [row(STICK, 1)], 0, [row(POTION, 2)])
+        a.expect_silence(0.2)                                       # A waits for B
+        build = self.server._build_opcode_03
+        raced = []
+
+        def build_then_commit(session, *args, **kw):
+            body = build(session, *args, **kw)
+            if session is a.session and not raced:
+                raced.append(body)
+                # B's confirm lands while A's map load is between its 0x03 build and the hook
+                self.confirm(b, 0, [row(POTION, 2)], 100, [row(STICK, 1)])
+                self.assertTrue(_wait(lambda: not self.server.trade.trades))
+            return body
+
+        with mock.patch.object(self.server, '_build_opcode_03', side_effect=build_then_commit):
+            a.send(0x7E, PORTAL_101_TO_102)
+            self.assertTrue(_wait(lambda: self.server.world.map_of(a.session) == 102))
+        self.assertEqual(len(raced), 1)
+        done, _gone = b.expect(0x4A, 0x06)                           # then A leaves the map
+        self.assertEqual(b.s2c(done), {'gold': 600})
+        pkts = a.recv_until_quiet(0.4)
+        self.assertEqual(_ops(pkts)[:3], [0x4A, 0x08, 0x03])        # committed, no 0x49
+        self.assertEqual(a.s2c(pkts[0]), {'gold': 900})
+        got = a.s2c(pkts[2], allow_trailing=True)
+        self.assertEqual(got['gold'], 900)
+        self.assertEqual(got['repeat[equip_item_count]'], [])
+        self.assertEqual([(r['item_id'], r['quantity']) for r in got['repeat[consume_item_count]']],
+                         [(POTION, 2)])
+        self.assertNotEqual(pkts[2].payload, raced[0])              # the stale build was replaced
+        self.assertEqual((self.bag('TestHero'), self.gold('TestHero')), ({POTION: 2}, 900))
+
     def test_exit2_death_cancels(self):
         a, b = self.a, self.b
         self.open_trade()
@@ -719,12 +787,49 @@ class _Trade(_Base):
         self.assertEqual((self.bag('Watcher'), self.gold('Watcher')), ({STICK: 1, POTION: 5}, 510))
 
 
-class Trade2008(_Trade, unittest.TestCase):
+class _PetTab:
+    """C1 review: a bagged 2009 pet record takes a slot of the 2009 client's equipment tab
+    (inventory.pet_slots), and the offer check runs on a snapshot of `inventory` alone."""
+    PICKY = 4294
+
+    def bag_a_pet(self, name):
+        import cash as CASH
+        pet = {'serial': 0x2000, 'item_id': self.PICKY, 'kind': CASH.KIND_PET, 'qty': 1, 'expire': None,
+               'origin': CASH.ORIGIN_CASH, 'equipped': False,
+               'pet': {'exp': 0, 'awake': True, 'level': 1, 'gauge': 100, 'name': 'Picky'}}
+        with self.server.store.lock:
+            self.rec(name)['cash_items'] = [pet]
+
+    def offer_into_one_slot_with_a_pet(self):
+        self.stock('Watcher', gold=500, items=[], caps=[1, 35, 35])
+        self.bag_a_pet('Watcher')
+        self.open_trade()
+        self.offer_stick()
+
+
+class Trade2008(_PetTab, _Trade, unittest.TestCase):
     build = B8
 
+    def test_a_pet_record_from_a_2009_server_takes_no_2008_slot(self):
+        """Both builds can share one accounts.json: the 2008 0x6F leaves the pet out, so the
+        2008 tab has room and the server must not count a phantom slot."""
+        self.offer_into_one_slot_with_a_pet()
+        self.both_added(STICK, 1, 1)
+        self.assertEqual(INV.Inventory(self.rec('Watcher')).free_slots('equip'), 1)
 
-class Trade2009(_Trade, unittest.TestCase):
+
+class Trade2009(_PetTab, _Trade, unittest.TestCase):
     build = B9
+
+    def test_a_bagged_pet_fills_the_partners_equipment_tab(self):
+        """Watcher's one equipment slot holds his bagged pet: the stick offer gets 0x4D (no
+        room), as the commit's real add would refuse it - not a 0x4B and a rolled-back trade."""
+        self.offer_into_one_slot_with_a_pet()
+        self.a.expect(0x4D)
+        self.b.expect_silence(0.1)
+        why = TR.simulate(self.rec('Watcher'), [], [TR.Offer(STICK, 1, True, [0] * 6, [], 0)])
+        self.assertIn('full', why)
+        self.assertEqual(self.server.trade.trade_of(self.a.session).a.offer, [])
 
 
 if __name__ == '__main__':

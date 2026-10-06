@@ -432,9 +432,13 @@ class DevCommands(GmTest):
         self.assertEqual([m['id'] for m in self.char('Nova')['memos']], [1, 2])
         self.gm_line(b'!gift Nova 3327 enjoy')
         self.assertIn('Gift 3327 stored for admin', self.notices()[0])
+        # P8 stage 2 (premium_cash-gift / chat_mail_gm-gift-inbox): a real gift - a record in
+        # the recipient account's mall box whose serial the inbox entry names
+        [rec] = self.account('admin')['cash_box']
+        self.assertEqual((rec['item_id'], rec['origin']), (3327, 2))
         self.assertEqual(self.account('admin')['gift_inbox'],
                          [{'sender': 'TestHero', 'message': 'enjoy', 'item_id': 3327,
-                           'serial': 0, 'delivered': False}])
+                           'serial': rec['serial'], 'delivered': False}])
         self.gm_line(b'!gift Nova 4249 x')                        # outside the EN catalog
         self.assertIn('outside', self.notices()[0])
         self.gm_line(b'!mail ghost hi')
@@ -459,6 +463,34 @@ class DevCommands(GmTest):
         self.assertEqual(self.notices(),
                          ['[Warning] level: 100 is outside 1..99 - !level <1-99>'])
 
+    def test_level_keeps_the_exp_into_the_level(self):
+        """livetest bug 9: `!level 15` then `!level 14` took 42903 down to 42203 (the Lv14
+        floor). The exp into the current level is kept, clamped to what the new level holds."""
+        lv14, lv15 = progression.exp_for_level(14), progression.exp_for_level(15)
+        self.gm_line(f'!exp {lv14 + 700}'.encode())
+        self.c.expect(0x21, 0x15)
+        self.gm_line(b'!level 15')
+        exp_pkt, notice = self.c.expect(0x21, 0x15)
+        self.assertEqual(self.s2c(exp_pkt, 4)['exp_delta'], lv15 - lv14)
+        self.assertEqual(self.s2c(notice)['text'], f'Level 15 (exp {lv15 + 700}, 700 exp into the level kept).')
+        self.gm_line(b'!level 14')
+        exp_pkt, notice = self.c.expect(0x21, 0x15)
+        self.assertEqual(self.s2c(exp_pkt, 4)['exp_delta'], lv14 - lv15)
+        self.assertEqual(self.char()['exp'], lv14 + 700)                    # 42903, as before the trip
+        self.assertEqual(lv14 + 700, 42903)
+        # Lv2 holds only 120 exp past its floor: the progress is clamped, and the reply says so
+        self.gm_line(b'!level 2')
+        exp_pkt, notice = self.c.expect(0x21, 0x15)
+        top = progression.exp_for_level(3) - 1
+        self.assertEqual(self.char()['exp'], top)
+        self.assertEqual(progression.level_for_exp(top), 2)
+        self.assertEqual(self.s2c(notice)['text'],
+                         f'Level 2 (exp {top}, 120 of the 700 exp into the level kept (the most Lv2 holds)).')
+        # Lv99 has no room past its floor (the client's exp clamp)
+        self.assertEqual(W.GameServer._level_exp(99, lv14 + 700),
+                         (progression.exp_for_level(99), 0, 700))
+        self.assertEqual(W.GameServer._level_exp(1, 0), (0, 0, 0))
+
     def test_give_validates_against_the_en_item_catalog(self):
         self.gm_line(b'!give 179 2')
         drop, notice = self.c.expect(0x18, 0x15)
@@ -471,13 +503,44 @@ class DevCommands(GmTest):
         self.assertIn('outside', self.notices()[0])
         self.assertNotIn(4249, self.server._inventory(self.c.session))
 
+    def test_give_of_a_cash_item_is_the_cash_grant_or_a_clear_refusal(self):
+        """livetest bug 6: a Type 5 item has no bag tab and the 0x18 adds nothing for it, yet
+        `!give` answered "Gave". Since P8 a Type 5 `!give` is the `!cash item` grant (a cash
+        inventory record, S2C 0x6F; a Note is one, limit_type 1 as livetest bug 4 needs), and
+        what the cash model refuses is refused with its reason - no 0x18, no false "Gave"."""
+        self.gm_line(b'!give 1894 2')
+        cash, notice = self.c.expect(0x6F, 0x15)
+        row = self.s2c(cash)['repeat[count]'][0]
+        [stored] = self.char()['cash_items']
+        self.assertEqual((row['item_id'], row['quantity'], row['limit_type'], row['serial']),
+                         (1894, 2, 1, stored['serial']))
+        self.assertEqual(self.s2c(notice)['text'],
+                         f'1 Message Pad (1894) in your cash bag: serial {stored["serial"]:#x}, kind 1, x2.')
+        self.assertNotIn(1894, self.server._inventory(self.c.session))
+        self.gm_line(b'!give 1884')                               # Equipment Slot Extension (Type 5)
+        text = self.notices()
+        self.assertEqual(len(text), 1)
+        self.assertIn('is a slot extension', text[0])
+        self.assertTrue(text[0].startswith('[Warning] '), text[0])
+        self.assertNotIn(1884, self.server._inventory(self.c.session))
+        self.assertEqual(len(self.char()['cash_items']), 1)
+        # master merge review: no count means 1, as for every other `!give` - not the catalog
+        # quantity `!cash item 3320` grants ("11 Message Pads": 11)
+        self.gm_line(b'!give 3320')
+        cash, notice = self.c.expect(0x6F, 0x15)
+        stored = next(r for r in self.char()['cash_items'] if r['item_id'] == 3320)
+        self.assertEqual(stored['qty'], 1)
+        self.assertTrue(self.s2c(notice)['text'].endswith('kind 1, x1.'), self.s2c(notice)['text'])
+
     def test_warp_replays_the_map_transfer(self):
         self.gm_line(b'!warp 102')
         pkts = self.c.expect(0x15, 0x08, 0x03, 0x07, 0x28, 0x44, *F.mob_packets(8))
         # No point given: where the real portal 101_23 lands (shop_storage-flea-warp; it
-        # used to be the start point, which is 101's)
+        # used to be the start point, which is 101's) - its (50, 712) settled onto the floor
+        # below, where the 0x07 puts him (livetest bug 5)
         self.assertEqual(self.s2c(pkts[0])['text'],
-                         'Warping to map 102 (stage01_02) at (50.0, 712.0).')
+                         'Warping to map 102 (stage01_02) at (50.0, 812.0).')
+        self.assertEqual(self.c.session['pos'], (50.0, 812.0))
         self.assertEqual(struct.unpack_from('<H', pkts[1].payload)[0], 102)
         self.assertEqual(self.c.session['current_map'], 102)
         self.assertEqual(len(self.c.session['monsters']), 8)
@@ -491,23 +554,25 @@ class DevCommands(GmTest):
         self.assertEqual(self.notices(), ['[Announce] aliased'])
 
     def test_another_group_can_register_its_own_command(self):
+        # `!mall` itself is GameServer's since P8 stage 2 (premium_cash-mall-enter), so the
+        # registration example uses a word nobody owns.
         called = []
-        W.GameServer._dev_test_mall = lambda self, session, args: called.append(args)
-        self.addCleanup(lambda: delattr(W.GameServer, '_dev_test_mall'))
-        self.addCleanup(gm.unregister, 'mall')
-        gm.register('mall', gm.DevCommand('_dev_test_mall', '!mall', 'open the shop',
-                                          owner='premium_cash-x', aliases=('cash',)))
+        W.GameServer._dev_test_bazaar = lambda self, session, args: called.append(args)
+        self.addCleanup(lambda: delattr(W.GameServer, '_dev_test_bazaar'))
+        self.addCleanup(gm.unregister, 'bazaar')
+        gm.register('bazaar', gm.DevCommand('_dev_test_bazaar', '!bazaar', 'open the shop',
+                                            owner='premium_cash-x', aliases=('itembazaar',)))
         self.assertEqual(gm.check_commands(W.GameServer.DEV_COMMANDS, W.GameServer, gm.COMMANDS), [])
-        self.gm_line(b'!mall now')
+        self.gm_line(b'!bazaar now')
         self.assertTrue(_wait(lambda: called == ['now']))
-        self.gm_line(b'!cash')                                    # its alias
+        self.gm_line(b'!itembazaar')                              # its alias
         self.assertTrue(_wait(lambda: called == ['now', '']))
-        self.gm_line(b'!help mall')
-        self.assertEqual(self.notices(), ['!mall - open the shop'])
+        self.gm_line(b'!help bazaar')
+        self.assertEqual(self.notices(), ['!bazaar - open the shop'])
         with self.assertRaises(ValueError):                       # the name is taken
-            gm.register('mall', gm.DevCommand('_dev_test_mall', '!mall'))
+            gm.register('bazaar', gm.DevCommand('_dev_test_bazaar', '!bazaar'))
         with self.assertRaises(ValueError):                       # so is the alias
-            gm.register('shop', gm.DevCommand('_dev_test_mall', '!shop', aliases=('cash',)))
+            gm.register('shop', gm.DevCommand('_dev_test_bazaar', '!shop', aliases=('itembazaar',)))
 
     def test_every_command_is_audited_with_its_arguments(self):
         self.gm_line(b'!who')

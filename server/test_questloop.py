@@ -21,6 +21,9 @@ treated as a TURN-IN with an empty Demand list counting as met, so after a porta
 the client log (Q-B8) the player could re-accept quest 26 at the NPC and be paid Herb x5
 plus the Double Jump skill with no Pupu killed (reproduced live in quest_cards_misc#02).
 
+The accept's Send mirror and the whole turn-in (gates + mirror) run under the player's
+combat lock, like every other bag / wallet change (P7 review, trade.py "Lock order").
+
 Quest 26 "Elder's Test" is the live-proven starter quest: Send Wooden Stick 179 x1,
 ReqPro 1 on npccode 1 (Pupu), Reward Herb 5 x5 + Double Jump 94 x1 (type 3), Exp 10,
 Money 0, Repeat 0, SNPC = ENPC = 75, Lv 1..20.
@@ -520,6 +523,35 @@ class TurnInRewards(QuestTest):
         self.refusal("There isn't empty space in the inventory.")
         self.assertEqual(self.state().active, [q.idx, 0, 0])   # still held, nothing paid
         self.assertEqual(self.state().completed, [])
+
+    def test_the_turn_in_checks_and_mirrors_under_the_combat_lock(self):
+        """P7 review (trade.py "Lock order"): the trade commit holds both players' combat
+        locks and relies on every bag / wallet change running under them. The turn-in's
+        gates and its mirror (fee, Demand removal, Reward grant) now do too: while another
+        thread holds the lock nothing of it happens, then all of it at once."""
+        q = self.make_quest(Money=['-300'], Demand=['0005' + '0' * 36], Demand_Num=['003' + '0' * 27],
+                            Reward=['0179' + '0' * 76], Reward_Num=['001' + '0' * 57])
+        self.accept(q.idx)
+        self.server._inv_add(self.c.session, HERB, 3, 'test')
+        INV.Wallet(self.char()).gold = 1000
+        with self.server._combat_lock(self.c.session):              # e.g. a trade commit
+            self.c.send_c2s('0x477F3E/0x17', {'quest_id': q.idx})
+            self.c.expect_silence(0.3)
+            self.assertEqual((self.gold(), self.bag()), (1000, {HERB: 3}))
+            self.assertEqual((self.state().active, self.state().completed), ([q.idx, 0, 0], []))
+        self.c.expect(0x27, 0x3F)
+        self.assertEqual((self.gold(), self.bag()), (700, {STICK: 1}))
+        self.assertEqual(self.state().completed, [[q.idx, 1]])
+
+    def test_the_accept_mirrors_its_send_items_under_the_combat_lock(self):
+        q = self.make_quest(Send=['0005' + '0' * 36], Send_Num=['002' + '0' * 27], ReqPro=['1'],
+                            NPC=[str(PUPU_NPCCODE)])
+        with self.server._combat_lock(self.c.session):
+            self.c.send_c2s('0x47734D/0x16', {'quest_id': q.idx})
+            self.c.expect_silence(0.3)
+            self.assertEqual((self.bag(), self.state().active), ({}, [0, 0, 0]))
+        self.c.expect(0x26, 0x59)
+        self.assertEqual((self.bag(), self.state().active), ({HERB: 2}, [q.idx, 0, 0]))
 
     def test_the_demand_items_free_the_space_the_rewards_need(self):
         """The client removes the Demand items before it adds the Rewards, so the space

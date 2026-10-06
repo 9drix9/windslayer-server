@@ -16,13 +16,20 @@ AGGRO section). Two layers:
   / dash / stop) as exact 0x2A self-form bytes with their keep-alive cadence, the 0x1B
   fallback, every release (target dead or gone, leash, timeout, the player's death) as the
   exact 0x9E, no command after a kill, contact damage per event type (S2C 0x28, 0x3E at 0),
-  the 2009 AI[5] proximity aggro, and MOB_AGGRO false = the old behaviour.
+  the 2009 AI[5] proximity aggro, and MOB_AGGRO false = the old behaviour;
+- P7 live L2: a touch from a monster parked in its commanded attack hurts through the
+  contact slot, and the attack word holds at the reach edge (MOB_ATTACK_HOLD_X hysteresis).
+- the desync fixes of 2026-09-28: M1's recovery gate (no chase word before
+  MOB_HIT_RECOVER_SECS after a client-caught basic swing, interact event 7; the skill /
+  guarded / trap catches that set none are in test_sharedmobs) on both the '2A' and the '1B'
+  path, and P3's per-template speed (1e7 / hni speed, x 2.7 in a dash; MOB_SPEED_FROM_TEMPLATE).
 
 No port is bound, no client or server is started; ticks run on an explicit clock and the live
 accounts.json is never opened (temp copies; checked at the end of the module).
 """
 import copy
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -71,6 +78,7 @@ ENTRY = {B8: (0x03, 0x07, 0x15, 0x28, 0x44), B9: (0x03, 0x07, 0x15, 0x65, 0x28, 
 ICE_SPEAR, POISON, STUN, BOOBY_TRAP = 260, 391, 435, 2609
 WOODEN_BLADE, DAGGER = 70, 256
 PUPU, BLUE_PUPU, IRON_BALL, RYNX, TOAD_CANNON, SLOW_PEACH = 1, 2, 26, 12, 143, 193
+MONKEY_SOLDIER = 15
 PORTAL_102_TO_101 = 31
 WALK_L, WALK_R, JUMP_L, JUMP_R, DROP_L, DROP_R = 0x01, 0x02, 0x0D, 0x0E, 0x11, 0x12
 ATK_A_L, ATK_A_R, ATK_B_L, ATK_B_R, DASH_L, DASH_R = 0x05, 0x06, 0x15, 0x16, 0x19, 0x1A
@@ -236,6 +244,51 @@ class Rules(unittest.TestCase):
         contact_only = AI.Flags.of([0, 0, 0, 0, 0, 0, 0, 1])
         self.assertEqual(self.decide((1000, 714), (1000, 714), flags=contact_only, rng_bit=1), WALK_L)
 
+    def test_an_attack_holds_until_the_target_is_clearly_out_of_reach(self):
+        """P7 live L2 "Related": at the reach edge the word flipped walk / attack on every
+        0.3 s tick. An attack starts at reach_x; one under way (same facing) holds up to
+        reach_x + hold_x - for ATTACK_HOLD_SECS after it began (P7 live L2 review: without
+        the time limit a target parked 1..30 px beyond reach kept the mob swinging at air for
+        good); the client's facing / jump / drop rules are untouched."""
+        rynx = AI.Flags.of([1, 1, 0, 0, 0, 0, 1, 0, 1, 0])
+        A = AI.MOTION_ATTACK_A
+        hold = dict(flags=rynx, rng_bit=1, hold_x=AI.ATTACK_HOLD_X, swing_secs=0.3)
+        self.assertEqual((AI.ATTACK_HOLD_X, AI.ATTACK_HOLD_SECS), (30.0, 1.0))
+        # starting: the plain box, whatever the hold
+        self.assertEqual(self.decide((1060, 714), (1000, 714), **hold), ATK_A_L)
+        self.assertEqual(self.decide((1061, 714), (1000, 714), **hold), WALK_L)
+        self.assertEqual(self.decide((1061, 714), (1000, 714), prev_motion=AI.MOTION_WALK, **hold), WALK_L)
+        # under way: holds to 60 + 30 px, then walks after the target
+        for mx, want in ((1061, ATK_A_L), (1085, ATK_A_L), (1090, ATK_A_L), (1091, WALK_L)):
+            with self.subTest(mob_x=mx):
+                self.assertEqual(self.decide((mx, 714), (1000, 714), prev_motion=A, **hold), want)
+        # attack B holds the same way and keeps its kind
+        self.assertEqual(self.decide((1080, 714), (1000, 714), prev_motion=AI.MOTION_ATTACK_B, **hold),
+                         ATK_B_L)
+        # hold_x 0 (the default of decide): the plain box every tick
+        self.assertEqual(self.decide((1061, 714), (1000, 714), flags=rynx, rng_bit=1, prev_motion=A), WALK_L)
+        # the hold never outlasts a turn: 70 px past the target the mob faces it again
+        # (|dx| > 65), and that new swing starts at the plain reach
+        self.assertEqual(self.decide((930, 714), (1000, 714), AI.DIR_LEFT, prev_motion=A, **hold), WALK_R)
+        self.assertEqual(self.decide((930, 714), (1000, 714), AI.DIR_RIGHT, prev_motion=A, **hold), ATK_A_R)
+        # behind the mob (kept facing within 65 px) or outside reach_y: no hold
+        self.assertEqual(self.decide((960, 714), (1000, 714), AI.DIR_LEFT, prev_motion=A, **hold), WALK_L)
+        self.assertEqual(self.decide((1040, 714), (1000, 673), prev_motion=A, **hold), JUMP_L)
+        self.assertEqual(self.decide((1035, 714), (1000, 755), prev_motion=A, **hold), DROP_L)
+        # the hold is timed: 61..90 px ahead it holds while the swing is younger than
+        # ATTACK_HOLD_SECS, and walks after the target from then on (or with no known age)
+        for dx in (61, 70, 80, 90):
+            for age, want in ((0.0, ATK_A_L), (0.99, ATK_A_L), (1.0, WALK_L), (6.0, WALK_L),
+                              (None, WALK_L)):
+                with self.subTest(dx=dx, swing_secs=age):
+                    self.assertEqual(self.decide((1000 + dx, 714), (1000, 714), prev_motion=A,
+                                                 **{**hold, 'swing_secs': age}), want)
+        # ... and inside the plain box the swing goes on whatever its age
+        self.assertEqual(self.decide((1060, 714), (1000, 714), prev_motion=A, **{**hold, 'swing_secs': 6.0}),
+                         ATK_A_L)
+        # hold_secs 0: no hold at all
+        self.assertEqual(self.decide((1061, 714), (1000, 714), prev_motion=A, hold_secs=0, **hold), WALK_L)
+
     def test_dash_when_nothing_else(self):
         dash = AI.Flags.of([0, 0, 0, 1])
         self.assertEqual(self.decide((1200, 714), (1000, 714), flags=dash), DASH_L)
@@ -273,9 +326,60 @@ class Config(unittest.TestCase):
                           d.MOB_AGGRO_TIMEOUT_SECS, d.MOB_ATTACK_REACH_X, d.MOB_ATTACK_REACH_Y),
                          (True, True, True, False, '2A', 0.3, 0.6, 900.0, 15.0, 60.0, 40.0))
         self.assertEqual(cfgmod.from_dict({'MOB_AI_COMMAND': '1B'}).MOB_AI_COMMAND, '1B')
+        self.assertEqual(d.MOB_CONTACT_MIN_SECS, 1.2)                     # livetest bug 2
+        self.assertEqual(cfgmod.from_dict({'MOB_CONTACT_MIN_SECS': 0}).MOB_CONTACT_MIN_SECS, 0.0)
+        self.assertEqual(d.MOB_ATTACK_HOLD_X, AI.ATTACK_HOLD_X)            # P7 live L2 hysteresis
+        self.assertEqual(cfgmod.from_dict({'MOB_ATTACK_HOLD_X': 0}).MOB_ATTACK_HOLD_X, 0.0)
+        for bad in (-1, float('nan'), float('inf')):
+            with self.subTest(MOB_ATTACK_HOLD_X=bad), self.assertRaises(cfgmod.ConfigError):
+                cfgmod.from_dict({'MOB_ATTACK_HOLD_X': bad})
+        self.assertEqual(d.MOB_ATTACK_HOLD_SECS, AI.ATTACK_HOLD_SECS)      # ... for about one swing
+        self.assertEqual(cfgmod.from_dict({'MOB_ATTACK_HOLD_SECS': 0}).MOB_ATTACK_HOLD_SECS, 0.0)
+        for bad in (-1, float('nan'), float('inf')):
+            with self.subTest(MOB_ATTACK_HOLD_SECS=bad), self.assertRaises(cfgmod.ConfigError):
+                cfgmod.from_dict({'MOB_ATTACK_HOLD_SECS': bad})
         for bad in ({'MOB_AI_COMMAND': '9F'}, {'MOB_AI_COMMAND': 0x2A}, {'MOB_AGGRO': 1},
                     {'MOB_CMD_KEEPALIVE_SECS': 0.96}, {'MOB_CMD_KEEPALIVE_SECS': 0},
-                    {'MOB_AI_TICK_SECS': 0}, {'MOB_LEASH_PX': -1}, {'MOB_ATTACK_REACH_X': 0}):
+                    {'MOB_AI_TICK_SECS': 0}, {'MOB_LEASH_PX': -1}, {'MOB_ATTACK_REACH_X': 0},
+                    {'MOB_CONTACT_MIN_SECS': -0.1},
+                    # json.load takes NaN / Infinity: NaN would switch the limit off, inf never
+                    # frees (or prunes) a monster's slot
+                    {'MOB_CONTACT_MIN_SECS': float('nan')}, {'MOB_CONTACT_MIN_SECS': float('inf')}):
+            with self.subTest(bad), self.assertRaises(cfgmod.ConfigError):
+                cfgmod.from_dict(bad)
+        with self.assertRaises(cfgmod.ConfigError):
+            cfgmod.from_dict(json.loads('{"MOB_CONTACT_MIN_SECS": NaN}'))
+
+    def test_the_desync_fix_keys(self):
+        """M1 / M3 / P3 (desync fix plan 2026-09-28, HIT_STUN_PER_SWING_RE): each switch alone,
+        validated at load. The gate is the hit + max(MOB_HIT_RECOVER_SECS, stun +
+        MOB_HIT_RECOVER_MARGIN_SECS), so it always outlasts the stun: the floor no longer has
+        to cover MOB_HIT_RELAY_HURT_MS, the margin has to cover the tick rounding (>= 0.09)."""
+        d = cfgmod.defaults()
+        self.assertEqual((d.MOB_HIT_RELAY_KNOCKBACK, d.MOB_HIT_RELAY_HURT_MS, d.MOB_HIT_HURT_PER_SWING,
+                          d.MOB_HIT_RELAY_SKILL_VARIANT, d.MOB_HIT_RECOVER_SECS, d.MOB_HIT_RECOVER_MARGIN_SECS,
+                          d.MOB_HIT_CAST_GATE, d.MOB_SPEED_FROM_TEMPLATE, d.MOB_HIT_ICE_CHASE_SECS),
+                         (True, 490, True, True, 0.45, 0.12, True, True, 0.6))
+        for good in ({'MOB_HIT_RELAY_KNOCKBACK': False}, {'MOB_HIT_RECOVER_SECS': 0},
+                     {'MOB_HIT_RECOVER_SECS': 0.03}, {'MOB_HIT_RELAY_HURT_MS': 0},
+                     {'MOB_HIT_RELAY_HURT_MS': 4095, 'MOB_HIT_RECOVER_SECS': 0.1},
+                     {'MOB_HIT_HURT_PER_SWING': False}, {'MOB_HIT_RELAY_SKILL_VARIANT': False},
+                     {'MOB_HIT_CAST_GATE': False}, {'MOB_HIT_RECOVER_MARGIN_SECS': 0.09},
+                     {'MOB_HIT_RECOVER_MARGIN_SECS': 1}, {'MOB_SPEED_FROM_TEMPLATE': False},
+                     {'MOB_HIT_ICE_CHASE_SECS': 0}, {'MOB_HIT_ICE_CHASE_SECS': 0.01},
+                     {'MOB_HIT_ICE_CHASE_SECS': 0.949}):
+            with self.subTest(good):
+                cfgmod.from_dict(good)
+        for bad in ({'MOB_HIT_RELAY_HURT_MS': -1}, {'MOB_HIT_RELAY_HURT_MS': 4096},
+                    {'MOB_HIT_RECOVER_SECS': -0.1}, {'MOB_HIT_RECOVER_SECS': float('nan')},
+                    {'MOB_HIT_RECOVER_SECS': float('inf')}, {'MOB_HIT_RELAY_KNOCKBACK': 1},
+                    {'MOB_HIT_RECOVER_MARGIN_SECS': 0.089}, {'MOB_HIT_RECOVER_MARGIN_SECS': 1.01},
+                    {'MOB_HIT_RECOVER_MARGIN_SECS': float('nan')}, {'MOB_HIT_HURT_PER_SWING': 1},
+                    {'MOB_HIT_RELAY_SKILL_VARIANT': 'yes'}, {'MOB_HIT_CAST_GATE': None},
+                    {'MOB_HIT_RELAY_HURT_MS': 360.0}, {'MOB_SPEED_FROM_TEMPLATE': None},
+                    # the ice chase word must beat the copies' stall at the 0.96 s node hold
+                    {'MOB_HIT_ICE_CHASE_SECS': 0.95}, {'MOB_HIT_ICE_CHASE_SECS': 1.0},
+                    {'MOB_HIT_ICE_CHASE_SECS': -0.1}, {'MOB_HIT_ICE_CHASE_SECS': float('nan')}):
             with self.subTest(bad), self.assertRaises(cfgmod.ConfigError):
                 cfgmod.from_dict(bad)
 
@@ -333,6 +437,13 @@ class AggroServer(unittest.TestCase):
 
     def lock(self, c):
         return self.server._combat_lock(c.session)
+
+    @staticmethod
+    def recovered(mob):
+        """The first moment a chase word may follow the last client-caught hit on `mob`
+        (desync fix M1: MOB_HIT_RECOVER_SECS after it, Monster.ai_recover_until); now when no
+        gate runs."""
+        return max(time.monotonic(), mob.ai_recover_until)
 
     def mob(self, c, i=1):
         return c.session['monsters'][W.MOB_UID_BASE + i]
@@ -438,7 +549,7 @@ class AggroFlows:
             self.hit(c, mob)
         self.assertEqual((mob.aggro_uid, mob.hate, mob.ai_owned, mob.ai_dir), (1, {1: 500 - mob.hp}, True,
                                                                                  AI.DIR_LEFT))
-        T = time.monotonic()
+        T = self.recovered(mob)
         got = self.tick(c, T)
         self.assertEqual(got, [(0x2A, bytes.fromhex('01 00 0f 00 01 00 00 00 00 00 00 00 01 00 00 00'))])
         self.assertEqual(c.s2c(P_Packet(*got[0])), {'mover_uid': mob.uid, 'move_bits': blob(WALK_L),
@@ -447,7 +558,7 @@ class AggroFlows:
     def test_the_keepalive_cadence_stays_under_the_960_ms_hold(self):
         c, mob = self.chase()
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         walk = (0x2A, self.cmd(mob, WALK_L))
         self.assertEqual(self.tick(c, T), [walk])
         # MOB_CMD_KEEPALIVE_SECS 0.6 less the 50 ms timer-jitter allowance
@@ -465,7 +576,7 @@ class AggroFlows:
         c, mob = self.chase()                                        # Pupu / Ssiyo, AI[7] no-jump
         self.assertTrue(mob.flags.no_jump and not mob.flags.attacks)
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         seq = [((1244, 714), (1000, 714), WALK_L),                   # faces the player
                ((1030, 714), (1000, 714), WALK_L),
                ((970, 714), (1000, 714), WALK_L),                    # walks through him
@@ -483,7 +594,7 @@ class AggroFlows:
     def test_a_jumping_template_jumps_toward_a_higher_player(self):
         c, mob = self.chase(template=BLUE_PUPU)                      # Blue Pupu / Koring: flags 0
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         self.assertEqual(self.step(c, mob, T, (1200, 714), (1000, 600)), JUMP_L)
         self.assertEqual(self.step(c, mob, T + 0.7, (1030, 714), (1000, 600)), JUMP_L)
         self.assertEqual(self.step(c, mob, T + 1.4, (900, 714), (1000, 600)), JUMP_R)
@@ -494,7 +605,7 @@ class AggroFlows:
         self.assertTrue(mob.flags.attack_a and mob.flags.attack_b)
         self.assertEqual((mob.body_atk, mob.weak_atk, mob.strong_atk), (18, 17, 25))
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         with mock.patch.object(self.server, '_mob_rng_bit', return_value=1):
             self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_L)
             self.assertEqual(self.step(c, mob, T + 0.3, (1040, 714)), ATK_A_L)
@@ -508,34 +619,193 @@ class AggroFlows:
         # the keep-alive re-sends the swing while the player stays in reach
         self.pin(c, mob, 960, 714, T + 2.9)
         self.assertEqual(self.tick(c, T + 2.9), [(0x2A, self.cmd(mob, ATK_B_R))])
+        # ... and every keep-alive renews the attack clock (P7 live L2 fix step 2)
+        self.assertEqual(mob.ai_attack_t, T + 2.9)
+        for dt in (3.5, 4.1):
+            self.pin(c, mob, 960, 714, T + dt)
+            self.assertEqual(self.tick(c, T + dt), [(0x2A, self.cmd(mob, ATK_B_R))])
+        self.assertEqual(mob.ai_attack_t, T + 4.1)
+        # A swing report (event 9) 0.2 s after that keep-alive still hurts, although the word
+        # last CHANGED at T + 2.2, 2.1 s (> MOB_ATTACK_EVENT_SECS) earlier: the swing filter
+        # counts from the last send of the attack, not from the last change of word.
+        self.assertGreater(T + 4.3 - (T + 2.2), W.GameServer.MOB_ATTACK_EVENT_SECS)
+        with self.lock(c):
+            c.session['hp'] = hp = 100
+            c.session.pop('swing_t', None)
+        with self.server._combat(c.session):
+            self.server._monster_contact(c.session, {'event_source_uid': mob.uid}, 9, T + 4.3)
+        self.assertLess(c.s2c(c.expect(0x28, quiet=0.1))['hp'], hp)
+
+    def test_the_attack_word_holds_at_the_reach_edge(self):
+        """P7 live L2 "Related": near the edge of the reach box the chase word flipped walk /
+        attack on every 0.3 s tick (36 changes in 21 s, each a 0x2A that flushes the client's
+        queue) while the server's x of the mob swung ~25 px per tick. With the hysteresis
+        (MOB_ATTACK_HOLD_X 30) a swing that started at reach holds while the target stays
+        within reach + 30 px - for MOB_ATTACK_HOLD_SECS (1 s) after it began: only its
+        keep-alive goes out. Then the plain box decides again, so the edge costs at most one
+        walk / attack pair per ~1 s instead of a flip per tick."""
+        c, mob = self.chase(template=RYNX)
+        self.assertEqual((self.server.config.MOB_ATTACK_HOLD_X, self.server.config.MOB_ATTACK_HOLD_SECS),
+                         (30.0, 1.0))
+        self.hit(c, mob)
+        T = self.recovered(mob)
+        with mock.patch.object(self.server, '_mob_rng_bit', return_value=1):
+            self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_L)
+            self.assertEqual(self.step(c, mob, T + 0.3, (1055, 714)), ATK_A_L)     # starts at reach
+            self.assertEqual(mob.ai_attack_start_t, T + 0.3)
+            atk = [(0x2A, self.cmd(mob, ATK_A_L))]
+            for dt, x, sent in ((0.6, 1080, []), (0.9, 1062, atk), (1.2, 1087, [])):
+                with self.subTest(dt=dt, mob_x=x):
+                    self.pin(c, mob, x, 714, T + dt)
+                    self.assertEqual(self.tick(c, T + dt), sent)            # no flip, keep-alives
+            self.assertEqual(mob.ai_attack_start_t, T + 0.3)                 # a keep-alive is no new swing
+            # 1.2 s into the swing the hold is over: 66 px is out of the plain box
+            self.assertEqual(self.step(c, mob, T + 1.5, (1066, 714)), WALK_L)
+            self.assertEqual(self.step(c, mob, T + 1.8, (1060, 714)), ATK_A_L)     # at reach: a new swing
+            self.assertEqual(mob.ai_attack_start_t, T + 1.8)
+            for dt, x, sent in ((2.1, 1085, []), (2.4, 1070, atk)):
+                with self.subTest(dt=dt, mob_x=x):
+                    self.pin(c, mob, x, 714, T + dt)
+                    self.assertEqual(self.tick(c, T + dt), sent)            # held again
+            self.assertEqual(self.step(c, mob, T + 2.7, (1091, 714)), WALK_L)     # clearly out of reach
+            self.pin(c, mob, 1070, 714, T + 3.0)
+            self.assertEqual(self.tick(c, T + 3.0), [])                             # walking: not in reach
+            self.assertEqual(self.step(c, mob, T + 3.3, (1060, 714)), ATK_A_L)     # at reach again
+            # MOB_ATTACK_HOLD_X 0: the plain box on every tick - the old flip at the edge
+            self.server.config = cfgmod.from_dict({'CLIENT_BUILD': self.build, **self.overrides,
+                                                    'MOB_ATTACK_HOLD_X': 0})
+            for k, (x, want) in enumerate(((1080, WALK_L), (1058, ATK_A_L), (1083, WALK_L))):
+                with self.subTest(hold=0, mob_x=x):
+                    self.assertEqual(self.step(c, mob, T + 3.6 + 0.3 * k, (x, 714)), want)
+
+    def test_a_target_parked_just_beyond_reach_is_walked_after(self):
+        """P7 live L2 review: the hold was spatial only. A commanded attack never moves the mob
+        (only walk / jump / drop / dash are dead-reckoned) and nothing fixes its x while
+        nothing hits, so a target that stood 1..30 px beyond the 60 px reach kept the mob in
+        its attack for good - swinging at air, a keep-alive every 0.55 s, never walking in
+        (20 of 20 ticks at 61..90 px). The hold now lasts MOB_ATTACK_HOLD_SECS after the swing
+        began; then the mob walks in and swings again at reach."""
+        c, mob = self.chase(template=RYNX)
+        self.hit(c, mob)
+        T = self.recovered(mob)
+        walk, atk = [(0x2A, self.cmd(mob, WALK_L))], [(0x2A, self.cmd(mob, ATK_A_L))]
+        with mock.patch.object(self.server, '_mob_rng_bit', return_value=1):
+            self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_L)
+            self.assertEqual(self.step(c, mob, T + 0.3, (1055, 714)), ATK_A_L)     # starts at reach
+            self.pin(c, mob, 1075, 714, T + 0.6)                   # the target now stands 75 px away
+            for dt, sent in ((0.6, []), (0.9, atk), (1.2, [])):     # held: 0.3 / 0.6 / 0.9 s in
+                with self.subTest(dt=dt):
+                    self.assertEqual(self.tick(c, T + dt), sent)
+            self.assertEqual(mob.x, 1075.0)                          # swinging never moved it
+            self.assertEqual(self.tick(c, T + 1.5), walk)            # 1.2 s: the hold is over
+            # no fix: the walk is dead-reckoned at the Rynx's own speed (desync fix P3: 1e7 /
+            # hni speed 80000 = 125 px/s) x 0.3 s = 37.5 px, back into reach
+            self.assertEqual(mob.walk_px_s, 125.0)
+            self.assertEqual(self.tick(c, T + 1.8), atk)
+            self.assertAlmostEqual(mob.x, 1075.0 - mob.walk_px_s * 0.3, places=3)
+            self.assertEqual(mob.ai_attack_start_t, T + 1.8)
+            # the target keeps stepping back to 75 px whenever a swing starts (knock-back):
+            # 6 s of it, and the mob walks in again after every held swing - never more than
+            # 4 attack ticks in a row (the one at reach + 0.3 / 0.6 / 0.9 s of hold)
+            words = [ATK_A_L]                                        # the swing of T + 1.8
+            for k in range(20):
+                now = T + 2.1 + 0.3 * k
+                if AI.is_attack(mob.ai_lo):
+                    self.pin(c, mob, 1075, 714, now)
+                self.tick(c, now)
+                words.append(mob.ai_lo)
+        self.assertEqual(set(words), {ATK_A_L, WALK_L})
+        runs = ''.join('A' if w == ATK_A_L else 'W' for w in words)
+        self.assertEqual(max(map(len, runs.split('W'))), 4, runs)
+        self.assertGreaterEqual(runs.count('W'), 4, runs)
 
     def test_a_dash_template_dashes(self):
         c, mob = self.chase(template=IRON_BALL)
         self.assertTrue(mob.flags.skill)
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         self.assertEqual(self.step(c, mob, T, (1244, 714)), DASH_L)        # out of any reach
         self.assertEqual(self.step(c, mob, T + 0.3, (800, 714)), DASH_R)
 
     def test_dead_reckoning_without_the_driver(self):
         c, mob = self.chase()
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_L)
         self.assertEqual(self.tick(c, T + 0.3), [])                          # no fix: reckoned
-        self.assertAlmostEqual(mob.x, 1244 - 0.3 * W.GameServer.MOB_WALK_PX_PER_SEC)
+        # at the template's speed (desync fix P3): Pupu / Ssiyo 1e7 / 120000 = 83.3 px/s
+        self.assertAlmostEqual(mob.walk_px_s, 1e7 / 120000)
+        self.assertAlmostEqual(mob.x, 1244 - 0.3 * mob.walk_px_s)
         self.pin(c, mob, 1200, 714, T + 0.4)                                  # a fix wins
         self.tick(c, T + 0.5)
-        self.assertAlmostEqual(mob.x, 1200 - 0.1 * W.GameServer.MOB_WALK_PX_PER_SEC)
+        self.assertAlmostEqual(mob.x, 1200 - 0.1 * mob.walk_px_s)
         # a hit report's interact tail is a fix as well
         self.report_hit(c, mob)
         c.expect(0x2A)
         self.assertGreater(mob.fix_t, 0)
 
+    def test_the_chase_waits_for_the_hurt_of_a_client_caught_hit(self):
+        """M1: after the release no word goes out until MOB_HIT_RECOVER_SECS after the hit
+        (the watchers' copies run the hurt the relay gave them); MOB_HIT_RECOVER_SECS 0: the
+        next tick, as before."""
+        c, mob = self.chase()
+        self.hit(c, mob)
+        T = mob.ai_recover_until
+        self.pin(c, mob, 1244, 714, T - 0.1)
+        self.assertEqual(self.tick(c, T - 0.1), [])
+        self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_L)
+        self.server.config['MOB_HIT_RECOVER_SECS'] = 0.0
+        self.hit(c, mob)
+        self.assertEqual(mob.ai_recover_until, T)                           # not moved on
+        # T + 0.01 is inside the second hit's 0.55 s (it came > 0.25 s after the first):
+        # with no gate the chase word goes out anyway
+        self.pin(c, mob, 1244, 714, T + 0.01)
+        self.assertEqual(self.tick(c, T + 0.01), [(0x2A, self.cmd(mob, WALK_L))])
+
+    def test_monsters_are_reckoned_at_their_template_speed(self):
+        """P3: +0x1280 = hni speed x 0.0001 and a walk step is tick / +0x1280 px, so a Monkey
+        Soldier (80000) walks 3.75 px per 30 ms tick = 125 px/s (the measured knockback 7.5 px
+        is two of those ticks) and dashes 2.7 x that; MOB_SPEED_FROM_TEMPLATE false = 82.5."""
+        c, mob = self.chase(template=MONKEY_SOLDIER)
+        self.assertEqual(mob.walk_px_s, 125.0)
+        self.assertAlmostEqual(W.GameServer.template_walk_px_s(EC.npcs().get(PUPU)), 1e7 / 120000)
+
+        class NoSpeed:
+            speed = 0
+        self.assertEqual(W.GameServer.template_walk_px_s(NoSpeed()), W.GameServer.MOB_WALK_PX_PER_SEC)
+
+        def reckon(lo):
+            with self.lock(c):
+                mob.x, mob.ai_lo, mob.ai_owned = 1000.0, lo, True
+                mob.ai_sent_t = mob.ai_step_t = mob.fix_t = 100.0
+                mob.ai_hold_end = 101.0
+                return self.server._mob_dead_reckon(mob, 101.0)
+        self.assertAlmostEqual(reckon(WALK_R), 125.0)
+        self.assertAlmostEqual(mob.x, 1125.0)
+        self.assertAlmostEqual(reckon(DASH_L), 125.0 * 2.7)
+        self.assertAlmostEqual(mob.x, 1000.0 - 337.5)
+        self.server.config['MOB_SPEED_FROM_TEMPLATE'] = False
+        self.assertAlmostEqual(reckon(WALK_R), 82.5)
+        self.assertAlmostEqual(reckon(DASH_L), 82.5)
+        # the hurt slide of a client-caught hit: 2 ticks at its speed = 7.5 px (M1); a skill
+        # hit 4 ticks = 15 px (M3; live s02: Ice Spear slid A's copy 15 px), wind 19 x 1.0 / 2.5
+        self.server.config['MOB_SPEED_FROM_TEMPLATE'] = True
+        with self.lock(c):
+            mob.x = 1100.0
+            mob.ai_lo = AI.STOP
+        self.assertAlmostEqual(self.server._mob_knock_estimate(mob, C.FACING_LEFT, 200.0), -7.5)
+        self.assertAlmostEqual(mob.x, 1092.5)
+        self.assertEqual(mob.fix_t, 200.0)
+        self.assertAlmostEqual(self.server._mob_knock_estimate(mob, C.FACING_RIGHT, 201.0, 4), 15.0)
+        self.assertAlmostEqual(self.server._mob_knock_estimate(mob, C.FACING_RIGHT, 202.0, 19), 71.25)
+        self.assertAlmostEqual(self.server._mob_knock_estimate(mob, C.FACING_LEFT, 203.0, 47.5), -178.125)
+        self.assertEqual(self.server._mob_knock_estimate(mob, C.FACING_LEFT, 204.0, 0), 0.0)
+        self.assertAlmostEqual(mob.x, 1092.5 + 15.0 + 71.25 - 178.125)
+
     def test_a_stunned_mob_stands_until_the_stun_ends(self):
         c, mob = self.chase()
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_L)
         with self.lock(c):
             rec, _ = D.apply(mob, SK.skill_def(STUN), T + 0.1)
@@ -546,16 +816,36 @@ class AggroFlows:
 
     # ------------------------------------------------- server-side hits ---
     def test_a_skill_survivor_is_taken_over_at_once(self):
+        """Desync fix M1 cast gate (MOB_HIT_CAST_GATE): taken over at once, but standing (the
+        STOP top-up) - the caster's client is about to catch the same hit and start its hurt -
+        for Ice Spear's L 1290 + 0.12 s; then the chase word. Off: the chase word at once."""
         self.hero(cls=1, level=40, weapon=WOODEN_BLADE, skills=[ICE_SPEAR])
         c, mob = self.chase(mob_xy=(1244, 714), player_xy=(1200, 714))
         with self.lock(c):
             c.session['facing'] = C.FACING_RIGHT
+        t0 = time.monotonic()
         c.send_c2s(self.keys['skill'], {'skill_id': ICE_SPEAR})
         use, mp, take = c.expect(0x25, 0x44, 0x2A)
+        t1 = time.monotonic()
         self.assertLess(mob.hp, 500)
-        # 44 px: within 65 the first direction is toward the attacker, and it walks on
-        self.assertEqual(take.payload, self.cmd(mob, WALK_L))
+        self.assertEqual(take.payload, self.cmd(mob, AI.STOP))
         self.assertEqual((mob.aggro_uid, mob.ai_owned), (1, True))
+        T = mob.ai_recover_until
+        self.assertTrue(t0 + 1.41 - 1e-6 <= T <= t1 + 1.41 + 1e-6, (T - t0, T - t1))
+        self.pin(c, mob, 1244, 714, T - 0.01)
+        self.assertEqual(self.tick(c, T - 0.01), [])
+        # 44 px: within 65 the first direction is toward the attacker, and it walks on
+        self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_L)
+        # MOB_HIT_CAST_GATE false: the chase word at the cast, as before
+        self.server.config['MOB_HIT_CAST_GATE'] = False
+        with self.lock(c):
+            AI.clear(mob)                                                  # a fresh, unowned mob
+            mob.hp = 500
+            c.session[W.GameServer.SKILL_CD_KEY].clear()
+        c.send_c2s(self.keys['skill'], {'skill_id': ICE_SPEAR})
+        use, mp, take = c.expect(0x25, 0x44, 0x2A)
+        self.assertEqual(take.payload, self.cmd(mob, WALK_L))
+        self.assertEqual(mob.ai_recover_until, 0.0)
 
     def test_a_dot_tick_takes_the_mob_over_once(self):
         self.hero(cls=4, level=40, weapon=DAGGER, skills=[POISON])
@@ -605,7 +895,7 @@ class AggroFlows:
         with self.lock(c):
             self.assertTrue(self.server._mob_aggro(sock, c.session, mob, 2, d1 + 10))
         self.assertEqual(mob.aggro_uid, 2)
-        T = time.monotonic()
+        T = self.recovered(mob)
         # it chases the Watcher (1500, 714) now: to the right - on both clients (shared), each
         # 0x2A carrying its receiver's own uid
         self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_R)
@@ -643,7 +933,7 @@ class AggroFlows:
     def test_the_leash_releases_with_0x9E(self):
         c, mob = self.chase()
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_L)
         leash = self.server.config.MOB_LEASH_PX
         self.pin(c, mob, 1244 + leash, 714, T + 0.1)                 # exactly the leash: still chasing
@@ -730,7 +1020,7 @@ class AggroFlows:
     def test_no_command_follows_a_kill(self):
         c, mob = self.chase(hp=5)
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         self.assertEqual(self.step(c, mob, T, (1244, 714)), WALK_L)
         opcodes = []
         for _ in range(10):
@@ -773,9 +1063,14 @@ class AggroFlows:
 
         def event(action, taken):
             with self.lock(c):
-                c.session['contact_t'] = 0.0
+                c.session.pop('contact_t', None)                # the contact and swing slots
+                c.session.pop('swing_t', None)
                 if action in W.GameServer.MOB_SWING_EVENTS and mob.ai_attack_t:
-                    mob.ai_attack_t = time.monotonic()      # as if its swing was just commanded
+                    now = time.monotonic()                  # as if its swing was just commanded
+                    mob.ai_attack_t = now
+                    # P13 boss-b3: only the kinds (A / B) it WAS commanded stay fresh
+                    mob.ai_attack_a_t = now if mob.ai_attack_a_t else 0.0
+                    mob.ai_attack_b_t = now if mob.ai_attack_b_t else 0.0
             self.move(c, action << 12, event_source_uid=mob.uid)
             if taken is None:
                 c.expect_silence(0.15)
@@ -798,15 +1093,26 @@ class AggroFlows:
         with mock.patch.object(self.server, '_mob_rng_bit', return_value=1):
             self.assertEqual(self.step(c, mob, time.monotonic(), (1040, 714)), ATK_A_L)
         hate = dict(mob.hate)
+        for action, taken in ((7, WEAK), (8, WEAK)):
+            with self.subTest(action=action):
+                event(action, taken)
+        # P13 boss-b3: attack B was never commanded, so its events (a client's own swing) do
+        # nothing yet; out of reach, then back in with the other rng bit: attack B
+        for action in (9, 10, 4, 5):
+            with self.subTest(action=action, commanded='A only'):
+                event(action, None)
+        with mock.patch.object(self.server, '_mob_rng_bit', return_value=0):
+            self.assertEqual(self.step(c, mob, time.monotonic(), (1100, 714)), WALK_L)
+            self.assertEqual(self.step(c, mob, time.monotonic(), (1040, 714)), ATK_B_L)
         # 4 / 5: attack B into his guard (5 is 4, 0x419549; no shield, so no guard Def)
-        for action, taken in ((7, WEAK), (8, WEAK), (9, STRONG), (10, STRONG), (4, STRONG), (5, STRONG)):
+        for action, taken in ((9, STRONG), (10, STRONG), (4, STRONG), (5, STRONG), (7, WEAK)):
             with self.subTest(action=action):
                 event(action, taken)
         self.assertEqual((mob.aggro_uid, mob.hate), (1, hate))            # a hit on him: no change
         # at 0 HP: the death dialog, and the mob chasing him goes back to its wander
         with self.lock(c):
             c.session['hp'] = 2
-            c.session['contact_t'] = 0.0
+            c.session.pop('contact_t', None)
         self.move(c, 6 << 12, event_source_uid=mob.uid)
         death, back = c.expect(0x3E, 0x9E)
         self.assertEqual(back.payload, self.hand_back(mob))
@@ -821,7 +1127,7 @@ class AggroFlows:
 
         def touch():
             with self.lock(c):
-                c.session['contact_t'] = 0.0
+                c.session.pop('contact_t', None)                # the contact slot
             self.move(c, 6 << 12, event_source_uid=mob.uid)
 
         touch()
@@ -853,6 +1159,167 @@ class AggroFlows:
         touch()
         hp -= 1
         self.assertEqual(c.s2c(c.expect(0x28, quiet=0.1)), {'hp': hp})
+
+    def test_contact_and_swings_have_separate_rate_limits(self):
+        """livetest bug 2: a chasing Poco / Monkey Soldier drained HP by body contact about
+        every 0.54 s and starved its swings (441 contact hits against 5), because both shared
+        one 0.5 s slot. Contact (events 1/6) now has its own MOB_CONTACT_MIN_SECS slot per
+        (victim, monster), swings (4/5, 7..10) their own MOB_SWING_MIN_SECS one. A touch from a
+        monster in its commanded attack is contact too (P7 live L2: the client checks contact
+        before the swing, so it is all a pinned player's client ever reports)."""
+        self.hero(level=40)
+        c, mob = self.chase(template=RYNX)
+        with self.lock(c):
+            other = self.mob(c, 2)                                      # a second Pupu, after him too
+            other.x, other.y = other.spawn_x, other.spawn_y = 1300.0, 714.0
+            other.hp = other.max_hp = 500
+        self.hit(c, mob)
+        self.hit(c, other)
+        window = self.server.config.MOB_CONTACT_MIN_SECS
+        self.assertEqual(window, 1.2)
+        hp = [c.session['hp']]
+
+        def event(m, action, hurts):
+            self.move(c, action << 12, event_source_uid=m.uid)
+            if not hurts:
+                c.expect_silence(0.15)
+                self.assertEqual(c.session['hp'], hp[0])
+                return
+            new = c.s2c(c.expect(0x28, quiet=0.1))['hp']
+            self.assertLess(new, hp[0])
+            hp[0] = new
+
+        event(mob, 6, True)                                             # contact
+        event(mob, 6, False)                                            # the same mob, < 1.2 s later
+        event(mob, 1, False)                                            # contact into a guard: same slot
+        event(other, 6, True)                                           # another mob: its own slot
+        # a swing is not starved by the contact that just landed
+        with self.lock(c):
+            mob.ai_attack_t = mob.ai_attack_a_t = mob.ai_attack_b_t = time.monotonic()   # A and B commanded
+        event(mob, 7, True)
+        event(mob, 9, False)                                            # < 0.5 s after that swing
+        # a touch while its commanded attack runs is contact (P7 live L2): it hurts through
+        # the contact slot, and the next one inside MOB_CONTACT_MIN_SECS does not
+        with self.lock(c):
+            mob.ai_attack_t = time.monotonic()
+            del c.session['contact_t'][mob.uid]
+        event(mob, 6, True)
+        self.assertIn(mob.uid, c.session['contact_t'])
+        event(mob, 6, False)                                            # < 1.2 s later
+        # both slots open again once their time has passed
+        with self.lock(c):
+            c.session['contact_t'][other.uid] -= window
+            c.session['swing_t'][mob.uid] -= W.GameServer.MOB_SWING_MIN_SECS
+            mob.ai_attack_t = mob.ai_attack_b_t = time.monotonic()      # its attack B commanded
+        event(other, 6, True)
+        event(mob, 9, True)
+
+    def test_a_monster_parked_in_its_attack_still_hurts_by_contact(self):
+        """P7 live L2: a Monkey Soldier parked in "attack A right" on a pinned player got only
+        keep-alives, and each renewed ai_attack_t, so the old rule "a touch within 1.5 s of a
+        commanded attack is its swing passing through" dropped all 407 of its touches in
+        226 s - while his client, which checks contact before the swing, never reported a
+        swing at all. Its touches hurt now, through the contact slot."""
+        self.hero(level=40)
+        c, mob = self.chase(template=RYNX)
+        self.hit(c, mob)
+        T = self.recovered(mob)
+        with mock.patch.object(self.server, '_mob_rng_bit', return_value=1):
+            self.assertEqual(self.step(c, mob, T, (1040, 714)), ATK_A_L)
+            for dt in (0.6, 1.2, 1.8):                                  # pinned: keep-alives only
+                with self.subTest(dt=dt):
+                    self.pin(c, mob, 1040, 714, T + dt)
+                    self.assertEqual(self.tick(c, T + dt), [(0x2A, self.cmd(mob, ATK_A_L))])
+        self.assertLess(T + 1.8 - mob.ai_attack_t, 0.6)                 # the clock never ages
+        # Rynx Body_Atk 18 on a Lv40 Novice with no armour: level_scale = 18 / 3 (see
+        # test_contact_damage_follows_the_event_type)
+        CONTACT = 6
+        hp = [c.session['hp']]
+
+        def touch(hurts):
+            self.move(c, 6 << 12, event_source_uid=mob.uid)
+            if not hurts:
+                c.expect_silence(0.15)
+                self.assertEqual(c.session['hp'], hp[0])
+                return
+            hp[0] -= CONTACT
+            self.assertEqual(c.s2c(c.expect(0x28, quiet=0.1)), {'hp': hp[0]})
+
+        with self.assertLogs('WS', logging.DEBUG) as logs:
+            with self.lock(c):
+                mob.ai_attack_t = time.monotonic()                      # on the real clock
+            touch(True)
+            self.assertIn(mob.uid, c.session['contact_t'])
+            with self.lock(c):
+                c.session['contact_t'][mob.uid] -= 0.54                 # the client's next report
+            touch(False)
+            with self.lock(c):
+                c.session['contact_t'][mob.uid] -= self.server.config.MOB_CONTACT_MIN_SECS   # 1.2
+                mob.ai_attack_t = time.monotonic()
+            touch(True)
+        self.assertEqual([line for line in logs.output if 'commanded attack' in line], [])
+
+    def test_two_monsters_swinging_together_both_hurt(self):
+        """Review of livetest bug 2: the swing slot was one per victim, so when two aggroed
+        monsters swung at the same player within MOB_SWING_MIN_SECS the second hit was dropped -
+        while his client had drawn its digit and flinch and never takes HP off itself. Swings
+        are limited per (victim, monster) now, like body contact."""
+        self.hero(level=40)
+        c, mob = self.chase(template=RYNX)
+        with self.lock(c):
+            other = self.mob(c, 2)                                      # a second Pupu, after him too
+            other.x, other.y = other.spawn_x, other.spawn_y = 1300.0, 714.0
+            other.hp = other.max_hp = 500
+        self.hit(c, mob)
+        self.hit(c, other)
+        hp = [c.session['hp']]
+
+        def swing(m, action, hurts):
+            self.move(c, action << 12, event_source_uid=m.uid)
+            if not hurts:
+                c.expect_silence(0.15)
+                self.assertEqual(c.session['hp'], hp[0])
+                return
+            new = c.s2c(c.expect(0x28, quiet=0.1))['hp']
+            self.assertLess(new, hp[0])
+            hp[0] = new
+        with self.lock(c):
+            # both attacks commanded, A and B (P13 boss-b3: a swing needs its own kind)
+            now = time.monotonic()
+            for m in (mob, other):
+                m.ai_attack_t = m.ai_attack_a_t = m.ai_attack_b_t = now
+        swing(mob, 7, True)
+        swing(other, 7, True)                                           # < 0.5 s later: its own slot
+        swing(mob, 9, False)                                            # the first one's slot is taken
+        swing(other, 9, False)
+        self.assertEqual(set(c.session['swing_t']), {mob.uid, other.uid})
+
+    def test_the_swing_slot_is_per_monster_and_pruned(self):
+        s = {'swing_t': 5.0}                                            # an older server's float
+        slot = self.server._swing_slot                                  # MOB_SWING_MIN_SECS 0.5
+        self.assertTrue(slot(s, 7, 100.0))
+        self.assertTrue(slot(s, 8, 100.1))                              # another monster
+        self.assertFalse(slot(s, 7, 100.4))
+        self.assertTrue(slot(s, 7, 100.5))
+        self.assertEqual(s['swing_t'], {7: 100.5, 8: 100.1})
+        self.assertTrue(slot(s, 9, 101.0))                              # the stale entries go
+        self.assertEqual(s['swing_t'], {9: 101.0})
+
+    def test_the_contact_slot_is_per_monster_and_pruned(self):
+        s = {}
+        slot = self.server._contact_slot                               # MOB_CONTACT_MIN_SECS 1.2
+        self.assertTrue(slot(s, 7, 100.0))
+        self.assertFalse(slot(s, 7, 101.1))
+        self.assertTrue(slot(s, 8, 101.1))                              # another monster
+        self.assertTrue(slot(s, 7, 101.2))
+        self.assertEqual(s['contact_t'], {7: 101.2, 8: 101.1})
+        self.assertTrue(slot(s, 9, 103.0))                              # the stale entries go
+        self.assertEqual(s['contact_t'], {9: 103.0})
+        s['contact_t'] = 0.0                                            # anything else: no slot taken
+        self.assertTrue(slot(s, 9, 103.1))
+        self.server.config = cfgmod.from_dict({'CLIENT_BUILD': self.build, **self.overrides,
+                                                'MOB_CONTACT_MIN_SECS': 0})
+        self.assertTrue(slot(s, 9, 103.1))                              # 0: every touch
 
     # ---------------------------------------------------------- proximity ---
     def test_the_proximity_scan_is_2009_only(self):
@@ -893,7 +1360,7 @@ class Fallback1BFlows:
     def test_nodes_stream_after_the_release_only_when_the_hold_is_nearly_spent(self):
         c, mob = self.chase()
         self.hit(c, mob)                                                # the 0x2A take-over (lo 0)
-        T = time.monotonic()
+        T = self.recovered(mob)
         self.pin(c, mob, 1244, 714, T)
         got = self.tick(c, T)
         self.assertEqual(got, [(0x1B, bytes.fromhex('01 00 0f 00 2c 01 00 00 01 00 00 00 00 00 00 00'))])
@@ -912,6 +1379,16 @@ class Fallback1BFlows:
         self.pin(c, mob, 1244, 714, T + 0.88)
         self.assertEqual(self.tick(c, T + 0.88), [(0x1B, self.node(mob, WALK_R))])
 
+    def test_the_chase_waits_for_the_hurt_on_the_1B_path_too(self):
+        """M1: the recovery gate holds the '1B' nodes as well."""
+        c, mob = self.chase()
+        self.hit(c, mob)
+        T = mob.ai_recover_until
+        self.pin(c, mob, 1244, 714, T - 0.1)
+        self.assertEqual(self.tick(c, T - 0.1), [])
+        self.pin(c, mob, 1244, 714, T)
+        self.assertEqual(self.tick(c, T), [(0x1B, self.node(mob, WALK_L))])
+
     def test_a_server_side_hit_takes_over_with_0x2A_then_streams(self):
         c, mob = self.chase()
         with self.lock(c):
@@ -923,7 +1400,7 @@ class Fallback1BFlows:
     def test_the_release_is_still_0x9E(self):
         c, mob = self.chase()
         self.hit(c, mob)
-        T = time.monotonic()
+        T = self.recovered(mob)
         self.pin(c, mob, 1244 - self.server.config.MOB_LEASH_PX - 1, 714, T)
         self.assertEqual(self.tick(c, T), [(0x9E, self.hand_back(mob))])
 

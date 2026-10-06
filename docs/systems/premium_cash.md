@@ -179,7 +179,7 @@ Field values are what the server should send. **"Replay"** means the proven map-
 3. Save `pre_mall = {map: session['current_map'], x, y}`. Take x/y from the combat driver's last memory read of `player+0x11F8/+0x1288` (ws:1800-1803), falling back to `char['x'/'y']`.
    - Set `session['in_cash_shop']=True`.
    - **Freeze** position sampling, `_memory_melee`, `_tick_respawns` and wander for this session (B9). The preview avatar has uid 1 and fixed coordinates.
-4. Multiplayer only: send S2C 0x75 `{uid}` to other sessions on the same map. They draw sign sprite 0x168 over the player.
+4. ~~Multiplayer only: send S2C 0x75 `{uid}` to other sessions on the same map. They draw sign sprite 0x168 over the player.~~ **Superseded (P8 stage 4):** the player leaves the map instead (hidden from it, see F17).
 5. Send S2C 0x6F (full owned list). 0x6A snapshots +0x04, so 0x6F must come first.
 6. If there are undelivered gifts, send S2C 0x6D, so their popups appear at the end of 0x6A.
 7. Send S2C 0x6A `{cash_balance=account.cash, mileage_balance=account.mileage, box_count=len(box), box records}`. Record `session['mall_snapshot'] = {box: set(serials), char: set(serials)}`.
@@ -264,7 +264,7 @@ One opcode has three send sites: single buy (0x1F8, `item_count=1`), cart (0x1F7
 5. The handler must be **idempotent**. If the window is closed again without a fresh 0x6A, the client re-sends the same serials.
 6. Send **S2C 0x6B** (empty). The client saves the wish list to `HKCU\Software\Hamelin\WindSlayer\<name>\Wish0..11`, sets window 3 ctrl 6 to state 3 and rebuilds the inventory. This **does not** restore the world.
 7. **Replay** to `pre_mall.map` at `pre_mall.x/y`: 0x08, 0x03, 0x07, 0x0A, 0x28, 0x44, then **S2C 0x6F** (post-move owned list), then `_spawn_map_monsters`.
-8. Set `session['in_cash_shop']=False` and unfreeze combat. Multiplayer only: send **S2C 0x5C `{uid}`** to others on the map.
+8. Set `session['in_cash_shop']=False` and unfreeze combat. ~~Multiplayer only: send **S2C 0x5C `{uid}`** to others on the map.~~ **Superseded (P8 stage 4):** the replay of step 7 brings him back as any map load does (0x05 to the peers, see F17).
 
 ### F8: Use a generic cash item (C2S 0x48 → S2C 0x72)
 1. **C2S 0x48** `{u16 item_id}`. The client shows the waiting box, **so a reply is mandatory**.
@@ -357,10 +357,18 @@ This group only provides `cash_find(char, item_id)` and `cash_consume(serial)`. 
 1. The server credits mileage (event or GM).
 2. Send **S2C 0x70 `{cash, mileage, 0}`**, then **S2C 0x98** (empty body). The client adds the chat line "※Mileage Event※ You got bonus mileage."
 
-### F17: Presence. Needs multiplayer
-- Entering the mall: send **S2C 0x75 `{uid}`** to others on the map.
-- Leaving: send **S2C 0x5C `{uid}`**.
-- When a session spawns another player (0x07) who is in the mall, it must send that player's `+0xE2 room_no = 0x81`. In our 0x07 builder this is the u16 labelled "marriage" (B10).
+### F17: Presence. Needs multiplayer. SUPERSEDED by "hidden from the map" (P8 stage 4)
+
+**Superseded.** The server implements presence as **hidden from the map**, not with the retail marker below (server `mall.py` module docstring "Presence"; roadmap item premium_cash-presence):
+- Entering the mall departs the map like a map load: the peers holding the player get **S2C 0x06**, and a late arrival gets no record of him (he is in no map instance, `in_world` is False, and `presence._can_show` also checks `in_cash_shop`).
+- The exit's map-load replay (F7 step 7) brings him back: **S2C 0x05** to every peer on the map at that time, and 0x04 of them to him.
+- Every other server-driven map load (GM `!warp` / `/go`, warp stones, revive) is refused while he is inside. A 0x08 into the preview scene would put the client back in the world with the mall still open server-side.
+- Why not the marker: the signboard needs the entity on the peers' clients, which the world-leave removes. The marker's only extra is the "Enter the cash shop?" prompt, whose Yes is the same client no-op as the HUD button (§1.4).
+
+The retail marker, kept for reference and **not sent**:
+- ~~Entering the mall: send **S2C 0x75 `{uid}`** to others on the map.~~
+- ~~Leaving: send **S2C 0x5C `{uid}`**.~~
+- ~~When a session spawns another player (0x07) who is in the mall, it must send that player's `+0xE2 room_no = 0x81` (2009: entity+0xEA = 0xC5). In our 0x07 builder this is the u16 labelled "marriage" (B10).~~
   - With a non-zero value, the client also reads the `+0xE1` type and the `+0xD0` title, so emit `u8 0` plus 17 zero bytes.
   - Clicking that player only re-dispatches to a no-op (§1.4), so the sign is cosmetic.
 
@@ -459,7 +467,7 @@ Keep one JSON file. Add fields only, no new top-level keys, because the account 
 | B7 | **wsproto treats hex literals in conditions as client state** (same defect as chat_mail_gm B9) | `wsproto.py` `_eval` lines 183-184: `re.findall(r'[A-Za-z_]\w*')` pulls `x0D50` out of `0x0D50`, and the filter only drops names that fullmatch `0x..`. The condition becomes a ClientStateCondition and evaluates **False** on encode and decode. **[run]** `Grammar("u16 a\nif(a == 0x10) { u8 b }").encode({'a':16,'b':7})` → `1000` (b dropped); with `a == 16` → `100007`. **0x72** random-hair `hair_code` is never emitted, so the client reads the serial from the wrong offset. The same pattern appears in C2S 0x0D movement (`& 0xF`) and in S2C 0x07/0x04/0x2B/0x2E/0x09/0x0C/0x01 conditions | crash_or_desync | Match names with `(?<![\w])[A-Za-z_]\w*`, or strip numeric literals before collecting names. Add a unit test |
 | B8 | `wsdev.py sendspec` cannot pass `assume` | wsdev.py `cmd_sendspec` 432-452: `Grammar(spec['grammar']).encode(fields)`. With client-state gates forced False: **0x6F encodes to 0 bytes** **[run]**; 0x76 encodes the 12-byte non-local form (the owner then reads a stale serial/count); 0x72 drops the 16-byte expiry for period items | wrong_behavior (tooling) | Accept an `"__assume__": {expr: bool}` key in the JSON, or default client-state conditions to True for S2C encode |
 | B9 | The combat driver will treat the mall preview avatar as the player | `_combat_driver` ws:1737-1810 caches the scene entity with uid==1. **[bin]** `FUN_0045C470` gives the preview avatar uid `player_info+0x1D8` (the same uid 1) and calls `RegisterLocalPlayer` (0x45C65C). `_memory_melee` (ws:1678) can then resolve hits against server-side monsters that 0x6A destroyed client-side, and `_tick_respawns` / wander can send 0x1A/0x12 into the preview scene | cosmetic | Skip sessions with `in_cash_shop` in `_memory_melee`, `_tick_respawns` and wander. Do not sample `pos` |
-| B10 | 0x07 builder labels `+0xE2` "marriage" | ws:2310-2317 (also ws:2105 in the PySlayer-style builder). Specs 0x75 / 0x5B: `entity+0xE2` is **room_no** (0x81 = cash-shop marker), with the `+0xE1` room type and the `+0xD0` title. Sending 0 is correct today | cosmetic | Rename to room_no. F17 needs 0x81 for players in the mall |
+| B10 | 0x07 builder labels `+0xE2` "marriage" | ws:2310-2317 (also ws:2105 in the PySlayer-style builder). Specs 0x75 / 0x5B: `entity+0xE2` is **room_no** (0x81 = cash-shop marker), with the `+0xE1` room type and the `+0xD0` title. Sending 0 is correct today | cosmetic | Rename to room_no. ~~F17 needs 0x81 for players in the mall~~ F17 is superseded (a player in the mall is hidden from the map), so 0 stays correct |
 | B11 | 0x02 login builder field labels | Docstring ws:2666 and appends ws:2676-2678: `unknown_1` = `cash_first_purchase_flag` (→ `game_state+0x700`), `has_premium` = `account_gender_flag` (`scene+0x130`), `premium_flags` = manner points. The values 0/0/0 are safe, but gender 0 makes Gender-1 items unequippable and breaks the gift 0x14 check (spec 0x02) | cosmetic | Relabel. Source the values from the account (F1) |
 
 **Cross-group dependency:** refusal and megaphone lines need a correct chat builder. `_handle_chat` (ws:954) and `_send_chat_line` (ws:1535) prepend an extra `u8 1` before the 17-byte name, but spec 0x16 is `str[17] sender_name, u8 len, text` (LIVE_TEST_LOG chat bug #3). That fix belongs to the chat group; this group uses 0x15/0x90 built from the grammar.
@@ -493,7 +501,7 @@ Priorities use the lead's scale. This group is cash / GM content, so most items 
 | premium_cash-megaphone | C2S 0x4C → 0x90 broadcast + consume (0x72 or 0x6F); rate limit | 0x4C, 0x90, 0x72 | S | P3 | cash-inventory-api |
 | premium_cash-region-warp | C2S 0x70 → 0x9A + replay to dest | 0x70, 0x9A | M | P3 | map-replay-helper, cash-inventory-api |
 | premium_cash-friend-warp | C2S 0x71 → 0x9B + replay to the target (needs per-session uid + position) | 0x71, 0x9B | M | P3 | map-replay-helper, multiplayer |
-| premium_cash-presence | 0x75 / 0x5C broadcast; 0x07 room_no=0x81 for players in the mall (B10) | 0x75, 0x5C, 0x07 | S | P3 | mall-enter, multiplayer |
+| premium_cash-presence | ~~0x75 / 0x5C broadcast; 0x07 room_no=0x81 for players in the mall (B10)~~ Done as "hidden from the map" (P8 stage 4; F17 superseded): 0x06 on entry, the exit replay's 0x05 | ~~0x75, 0x5C,~~ 0x06, 0x05 | S | P3 | mall-enter, multiplayer |
 | premium_cash-mileage-event | GM/event mileage credit → 0x70 + 0x98 | 0x70, 0x98 | S | P3 | balance-refresh |
 
 ---

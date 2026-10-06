@@ -17,7 +17,8 @@ docs/systems/social_friend.md F10 / F11, chat_mail_gm.md 1.6 / F9, roadmap P7 ex
   the same day is 0x95 {7} and costs nothing;
   plus the weekly (6) and daily-cap (5) rules on later days, every "doesn't exist" (2) case,
   the HUD Report path (uid 0, offline target), own account, fee by level, short of gold,
-  gold locked in a trade, the category clamp and the `!rep` / `!reports` dev commands.
+  gold locked in a trade, the F9 order (once a day before the fee checks), the category
+  clamp and the `!rep` / `!reports` dev commands.
 
 No port is bound, no client is started and the live accounts.json is never opened (temp
 copies; the module checks its hash at the end).
@@ -487,6 +488,32 @@ class _Reputation(_Base):
         self.assertIn('That gold is offered in a trade.', self.notice(a.expect(0x15), a))
         self.assertEqual((self.gold('TestHero'), self.social('test')['report_day']), (1000, None))
         self.assertIsNotNone(self.server.trade.trade_of(a.session))
+
+    def test_once_a_day_is_answered_before_the_fee_checks(self):
+        """chat_mail_gm F9 step 3: the once-a-day rule (0x95 {7}) comes before the fee and gold
+        checks. A second report the same day while the gold is locked in a trade got the
+        trade's "That gold is offered in a trade." line instead (P7 review)."""
+        a, b = self.a, self.b
+        self.report(a, 2, 'Watcher')
+        self.assertEqual(self.result(a, 0x95), {'result': REP.REPORT_OK, 'gold': 900})
+        a.send_c2s(self.k['trade_request'], {'target_uid': 2})
+        b.expect(0x45)
+        b.send_c2s(self.k['trade_accept'], {'requester_name': 'TestHero'})
+        a.expect(0x46)
+        b.expect(0x46)
+        a.send_c2s(self.k['trade_lock'], {'gold': 850})
+        a.expect(0x48)
+        b.expect(0x48)
+        self.report(a, 0, 'Carol', b'again')
+        self.assertEqual(self.result(a, 0x95), {'result': REP.REPORT_ONCE_A_DAY})
+        a.expect_silence(0.1)                               # no gold-in-trade line
+        self.assertEqual((self.gold('TestHero'), len(self.reports())), (900, 1))
+        self.assertIsNotNone(self.server.trade.trade_of(a.session))
+        # short of gold too: still {7}, no 0x3F resync
+        self.rec('TestHero')['gold'] = 50
+        self.report(a, 0, 'Carol', b'again')
+        self.assertEqual(self.result(a, 0x95), {'result': REP.REPORT_ONCE_A_DAY})
+        a.expect_silence(0.1)
 
     def test_category_is_clamped_and_content_kept(self):
         self.report(self.a, 2, 'Watcher', 'hack tool 한'.encode('cp949'), category=9)

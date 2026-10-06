@@ -34,12 +34,24 @@ Applies, to a copy of the pristine WindSlayer.exe (every original byte is checke
     orange from 20. Live-verified 2026-09-24 (GOOD, rolled digits, 2-3 Combo). See
     combo_hud_2009.py; its art is 4 extra hs\ files (combo_hud_2009.py --install-assets;
     without them a built-in fallback is drawn). v1 is kept in _backup_combo_v1\.
+  - Catch-up knock fix F1 (--no-knock-fix to skip; live_harness/p8p13_live_triage.md finding 1,
+    RE in re_tools/docs/CATCHUP_KNOCK_FIX_RE_2026-10-05.md). The field catch-up pass of the frame
+    function (0x42CC94) calls FUN_00412c60(scene, copy) for every player copy with more than one
+    queued 0x1B node. That function honours its entity parameter only in pass 1; pass 2 (the
+    victims' +0x9DC reactions) walked every entity, so it consumed the local player's fresh knock
+    (+0x9DC = 6 from the frame's last hit detection) before the next tick's 0x0D builder could
+    report it: about 2.5 % of knocks were never sent. The 5 bytes 0x4138C6 (pass-2 list head
+    load) jump to a 60-byte cave at 0x4C6F00: when param_2 != 0 and the room is the field
+    (room +0x7C == 0), pass 2 walks a one-node list built in the function's own frame
+    ([esp+0x18] next = NULL, [esp+0x20] = param_2), so it handles only that copy. param_2 == 0
+    (the main tick) and PvP rooms (room mode 1, where the catch-up is the only tick and has no
+    main tick to fall back on) run the original instructions unchanged.
 The launcher still needs the three SSO arguments: WindSlayer_patched.exe -<a> -<b> -<c>
 (play_2009.bat passes them).
 
 usage: python patch_2009.py [address] [--src WindSlayer.exe] [--out WindSlayer_patched.exe]
                             [--no-smooth] [--no-aggro-rules] [--name-rule level|kr]
-                            [--no-combo-hud] [--p2]
+                            [--no-combo-hud] [--no-knock-fix] [--p2]
   --p2  second client for multiplayer tests: the client's own UDP P2P port 42907 -> 42908
         (4 immediates; only one process can bind 42907), written to WindSlayer_p2.exe
         unless --out is given.
@@ -90,6 +102,87 @@ NAME_RULES = {
 }
 
 
+# F1 catch-up knock fix (see the docstring and re_tools/docs/CATCHUP_KNOCK_FIX_RE_2026-10-05.md).
+# Hook: FUN_00412c60 0x4138C6 'mov eax,[edi+0Ch]; cmp eax,ebx' (pass-2 list head; reached from
+# 0x412C7A, 0x4138BA and the fall-through of 0x4138C0, always at body depth with EBX = 0 and
+# EDI = scene; nothing branches into 0x4138C7..0x4138CA). Both cave paths rejoin at 0x4138CB
+# 'mov [esp+14h],eax; jz 0x4141A2; mov edi,[esp+40h]; xor ebp,ebp; jmp 0x4138E0'.
+# The cave touches only EAX, the flags and, on the one-node path, [esp+18h] / [esp+20h]: pass-2
+# locals that the loop head 0x4138E0 reads once (node+0 next, node+8 entity) and writes before any
+# other read. [esp+44h] (param_2) is only read before pass 2 (first write 0x413D0D), so it is intact
+# at the hook. Cave in the zero .text tail past the combo HUD cave (0x4C6220..0x4C68A0), leaving that
+# cave 0x660 bytes to grow; both knock ranges are in combo_hud_2009.RESERVED.
+KNOCK_HOOK, KNOCK_ORIG, KNOCK_RESUME = 0x4138C6, bytes.fromhex('8B470C3BC3'), 0x4138CB
+KNOCK_CAVE, KNOCK_CAVE_LEN = 0x4C6F00, 0x3C
+
+
+def knock_cave_bytes():
+    rel32 = lambda src, dst: struct.pack('<i', dst - (src + 5))
+    one = bytes.fromhex(
+        '837C244400'          # +00 cmp  dword [esp+44h],0   param_2 (the catch-up's copy) or 0 (main tick)
+        '742B'                # +05 jz   +32                 param_2 == 0: the original instructions
+        '8B442440'            # +07 mov  eax,[esp+40h]       scene (param_1, never written in the function)
+        '8B80B40F0000'        # +0B mov  eax,[eax+0FB4h]     room (== game+0x4FC)
+        '83787C00'            # +11 cmp  dword [eax+7Ch],0   field? (the +0x13FC queue catch-up)
+        '751B'                # +15 jnz  +32                 PvP room: keep the all-entity walk
+        '8B442444'            # +17 mov  eax,[esp+44h]
+        '89442420'            # +1B mov  [esp+20h],eax       node+8 = the copy
+        'C744241800000000'    # +1F mov  dword [esp+18h],0   node+0 = next = NULL
+        '8D442418'            # +27 lea  eax,[esp+18h]       list head = &node
+        '85C0')               # +2B test eax,eax             ZF = 0: 0x4138CF does not exit
+    cave = one + b'\xE9' + rel32(KNOCK_CAVE + len(one), KNOCK_RESUME)          # +2D jmp 0x4138CB
+    assert len(cave) == 0x32
+    cave += KNOCK_ORIG + b'\xE9' + rel32(KNOCK_CAVE + len(cave) + len(KNOCK_ORIG), KNOCK_RESUME)
+    assert len(cave) == KNOCK_CAVE_LEN   # +32 mov eax,[edi+0Ch]; +35 cmp eax,ebx; +37 jmp 0x4138CB
+    return cave
+
+
+def apply_knock_fix(data, off, put, pe, combo=None):
+    """combo = (entries, cave_end) returned by combo_hud_2009.apply(), or None when it was skipped."""
+    sys.path.insert(0, HERE)
+    import combo_hud_2009
+    cave = knock_cave_bytes()
+    assert len(cave) == KNOCK_CAVE_LEN
+    hook = b'\xE9' + struct.pack('<i', KNOCK_CAVE - (KNOCK_HOOK + 5))
+    mine = ((KNOCK_HOOK, len(KNOCK_ORIG)), (KNOCK_CAVE, len(cave)))
+    # every other patch site: combo_hud's RESERVED list (all other patch_2009 edits) plus, when it
+    # was applied, the combo cave and its four hooks
+    others = [r for r in combo_hud_2009.RESERVED if r not in mine]
+    if combo is not None:
+        entries, combo_end = combo
+        others.append((combo_hud_2009.CAVE_VA, combo_end - combo_hud_2009.CAVE_VA))
+        others += [(va, len(orig)) for va, orig, _n, _w in combo_hud_2009.hooks(entries)]
+    missing = [r for r in mine if r not in combo_hud_2009.RESERVED]
+    if missing:
+        raise SystemExit(f'knock fix: combo_hud_2009.RESERVED lacks {[(hex(a), n) for a, n in missing]}')
+    for a, al in mine:
+        for b, bl in others:
+            if a < b + bl and b < a + al:
+                raise SystemExit(f'knock fix: 0x{a:X}+{al} overlaps another patch at 0x{b:X}+{bl}')
+    text = next(s for s in pe.sections if s.Name.rstrip(b'\0') == b'.text')
+    if not (text.VirtualAddress + B <= KNOCK_CAVE and KNOCK_CAVE + len(cave) <= text.VirtualAddress + B + text.SizeOfRawData):
+        raise SystemExit('knock fix: cave is outside the raw .text data')
+    # verify everything before writing anything (put() re-checks the hook)
+    ho = off(KNOCK_HOOK)
+    if bytes(data[ho:ho + len(KNOCK_ORIG)]) != KNOCK_ORIG:
+        raise SystemExit(f'catch-up knock fix: unexpected bytes at 0x{KNOCK_HOOK:X}: '
+                         f'{bytes(data[ho:ho + len(KNOCK_ORIG)]).hex()} (want {KNOCK_ORIG.hex()}) - not the pristine 2009 exe?')
+    co = off(KNOCK_CAVE)
+    if bytes(data[co:co + len(cave)]) != b'\0' * len(cave):
+        raise SystemExit(f'knock cave: 0x{KNOCK_CAVE:X}..0x{KNOCK_CAVE + len(cave) - 1:X} is not all zero - already patched?')
+    data[co:co + len(cave)] = cave
+    print(f'  {"knock fix cave":22} 0x{KNOCK_CAVE:X}  {len(cave)} zero bytes -> {cave.hex()}')
+    put(KNOCK_HOOK, KNOCK_ORIG, hook, 'catch-up knock fix')
+    # .text VirtualSize: max() so the patch order does not matter (after the smooth block, which
+    # writes it from a stale pefile value)
+    fo = text.get_file_offset() + 8
+    cur = struct.unpack_from('<I', data, fo)[0]
+    new = max(cur, KNOCK_CAVE + len(cave) - B - text.VirtualAddress)
+    if new != cur:
+        struct.pack_into('<I', data, fo, new)
+    print(f'  {"knock .text VSize":22} 0x{cur:X} -> 0x{new:X}')
+
+
 def pe_of(data):
     import pefile
     return pefile.PE(data=bytes(data), fast_load=True)
@@ -107,12 +200,15 @@ def main():
     aggro_rules = '--no-aggro-rules' not in args
     p2 = '--p2' in args
     combo_hud = '--no-combo-hud' not in args
+    knock_fix = '--no-knock-fix' not in args
     name_rule = opt('--name-rule', 'level')
     if name_rule not in NAME_RULES:
         raise SystemExit(f'--name-rule must be one of {sorted(NAME_RULES)}')
     if p2 and '--out' not in sys.argv:
         out = os.path.join(HERE, 'WindSlayer_p2.exe')
-    args = [a for a in args if a not in ('--no-smooth', '--no-aggro-rules', '--p2', '--no-combo-hud')]
+    args = [a for a in args if a not in ('--no-smooth', '--no-aggro-rules', '--p2', '--no-combo-hud', '--no-knock-fix')]
+    if any(a.startswith('--') for a in args):
+        raise SystemExit(f'unknown option(s): {[a for a in args if a.startswith("--")]}')
     address = args[0] if args else '127.0.0.1'
 
     data = bytearray(open(src, 'rb').read())
@@ -172,11 +268,16 @@ def main():
         for va, orig, new, what in AGGRO_RULES + NAME_RULES[name_rule]:
             put(va, bytes.fromhex(orig), bytes.fromhex(new), what)
 
+    combo = None
     if combo_hud:
         # after the smooth block: it writes .text VirtualSize from a stale pefile value
         sys.path.insert(0, HERE)
         import combo_hud_2009
-        combo_hud_2009.apply(data, off, put, iat, pe)
+        combo = combo_hud_2009.apply(data, off, put, iat, pe)
+
+    if knock_fix:
+        # after the smooth block (stale VirtualSize write) and the combo HUD (its cave extent)
+        apply_knock_fix(data, off, put, pe, combo)
 
     if p2:
         # scene+0x248 own port (0x4405C9), CreateSockets UDP bind (0x4407F9), the UDP handler

@@ -295,6 +295,21 @@ class Parties:
             if m is not viewer:
                 self._hud_add(viewer, m)
 
+    def renamed(self, session, old=None, new=None):
+        """premium_cash-rename (P8 stage 3; the world.ON_RENAME hook, ROADMAP_2009_ADDENDUM C4): a
+        frame shows a member's name only from the 0x4F that bound it (0x54 / 0x55 carry gauges
+        only), so every OTHER member's frames are rebuilt - 0x51 self, then 0x4F per member in
+        join order (_hud_rebuild), which now carries the new name (member_fields reads the
+        session's char_name). Returns how many members were rebuilt."""
+        with self.lock:
+            p = self.party_of(session)
+            others = [m for m in p.members if m is not session and self.online(m)] if p is not None else []
+            for m in others:
+                self._hud_rebuild(m, p)
+        if others:
+            log.info(f'[PARTY] {old!r} is now {new!r}: frames rebuilt for {[name_of(m) for m in others]}')
+        return len(others)
+
     # =============================================================== F1 ===
     def invite(self, session, target_uid):
         """C2S 0x27 {target_uid} (popup 0x50 "Make Party": the client printed "You requested
@@ -630,7 +645,8 @@ class Parties:
 # ------------------------------------------------------------------- hooks ---
 def register(hooks, parties):
     """The lifecycle hooks (world.py): every map load of a member queues its vitals resync;
-    leaving the world or closing the connection leaves the party (F5)."""
+    leaving the world or closing the connection leaves the party (F5); a rename rebuilds the
+    other members' frames (ON_RENAME, the C4 hook)."""
     def on_enter_world(server, session, first=False, **_):
         parties.entered(session, first=first)
 
@@ -640,7 +656,11 @@ def register(hooks, parties):
     def on_disconnect(server, session, reason=None, **_):
         parties.gone(session, reason or 'disconnect')
 
+    def on_rename(server, session, old=None, new=None, **_):
+        parties.renamed(session, old, new)
+
     hooks.register(worldmod.ON_ENTER_WORLD, on_enter_world)
     hooks.register(worldmod.ON_LEAVE_WORLD, on_leave_world)
     hooks.register(worldmod.ON_DISCONNECT, on_disconnect)
-    return on_enter_world, on_leave_world, on_disconnect
+    hooks.register(worldmod.ON_RENAME, on_rename)
+    return on_enter_world, on_leave_world, on_disconnect, on_rename

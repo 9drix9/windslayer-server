@@ -442,9 +442,11 @@ class StoreRecords(TempDir):
 
     def test_new_character_schema_and_immediate_save(self):
         st = self.st
+        # ROADMAP_2009_ADDENDUM C4 / X14: the next stable character id, store-wide max + 1.
+        want_cid = max(c['cid'] for acc in st.accounts.values() for c in acc['characters']) + 1
         char = st.new_character('Nova', s10=3, s1=2, s6=4, s5=5, s9=3, stats=(3, 2, 1, 3), now=1726550000)
         self.assertEqual(char, {
-            'name': 'Nova', 'created_at': 1726550000, 'class': 0, 'job2': 0, 'exp': 0,
+            'name': 'Nova', 'cid': want_cid, 'created_at': 1726550000, 'class': 0, 'job2': 0, 'exp': 0,
             'look': [0, 2, 0, 0, 3, 5, 4, 0, 0, 3, 3, 0, 0, 3], 'str': 3, 'dex': 2, 'int': 1, 'spr': 3,
             # cs-hp-mp-model: born at the client's maxima for class 0 / Lv1 / SPR 3 / INT 1
             # (hpmp.new_character_vitals), not the old flat 100/50.
@@ -471,7 +473,11 @@ class StoreRecords(TempDir):
             'friends': [], 'friend_capacity': 20, 'mentor': None, 'mentees': [], 'memos': [],
             'memo_seq': 0,
             # P7 (shop_storage-stall-registry): no stall open, nothing in escrow.
-            'stall_escrow': []})
+            'stall_escrow': [],
+            # P8 (premium_cash-wallet-model): no cash items owned.
+            'cash_items': [],
+            # P13 (ev-e3, events.py): no event login gift claimed yet.
+            'event_gifts_claimed': {}})
         saves = st.saves
         st.add_character('admin', char)
         self.assertEqual(st.saves, saves + 1)
@@ -498,7 +504,10 @@ class StoreRecords(TempDir):
         self.assertEqual(dave, {'uid': 4, 'gender': 1, 'manner': 0, 'banned': False,
                                 'deleted': False, 'characters': [],
                                 # P6 (social_friend-persistence): the compliment / report limits
-                                'social': S.social.default_account_social()})
+                                'social': S.social.default_account_social(),
+                                # P8 (premium_cash-wallet-model): an empty wallet, box and inbox
+                                'cash': 0, 'mileage': 0, 'first_purchase_done': False,
+                                'first_purchase_notice': False, 'cash_box': [], 'gift_inbox': []})
         with self.assertRaises(S.StoreError):
             st.create_account('carol', 'x')
         self.assertEqual(st.uid_of('dave'), 4)
@@ -563,6 +572,148 @@ class AtomicSave(TempDir):
         self.assertEqual(len(calls), 2)
         self.assertEqual(self.read()['test']['characters'][0]['exp'], 999)
         self.assertEqual(self.leftovers(), [])
+
+    # ---- livetest bug 7: the save snapshots under the lock and writes outside it ----
+    def test_replace_backs_off_exponentially_for_about_three_seconds(self):
+        """A reader holding accounts.json (WinError 5) outlasted the old five tries (~0.5 s)."""
+        delays = S.replace_delays()
+        self.assertEqual([round(d, 6) for d in delays], [0.05, 0.1, 0.2, 0.4, 0.8, 1.45])
+        self.assertAlmostEqual(sum(delays), S.REPLACE_BUDGET_SECS)
+        with mock.patch.object(S.os, 'replace', side_effect=PermissionError(13, 'held by a reader')) as rep, \
+                mock.patch.object(S.time, 'sleep') as slept:
+            with self.assertRaises(PermissionError):
+                self.st.save_now()
+        self.assertEqual([c.args[0] for c in slept.call_args_list], delays)
+        self.assertEqual(rep.call_count, len(delays) + 1)
+        self.assert_old_file_intact()
+        self.assertEqual([round(d, 6) for d in S.replace_delays(0.1, 0.25)], [0.1, 0.15])
+
+    def test_an_older_snapshot_never_replaces_a_newer_one(self):
+        st = self.st
+        older = st._take_snapshot()                       # exp 999
+        with st.lock:
+            st.accounts['test']['characters'][0]['exp'] = 1234
+        st.mark_dirty('newer')
+        newer = st._take_snapshot()
+        saves = st.saves
+        self.assertTrue(st._write_snapshot(*newer))       # the newer one reaches the disk first
+        self.assertEqual((self.read()['test']['characters'][0]['exp'], st.saves, st.dirty), (1234, saves + 1, False))
+        self.assertTrue(st._write_snapshot(*older))       # dropped: a newer one is on disk
+        self.assertEqual((self.read()['test']['characters'][0]['exp'], st.saves, st.dirty), (1234, saves + 1, False))
+        self.assertEqual(self.leftovers(), [])
+
+    def test_a_failed_newer_write_lets_an_older_one_land_and_stays_dirty(self):
+        st = self.st
+        older = st._take_snapshot()
+        with st.lock:
+            st.accounts['test']['characters'][0]['exp'] = 1234
+        st.mark_dirty('newer')
+        newer = st._take_snapshot()
+        with mock.patch.object(S.os, 'replace', side_effect=PermissionError(13, 'held')), \
+                mock.patch.object(S.time, 'sleep'):
+            with self.assertRaises(PermissionError):
+                st._write_snapshot(*newer)
+        self.assertTrue(st._write_snapshot(*older))       # nothing newer on disk: it lands
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 999)
+        self.assertTrue(st.dirty)                         # 1234 is not on disk yet
+        self.assertTrue(st.flush())
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 1234)
+        self.assertFalse(st.dirty)
+
+    def test_the_write_runs_outside_the_store_lock(self):
+        """flush (the debounced save's path) holds db_lock only for the snapshot: a handler can
+        take it while the file is written - it used to wait out every replace retry."""
+        st, real, seen = self.st, S.atomic_write, []
+
+        def writer(path, data, delays=None):
+            t = threading.Thread(target=lambda: (st.lock.acquire(), seen.append('lock taken'), st.lock.release()),
+                                 daemon=True)
+            t.start()
+            t.join(2.0)
+            seen.append('blocked' if t.is_alive() else 'free')
+            return real(path, data, delays)
+        with mock.patch.object(S, 'atomic_write', side_effect=writer):
+            self.assertTrue(st.flush())
+        self.assertEqual(seen, ['lock taken', 'free'])
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 999)
+
+    def test_a_failed_immediate_save_is_never_marked_clean_by_an_older_write(self):
+        """Review of livetest bug 7: create_account changed the records with no mark_dirty(),
+        so an older flush snapshot that landed after its failed write saw the change count it
+        covered unchanged and marked the store clean - 'newbie' was in memory only, and the
+        scheduled retry and the shutdown flush both found nothing to write."""
+        st = self.st
+        older = st._take_snapshot()                       # a debounced flush's, still in flight
+        with mock.patch.object(S, 'atomic_write', side_effect=PermissionError(13, 'held by a reader')):
+            with self.assertRaises(PermissionError):
+                st.create_account('newbie', 'pw')
+        self.assertTrue(st.dirty)
+        self.assertTrue(st._write_snapshot(*older))       # nothing newer on disk: it lands
+        self.assertNotIn('newbie', self.read())
+        self.assertTrue(st.dirty)                         # 'newbie' is still to save
+        self.assertTrue(st.flush())
+        self.assertIn('newbie', self.read())
+        self.assertFalse(st.dirty)
+        # an immediate save in flight keeps the store dirty until it is on disk, whatever an
+        # older snapshot's write does first
+        older = st._take_snapshot()
+        with st.lock:
+            st.accounts['newbie']['manner'] = 5
+        immediate = st._take_snapshot(change=True)
+        self.assertTrue(st._write_snapshot(*older))
+        self.assertTrue(st.dirty)
+        self.assertTrue(st._write_snapshot(*immediate))
+        self.assertFalse(st.dirty)
+        self.assertEqual(self.read()['newbie']['manner'], 5)
+
+    def test_immediate_saves_write_outside_the_store_lock(self):
+        """Review of livetest bug 7: create_account / add_character / remove_character / set_gm
+        wrote - and backed off up to ~3 s while a reader held the file - holding db_lock, which
+        every handler takes. They snapshot under it and write after letting it go; save=False
+        only marks the store dirty, for a caller that validates under db_lock itself and
+        calls save_now() after its own `with`."""
+        st, real, seen = self.st, S.atomic_write, []
+
+        def writer(path, data, delays=None):
+            t = threading.Thread(target=lambda: (st.lock.acquire(), st.lock.release()), daemon=True)
+            t.start()
+            t.join(2.0)
+            seen.append('blocked' if t.is_alive() else 'free')
+            return real(path, data, delays)
+        with mock.patch.object(S, 'atomic_write', side_effect=writer):
+            st.create_account('newbie', 'pw')
+            nova = st.new_character('Nova', **S.DEFAULT_LOOK_SLOTS[0], stats=S.DEFAULT_STATS, now=0)
+            st.add_character('newbie', nova)
+            self.assertEqual(st.set_gm('Nova')[0], 'newbie')
+            self.assertTrue(st.remove_character('newbie', 'Nova'))
+            self.assertFalse(st.remove_character('newbie', 'Nova'))     # nothing removed, nothing saved
+        self.assertEqual(seen, ['free'] * 4)
+        self.assertEqual(self.read()['newbie']['characters'], [])
+        self.assertFalse(st.dirty)
+        saves = st.saves
+        with st.lock:
+            st.create_account('later', 'pw', save=False)
+        self.assertEqual((st.saves, st.dirty), (saves, True))
+        self.assertNotIn('later', self.read())
+        st.save_now()
+        self.assertEqual((st.saves, st.dirty), (saves + 1, False))
+        self.assertIn('later', self.read())
+
+    def test_a_change_during_the_write_keeps_the_store_dirty(self):
+        st, real = self.st, S.atomic_write
+
+        def writer(path, data, delays=None):
+            with st.lock:
+                st.accounts['test']['characters'][0]['exp'] = 777
+            st.mark_dirty('a kill while the file is written')
+            return real(path, data, delays)
+        with mock.patch.object(S, 'atomic_write', side_effect=writer):
+            self.assertTrue(st.flush())
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 999)   # the snapshot's value
+        self.assertTrue(st.dirty)                                           # 777 still to save
+        self.assertTrue(st.flush())
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 777)
+        self.assertFalse(st.dirty)
 
     def test_concurrent_writers_never_tear_the_file(self):
         st = self.st
@@ -633,7 +784,7 @@ class ConcurrentEnsureAndSave(TempDir):
     save dies with "dictionary changed size during iteration", losing everything dirty.
     A conforming record is now left untouched and the encoder walks a store.snapshot()."""
 
-    ROUNDS, READERS = 600, 4
+    ROUNDS, READERS = 1200, 4
     HERB, POTION = 5, 3                                   # two EN consumables (one stack each)
 
     def setUp(self):
@@ -729,6 +880,146 @@ class DebouncedSave(TempDir):
         self.assertFalse(st.dirty)
         st.mark_dirty('again')                                # a new window opens
         self.assertEqual(self.sched.pending(), 1)
+
+    def test_a_failed_save_is_retried_with_backoff(self):
+        """livetest bug 7: after a failed save nothing rescheduled it - it waited for the next
+        change or the 60 s autosave. The failure keeps the store dirty and flushes again
+        RETRY_SECS later, twice as long after each further failure (up to RETRY_MAX_SECS).
+        Review: the retry is a timer - the tick thread's save sleeps only
+        QUICK_REPLACE_DELAYS, never the ~3 s backoff - and the traceback is logged once per
+        run of failures, then one line per failure."""
+        st = self.st
+        st.attach(self.sched, autosave=False)
+        with st.lock:
+            st.accounts['test']['characters'][0]['exp'] = 30
+        st.mark_dirty('kill')
+        self.clock.t += 2.0
+
+        def held():
+            return mock.patch.object(S.os, 'replace', side_effect=PermissionError(13, 'held by a reader'))
+        with held(), mock.patch.object(S.time, 'sleep') as slept:
+            with self.assertLogs('WS', logging.WARNING) as cm:
+                self.assertEqual(self.sched.run_due(), 1)
+            self.assertEqual([r.levelno for r in cm.records], [logging.ERROR])
+            self.assertIsNotNone(cm.records[0].exc_info)                   # the traceback, once
+            self.assertEqual([c.args[0] for c in slept.call_args_list], list(S.QUICK_REPLACE_DELAYS))
+            self.assertAlmostEqual(sum(S.QUICK_REPLACE_DELAYS), S.QUICK_REPLACE_BUDGET_SECS)
+            self.assertTrue(st.dirty)
+            self.assertEqual(self.read()['test']['characters'][0]['exp'], 0)   # the old file, intact
+            self.assertEqual(self.sched.pending(), 1)                          # the retry
+            for n, delay in enumerate((0.25, 0.5, 1.0), start=2):             # RETRY_SECS, doubling
+                self.clock.t += delay * 0.9
+                self.assertEqual(self.sched.run_due(), 0)
+                self.clock.t += delay * 0.1 + 1e-6
+                with self.assertLogs('WS', logging.WARNING) as cm:
+                    self.assertEqual(self.sched.run_due(), 1)
+                self.assertEqual([r.levelno for r in cm.records], [logging.WARNING])
+                self.assertIsNone(cm.records[0].exc_info)                       # one line
+                self.assertIn(f'({n} in a row)', cm.output[0])
+                self.assertEqual(self.sched.pending(), 1)
+        self.assertEqual(st.retry_delay(), 2.0)
+        self.clock.t += 2.0 + 1e-6                                             # the reader let go
+        with self.assertLogs('WS', logging.INFO) as cm:
+            self.assertEqual(self.sched.run_due(), 1)
+        self.assertIn('saved after 4 failed attempt(s)', '\n'.join(cm.output))
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 30)
+        self.assertFalse(st.dirty)
+        self.assertEqual(st.saves, self.base + 1)
+        self.assertEqual(self.sched.pending(), 0)
+        self.assertEqual(st.retry_delay(), st.RETRY_SECS)                      # the run is over
+        # an explicit save_now that fails schedules the retry too; a detached store does not
+        st.mark_dirty('again')
+        self.sched.run_due(self.clock.t + 5.0)                             # (the debounced save)
+        with held(), mock.patch.object(S.time, 'sleep'):
+            with self.assertRaises(PermissionError):
+                st.save_now()
+        self.assertEqual(self.sched.pending(), 1)
+        st.detach()
+        with held(), mock.patch.object(S.time, 'sleep'):
+            with self.assertLogs('WS', logging.ERROR):                     # save_now logged nothing
+                self.assertFalse(st.flush())
+        self.assertEqual(self.sched.pending(), 0)
+        self.assertTrue(st.flush())
+
+    def test_the_backoff_is_capped(self):
+        st = self.st
+        for failures, delay in ((0, 0.25), (1, 0.25), (2, 0.5), (7, 16.0), (8, 30.0), (400, 30.0)):
+            st._failures = failures
+            self.assertEqual(st.retry_delay(), delay, failures)
+
+    def test_a_held_file_never_holds_the_world_lock_long(self):
+        """Review of livetest bug 7: the debounced save, its retry and the autosave run on the
+        tick thread, which holds the world lock around every callback (GameServer wires
+        ticks.Scheduler(lock=world_lock)). While a reader held accounts.json each of those
+        saves slept through the ~3 s replace backoff there and the retry came a second later,
+        so the world lock was held ~3 s of every 4: monster AI, regen, DoT, buff expiry and
+        the login claim all waited. A tick's save now sleeps at most QUICK_REPLACE_DELAYS and
+        the retry is a timer."""
+        world_lock = threading.RLock()
+        sched = ticks.Scheduler(lock=world_lock, name='test-world')
+        st = self.st
+        st.debounce_secs, st.autosave_secs = 0.05, 0.2
+        st.attach(sched, autosave=True)
+        attempts, waits = [], []
+
+        def held(src, dst):
+            attempts.append(time.monotonic())
+            raise PermissionError(13, 'held by a reader')
+        with mock.patch.object(S.os, 'replace', side_effect=held), self.assertLogs('WS', logging.WARNING):
+            sched.start()
+            try:
+                with st.lock:
+                    st.accounts['test']['characters'][0]['exp'] = 42
+                st.mark_dirty('kill')
+                end = time.monotonic() + 1.5
+                while time.monotonic() < end:
+                    t0 = time.monotonic()
+                    with world_lock:                              # a handler / the next tick
+                        waits.append(time.monotonic() - t0)
+                    time.sleep(0.01)
+            finally:
+                sched.stop()
+                st.detach()
+        self.assertLess(max(waits), 0.5)                          # it was ~3.0 s
+        saves = len(attempts) // (len(S.QUICK_REPLACE_DELAYS) + 1)
+        self.assertGreaterEqual(saves, 3)                         # debounce, autosaves, retries
+        self.assertTrue(st.dirty)
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 0)
+        self.assertTrue(st.flush())                               # the reader let go
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 42)
+
+    def test_a_tick_save_never_waits_for_another_writer(self):
+        """Review of livetest bug 7: a create / delete / !gm save holds _save_mutex through its
+        whole ~3 s replace backoff while a reader holds the file, and the tick thread's save
+        waiting for that mutex held the world lock as long. tick_flush does not wait: the
+        store stays dirty and the retry writes it once the other writer is done. A trade /
+        stall commit (under store.lock) waits at most the quick budget."""
+        st = self.st
+        st.attach(self.sched, autosave=False)
+        with st.lock:
+            st.accounts['test']['characters'][0]['exp'] = 7
+        st.mark_dirty('kill')
+        self.clock.t += 2.0
+        with st._save_mutex:                                      # another writer is on disk
+            t0 = time.monotonic()
+            with self.assertLogs('WS', logging.INFO) as cm:
+                self.assertEqual(self.sched.run_due(), 1)         # the debounced save
+            self.assertLess(time.monotonic() - t0, 0.5)
+            self.assertIn('another save is writing', '\n'.join(cm.output))
+            self.assertEqual((st.dirty, st.saves), (True, self.base))
+            self.assertEqual(self.sched.pending(), 1)             # the retry
+            t0 = time.monotonic()
+            with self.assertLogs('WS', logging.INFO):
+                self.assertFalse(st.save_now(delays=S.QUICK_REPLACE_DELAYS,
+                                             wait=S.QUICK_REPLACE_BUDGET_SECS))
+            self.assertLess(time.monotonic() - t0, 0.5)
+            self.assertEqual(self.sched.pending(), 1)             # still the one retry
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 0)
+        self.assertEqual(st._failures, 0)                         # busy is not a failure
+        self.clock.t += st.RETRY_SECS + 1e-6
+        self.assertEqual(self.sched.run_due(), 1)
+        self.assertEqual(self.read()['test']['characters'][0]['exp'], 7)
+        self.assertEqual((st.dirty, st.saves, self.sched.pending()), (False, self.base + 1, 0))
 
     def test_autosave_backstop_and_detach(self):
         st = self.st

@@ -288,6 +288,32 @@ class ModelRules(unittest.TestCase):
         self.bag.add(ELEDUST, 5)
         self.assertEqual(C.craft(self.char, CHIPPED, rng=Rolls(0)).result, C.RESULT_OK)
 
+    @needs_2009
+    def test_a_bagged_pet_fills_the_equipment_tab_for_the_product(self):
+        """C1 review: a 2009 bagged pet takes an equipment-tab slot, and the room check runs on
+        a scratch copy of `inventory` - it must still count the pet, or the product of a full
+        tab is RESULT_OK / granted while bag.add refuses it (the materials gone for nothing)."""
+        import cash as CASH
+        use_build(B9)
+        try:
+            char = bare_char()
+            SK.learn(char, REFINING_1, check=False)
+            bag = INV.Inventory(char)
+            bag.set_capacity('equip', 1)
+            bag.add(WOOD_PIECE, 6)
+            pet = CASH.new_pet(4294, bound=True)                           # 4294 Picky, not worn
+            char['cash_items'] = [CASH.make_record(0x2000, 4294, CASH.KIND_PET, 1, equipped=False, pet=pet)]
+            self.assertEqual(bag.free_slots('equip'), 0)
+            self.assertEqual(C._scratch(bag).fits(CRUDE_CLUB, 1), bag.fits(CRUDE_CLUB, 1))
+            out = C.craft(char, CRUDE_CLUB, rng=Rolls(0))
+            self.assertEqual((out.result, out.granted), (C.RESULT_FULL, False))
+            self.assertEqual((bag.count(WOOD_PIECE), bag.count(CRUDE_CLUB)), (3, 0))   # as the client: consumed
+            char['cash_items'][0]['equipped'] = True                       # worn: grid slot 15, not the tab
+            out = C.craft(char, CRUDE_CLUB, rng=Rolls(0))
+            self.assertEqual((out.result, out.granted, bag.count(CRUDE_CLUB)), (C.RESULT_OK, True, 1))
+        finally:
+            use_build(B8)
+
     def test_reinforce_results(self):
         c, bag = self.char, self.bag
         bag.add(WOODEN_BLADE, 1)

@@ -98,7 +98,9 @@ WHAT IS PATCHED (pristine exe = image base 0x400000, file offset = VA - 0x400000
   0x412D70  NOT patched any more (v1's hit hook). Nothing needs restoring: every build starts from
             the pristine exe.
   cave      0x4C6220..CAVE_END, in the zero .text tail 0x4C61F7..0x4C6FFF. The smooth cave of
-            patch_2009 is 0x4C6200..0x4C6214, so there is no overlap.
+            patch_2009 is 0x4C6200..0x4C6214, so there is no overlap. The catch-up knock fix
+            cave of patch_2009 is 0x4C6F00..0x4C6F3B (in RESERVED), so the combo cave may grow
+            to 0x4C6F00 at most.
             Layout: strings, then the art probe table (16 B per entry), then A, B, HUD and init,
             each 16-byte aligned with 0xCC padding.
   state     0x551680..0x55169F, in the zero .data slack past VirtualSize (0x551668). It is BSS:
@@ -291,6 +293,7 @@ RESERVED = (
     (0x49F420, 1), (0x49F440, 1), (0x49F460, 1), (0x49F480, 1),   # X-Trap stubs
     (0x4405CF, 4), (0x4407FA, 4), (0x45F19A, 4), (0x488C42, 4),   # --p2 port immediates
     (0x52DD54, 16), (0x52DFD7, 53),             # version server address slots
+    (0x4138C6, 5), (0x4C6F00, 0x3C),            # catch-up knock fix F1: hook + cave (patch_2009 KNOCK_*)
 )
 
 GAME = 0x54EBD0               # CMyD3DApplication (game_state)

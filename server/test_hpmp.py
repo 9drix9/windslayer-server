@@ -26,6 +26,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -391,8 +392,11 @@ class EnterAndTransfer(ServerHpMp):
         with self.assertLogs('WS', logging.WARNING) as cm:
             c, pkts = self.enter()
         self.assertEqual(self.val(pkts[3]), 70)
-        self.assertTrue(any('saved dead' in line for line in cm.output))
+        line = next(line for line in cm.output if 'saved dead' in line)
         self.assertFalse(c.session['dead'])
+        # the line names the floor point the map load put him on (review of livetest bug 5)
+        x, y = c.session['pos']
+        self.assertIn(f'at ({x:g}, {y:g}) with 70 HP', line)
 
     def test_portal_neither_refills_nor_keeps_old_timers(self):
         c, _ = self.enter()
@@ -575,6 +579,25 @@ class DevCommands(ServerHpMp):
         c.expect(0x28, 0x15)
         self.server._tick_regen(self.due(c, 'hp_due'))
         self.assertEqual([self.val(p) for p in c.expect(0x28, 0x44)], [105, 34])
+        # polish 2026-09-28: a bare `!hp` / `!mp` fills to the maximum (it only warned before)
+        self.gm_line(c, '!hp')
+        hp, line = c.expect(0x28, 0x15)
+        self.assertEqual((self.val(hp), F.FakeClient.decode(line)['text']), (140, 'HP 140/140.'))
+        self.gm_line(c, '!mp')
+        mp, line = c.expect(0x44, 0x15)
+        self.assertEqual((self.val(mp), F.FakeClient.decode(line)['text']), (87, 'MP 87/87.'))
+        self.assertEqual((c.session['hp'], c.session['mp']), (140, 87))
+        # master merge review: a derived maximum of 0 (hpmp: class >= 7, level 0 or > 99) has
+        # nothing to fill to - refused, not HP 1 / MP 0; an explicit value still works
+        self.gm_line(c, '!hp 100')
+        c.expect(0x28, 0x15)
+        zero = W.hpmp.Derived(0, 0, 0, 0, None, 0, 7)
+        with mock.patch.object(W.hpmp, 'refresh', return_value=zero):
+            for cmd in ('!hp', '!mp'):
+                self.gm_line(c, cmd)
+                text = F.FakeClient.decode(c.expect(0x15))['text']
+                self.assertIn(f'no {cmd[1:].upper()} maximum for class 7 Lv0', text)
+        self.assertEqual((c.session['hp'], c.session['mp']), (100, 87))
 
 
 if __name__ == '__main__':

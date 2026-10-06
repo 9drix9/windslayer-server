@@ -274,6 +274,24 @@ def remove_friend(char, name):
     return None
 
 
+def rename_references(char, old, new):
+    """premium_cash-rename (P8 stage 3, cashuse.py): point this record's stored references to
+    a renamed character - `friends` and `mentees` in place (list order kept), `mentor` - at the
+    new canonical name. Without it the next C2S 0x2F would drop the renamed friend as a
+    deleted character (friend_list, F1 step 3). Memo senders stay as history. Returns True
+    when anything changed."""
+    old_key, new_name, changed = key(old), name_text(new), False
+    for field in ('friends', 'mentees'):
+        names = char.get(field)
+        if isinstance(names, list) and any(key(n) == old_key for n in names):
+            char[field] = [new_name if key(n) == old_key else n for n in names]
+            changed = True
+    if char.get('mentor') and key(char['mentor']) == old_key:
+        char['mentor'] = new_name
+        changed = True
+    return changed
+
+
 def friend_row(name, channel, friend_id, status):
     """One S2C 0x0B / 0x0C row {name, channel, friend_id, status}."""
     return {'name': chatmod.name_bytes(name), 'channel': int(channel) & 0xFF,

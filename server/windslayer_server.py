@@ -26,8 +26,8 @@ character name rules in names.py (login_character.md 3.5.4).
 """
 
 import collections
+import datetime
 import contextlib
-import copy
 import socket
 import struct
 import threading
@@ -46,8 +46,11 @@ from cencmsg import CEncMsg
 
 import auth
 import bank_tabs as BT
+import bosses as bossmod
 import buffs as buffmod
 import cards as cardsmod
+import cash as cashmod
+import cashuse as cashusemod
 import chat as chatmod
 import client_layout as CL
 import classchange as CC
@@ -57,17 +60,21 @@ import crafting as craftmod
 import damage as dmgmod
 import debuffs as debuffmod
 import en_content as EC
+import events as eventmod
 import gm
 import ground as groundmod
+import hitstun as HS
 import hpmp
 import ids
 import inventory as invmod
+import mall as mallmod
 import market as marketmod
 import messenger as msgrmod
 import mobai
 import names
 import packets as P
 import party as partymod
+import pets as petsmod
 import presence
 import privacy
 import progression
@@ -184,7 +191,16 @@ class Monster:
     ai_sent_t: float = 0.0           # when that command went out (keep-alive)
     ai_hit_t: float = 0.0            # last hit that fed the hate list (aggro timeout)
     ai_hold_end: float = 0.0         # when the last command node's hold runs out
-    ai_attack_t: float = 0.0         # last attack motion commanded (swing events 4/5, 7..10)
+    # The last attack motion commanded, A or B. Nothing in the server reads it any more:
+    # livefix's L2 rule dropped the contact filter that did, and the swing gate reads the
+    # per-kind times below. Still written on every attack send, for the tests that check it.
+    ai_attack_t: float = 0.0
+    # P13 boss-b3 (bosses.note_command / swing_age): the last attack A and attack B commanded -
+    # what the swing gate reads: a swing event hurts only after its own kind (7/8 after A,
+    # 4/5/9/10 after B) within MOB_ATTACK_EVENT_SECS.
+    ai_attack_a_t: float = 0.0
+    ai_attack_b_t: float = 0.0
+    ai_attack_start_t: float = 0.0   # when the running attack word was first commanded (hold)
     ai_owned: bool = False           # a 0x2A set the client's +0x971: the server drives it
     # world-shared-monsters: the viewer keys (GameServer._viewer_key) whose client got a 0x2A
     # for this mob since it got the mob - its copy runs the server's words (+0x971 = 1), so a
@@ -193,6 +209,38 @@ class Monster:
     aggro_x: float = 0.0             # x where the current chase began (the chase leash origin)
     ai_step_t: float = 0.0           # last dead-reckoning step
     fix_t: float = 0.0               # last position fix (driver sample, 0x0D interact tail)
+    # P13 boss-b2 (bosses.roll_drops): the template's hni item/Drop columns as [(item, rate)]
+    # (EN-grantable ids only), rolled per entry by DROP_MODE 'rates' / 'single'.
+    drop_table: list = field(default_factory=list)
+    # P13 boss-b1 (bosses.py): the boss ledger key (channel, map, (tile x, tile y)) of a field
+    # boss (a map tile with value_num in BOSS_TILE_VALUES), None for every other monster.
+    boss: tuple = None
+    # Desync fix P3 (config MOB_SPEED_FROM_TEMPLATE): the template's walk speed in px/s,
+    # 1e7 / its hni `speed` (the entity's +0x1280 = speed x 0.0001 and one walk step is
+    # tick / +0x1280 px, 0x4163EE: Ssiyo 120000 -> 83.3 px/s, measured 82.5; Monkey Soldier
+    # 80000 -> 125 px/s = 3.75 px per 30 ms tick). No speed: the measured 82.5.
+    walk_px_s: float = 82.5
+    # Desync fix M1 (config MOB_HIT_RECOVER_SECS): no chase word before this monotonic time -
+    # every client's copy is still in the hurt a client-caught swing or skill hit (interact
+    # event 7 / 9) started (_release_hit_lock), or an attack skill the server's box landed
+    # is about to start (MOB_HIT_CAST_GATE, _skill_attack); _mob_send_decision holds it.
+    ai_recover_until: float = 0.0
+    # When the copies' hurt of the last client-caught swing / skill hit ends (the hit + its
+    # stun, _arm_hit_gate): they stand in state 3 until then whatever word they hold, so the
+    # server's dead reckoning (_mob_dead_reckon) starts no earlier - an ice hit's chase word
+    # goes out inside the stun (MOB_HIT_ICE_CHASE_SECS).
+    ai_stun_until: float = 0.0
+    # The same for an ice-element hit's stun (hurt + 1000, MOB_HIT_ICE_CHASE_SECS on), else 0,
+    # and when its chase word is due (the gate it set): while that stun runs under a LATER
+    # gate (someone's cast), the copies' last word is kept alive (_mob_send_decision), or
+    # their state machine stalls when its 960 ms node hold runs out.
+    ai_ice_until: float = 0.0
+    ai_ice_chase_t: float = 0.0
+    # The last client-caught swing / skill hit's time and stun (s), kept until the first word
+    # to the copies after it (_mob_word_after_stun): a stun past the 0x2A node's 960 ms hold
+    # stalls both copies at the hold's end until a word comes, then runs its rest.
+    ai_stun_t: float = 0.0
+    ai_stun_secs: float = 0.0
 
     @property
     def flags(self):
@@ -330,6 +378,9 @@ NO_ENCODE_FLAG = 0x800
 def make_raw_packet(body, seq=0, no_encode=False):
     """Build a Fireway packet. Body must include opcode as first byte."""
     total = HEADER_SIZE + len(body)
+    if total > MAX_PKT:
+        # 11-bit size field: masking a longer length would corrupt the stream (P8 review).
+        raise ValueError(f'Fireway frame of {total} B > {MAX_PKT} B')
     dword0 = (total & SIZE_MASK) | ((seq & 0xFF) << 12)
     if no_encode:
         dword0 |= NO_ENCODE_FLAG
@@ -523,7 +574,11 @@ def routes_2009(base):
     New in 2009: 0x4D/0x82/0x83/0x85/0x86 pets, 0x4E/0x80/0x81 cash item options and sales,
     0x87..0x92 + 0x96..0x9D guild and guild battle, 0x8A GuildInfoRequest (sent by the
     client itself after every S2C 0x03 -> 0xB3 sub 15), 0x9E X-Trap answer, 0xBC dead code.
-    Gone: 0x74/0x75 (play room list open/close), 0x7C."""
+    Gone: 0x74/0x75 (play room list open/close), 0x7C.
+    Owned by P8 (ROADMAP_2009_ADDENDUM C5 / C8): 0x4D PetRename -> the planned refusal S2C
+    0x73 {0} (pets.py, a waiting box), 0x4E -> S2C 0xC4 {0}, 0x80 -> S2C 0x71 {1, 0x17}
+    (a waiting box), 0x81 -> S2C 0x71 {1, 0x16} on the seller's Cancel, else nothing
+    (mall.py "The 2009-only cash opcodes")."""
     routes = {op: r for op, r in base.items()
               if op not in (0x2D, 0x74, 0x75, 0x7C, 0x93, 0x94, 0x95, 0x97, 0x99)}
 
@@ -536,14 +591,16 @@ def routes_2009(base):
         0x2C: Route('_handle_room_list', style=STYLE_REC),
         0x2D: consumed(0x2D, 'instance dungeon room kick', 'no dungeon rooms (pvp owns rooms)'),
         **{op: Route('_warn_dead_host_code') for op in (0x08, 0x09, 0x0A, 0xBC)},
-        0x4D: consumed(0x4D, 'pet rename', no_pets),
-        0x4E: consumed(0x4E, 'cash item add option', 'premium_cash owns cash items'),
-        0x80: consumed(0x80, 'cash item sale offer', 'premium_cash owns cash item trades'),
-        0x81: consumed(0x81, 'cash item sale reply', 'premium_cash owns cash item trades'),
+        0x4D: Route('_handle_pet_rename', style=STYLE_REC),                 # -> 0x73 {0} (C5)
+        0x4E: Route('_handle_cash_add_option', style=STYLE_REC),            # -> 0xC4 {0} (C8)
+        0x80: Route('_handle_cash_sale_offer', style=STYLE_REC),            # -> 0x71 {1, 0x17} (C8)
+        0x81: Route('_handle_cash_sale_reply', style=STYLE_REC),            # 1 -> 0x71 {1, 0x16} (C8)
         0x82: consumed(0x82, 'pet equip', no_pets),
         0x83: consumed(0x83, 'pet unequip', no_pets),
         # Sent by the client itself on S2C 0xAE (pet HP <= 10), which is never sent, or when
-        # a pet food item 0x10BA..0x10BD is used from the bag.
+        # an item the exe takes for pet food (KR ids 0x10BA..0x10BD = EN 4282..4285: Cruiser
+        # Sword, the guild billboards, the Pet Bell - ROADMAP_2009_ADDENDUM X7 / X8) is used
+        # from the bag. No waiting box; EN food reaches C2S 0x48 instead (pets.py, C6).
         0x85: consumed(0x85, 'pet feed', no_pets),
         0x86: consumed(0x86, 'pet emote', no_pets),
         0x87: consumed(0x87, 'guild create', no_guild),
@@ -636,6 +693,10 @@ class GameServer:
         # F3/F5: online sessions by account uid and character name (lc-uid-online). World
         # guards its indexes with its own leaf lock, never world_lock (see above).
         self.world = World()
+        # Desync fix P2 review: {uid: [monotonic() of the last line, failures not logged
+        # since]} of the movers whose settle raised on the 'presence-settle' tick
+        # (_settle_failed; that tick is the only reader and writer).
+        self._settle_fail_log = {}
         # F5 lifecycle hooks. The welcome line is registered instead of inlined in the
         # enter-world handler: every map load then runs the same MapTransfer sequence, and
         # the groups that must clean up before a map load (trade, stall, messenger, the 0x06
@@ -697,6 +758,36 @@ class GameServer:
         self.store = storemod.Store.from_config(self.config, db_file)
         self.store.load()
         self.store.attach(self.ticks, autosave=False)     # autosave starts with the server
+        # P8 stage 1 (premium_cash-wallet-model / -cash-inventory-api, cash.py): the account
+        # wallets (Wind Cash, Mileage), the mall box and every character's owned cash list
+        # live in the store; this is the API over them (serials, find, consume, grant). The
+        # owned list goes to the client after every map load (_send_owned_cash).
+        self.cash = cashmod.CashInventory(self.store)
+        # P8 stage 2 (premium_cash-mall-enter .. -gift, chat_mail_gm-gift-inbox; mall.py): the
+        # Item Mall / Spark Shop on top of that model - `!mall` in, C2S 0x42 out (the map-load
+        # replay), 0x43 buy, 0x45 delete, 0x46 balance, 0x47 gift, and the 0x6D gift queue each
+        # map load sends (_map_transfer).
+        self.mall = mallmod.Mall(self)
+        # P8 stage 3 (premium_cash-use-generic .. -friend-warp, -expiry, lc-rename; cashuse.py):
+        # using what the owned list holds - C2S 0x48 generic use / hair / period items, 0x49
+        # rename, 0x4A stat reset, 0x4C megaphone, 0x70 / 0x71 warp stones - and the period
+        # expiry (S2C 0x93 ticker, the map load's sync). A rename is pushed to the groups that
+        # show names through the world hook ON_RENAME (ROADMAP_2009_ADDENDUM C4; the messenger and
+        # the party registered theirs above: friends' 0x0B, the mentor's 0x7B, party frames).
+        self.cashuse = cashusemod.CashUse(self)
+        # ROADMAP_2009_ADDENDUM C5 / C6 (pets.py): the pet stub P15 replaces - the C2S 0x48
+        # gates / effects of EN pet food 4286..4289 and the name ticket 4322 (the unpatched exe
+        # sends them there) and the 2009 C2S 0x4D PetRename refusal (S2C 0x73 {0}).
+        self.pets = petsmod.PetStub(self).install(self.cashuse)
+        # P13 stage 1 (events.py: ev-e1..ev-e4, arch09-window-open): the event schedule
+        # (config EVENTS_FILE), the multiplier stage of award_exp, the login gift and the
+        # Event News popup. It registers one hook (before_server_map_load: no event packet
+        # until that map load's C2S 0x63) and its '!event' / '!expmult' commands.
+        self.events = eventmod.Events(self)
+        # P13 stage 3 (bosses.py: boss-b1, boss-b2): the field-boss ledger keyed (channel, map,
+        # tile), persisted next to accounts.json (BOSS_LEDGER_FILE), which the monster lifecycle
+        # below consults for a boss's respawn; its '!boss' command.
+        self.bosses = bossmod.Bosses(self)
 
     @property
     def routes(self):
@@ -713,6 +804,18 @@ class GameServer:
     def accounts(self):
         """The store's account dict (read-modify-write under self.store.lock)."""
         return self.store.accounts
+
+    def _save_store_now(self, what):
+        """The immediate save of a create / delete / AUTO_REGISTER, made once the handler let
+        store.lock go: the write and its ~3 s replace backoff never hold db_lock (review of
+        livetest bug 7). A failed write is logged and left to the store - the record is
+        already in memory, the store stays dirty and retries with backoff - so the reply
+        still goes out. Never call it holding store.lock."""
+        try:
+            self.store.save_now()
+        except OSError:
+            log.exception(f'[STORE] {what}: the immediate accounts.json save failed; kept dirty, '
+                          f'the store retries')
 
     def channel_user_counts(self):
         """{channel_no: logged-in accounts} for the S2C 0x01 channel table
@@ -746,8 +849,18 @@ class GameServer:
             self.ticks.call_every(self.config.MOB_AI_TICK_SECS, self._tick_monster_ai, name='monster-ai')
         # world-shared-monsters: a map nobody stood on for MOB_MAP_KEEP_SECS loses its monsters.
         self.ticks.call_every(self.MOB_MAP_GC_SECS, self._tick_monster_maps, name='monster-maps')
+        # desync fix P2: the settle node of every mover gone quiet on idle words (presence.settle_node).
+        if self.config.get('RELAY_SETTLE_NODE', True):
+            self.ticks.call_every(self.PRESENCE_SETTLE_TICK_SECS, self._tick_presence_settle,
+                                  name='presence-settle')
         # party-vitals-sync (party.md F7): the frames' 0x54 / 0x55, coalesced per 250 ms.
         self.ticks.call_every(partymod.VITALS_SECS, self.party.tick_vitals, name='party-vitals')
+        # premium_cash-expiry (F15; roadmap F8 ticker table "60 s"): activated period cash items
+        # whose date passed -> S2C 0x93 "[x] is expired." to their in-world owner.
+        self.ticks.call_every(cashusemod.EXPIRY_SCAN_SECS, self.cashuse.tick_expiry, name='cash-expiry')
+        # P13 (events.py): the every-N-minutes [Announcement] lines and events that start
+        # while players are in the world.
+        self.ticks.call_every(eventmod.TICK_SECS, self.events.tick, name='events')
         self.ticks.start()
         if self.memory_driver_enabled():
             threading.Thread(target=self._combat_driver, daemon=True).start()
@@ -1275,6 +1388,14 @@ class GameServer:
             # packets.FORBIDDEN_S2C (spec_2009 0xC5): also refused for raw sends, so the admin
             # injector cannot drop a 2009 client either.
             raise P.PacketError(f'S2C 0x{opcode:02X} must never be sent to a {build} client: {why}')
+        if HEADER_SIZE + 1 + len(payload) > MAX_PKT:
+            # The header's size field is 11 bits (PROTOCOL.md framing): make_raw_packet would
+            # mask a longer length and the client would read a corrupt stream from here on.
+            # Refused before send_seq / the cipher advance, so the connection stays in step.
+            log.error(f'[FIREWAY] S2C 0x{opcode:02X} refused: {len(payload)} B payload > '
+                      f'{MAX_PKT - HEADER_SIZE - 1} B (one frame) -> {session.get("char_name")!r}')
+            raise P.PacketError(f'S2C 0x{opcode:02X} payload of {len(payload)} B does not fit one '
+                                f'Fireway frame ({MAX_PKT - HEADER_SIZE - 1} B max)')
         outbox = session.get('outbox')
         if outbox is not None and sock is not session.get('sock'):
             outbox = None
@@ -1531,7 +1652,38 @@ class GameServer:
         0x67: Route('_handle_craft_complete', style=STYLE_REC),
         0x68: Route('_handle_reinforce_complete', style=STYLE_REC),
         0x69: Route('_handle_gather_complete', style=STYLE_REC),
-        0x72: Route(log='[0x72] elemental stone extraction - failed (item_inventory-stone-extraction)'),
+        # Elemental stone extraction (P8 stage 4, item_inventory-stone-extraction, F14): window
+        # 0x473 -> 0x9C (+ the 0x18 stone grant), or 0x9C {0}. Same bytes in both builds
+        # (spec_2009 0x4765EE/0x72 "identical"); the MUST_REPLY 0x9C {0} row is the backstop
+        # for a handler that raises or a request from outside the world.
+        0x72: Route('_handle_stone_extract', style=STYLE_REC),
+
+        # --- the Item Mall / Spark Shop (P8 stage 2; premium_cash.md F3-F7, mall.py). The client
+        # can only be put INTO the mall by the server (`!mall` -> S2C 0x6A); these are the
+        # requests its windows send once it is there. Both builds: 0x42 / 0x45 / 0x46 are
+        # wire-identical, the 2009 0x43 / 0x47 carry a u8 option per item (spec_2009 0x466BDE /
+        # 0x468D84 / 0x467D8C) - the handlers decode with the server's build. 0x42 / 0x43 / 0x45
+        # are raw so a payload that does not decode is still answered (0x42: the world replay
+        # always runs); 0x46 / 0x47 keep their registry.MUST_REPLY rows as the backstop. ---
+        0x42: Route('_handle_mall_close'),                          # EXIT -> moves, 0x6B, map-load replay
+        0x43: Route('_handle_mall_buy'),                            # Buy / cart / slot ext -> 0x6C per item
+        0x45: Route('_handle_mall_delete'),                         # box Delete -> 0x6E (30% mileage)
+        0x46: Route('_handle_mall_refresh'),                        # after charge / restore -> ONE 0x70
+        0x47: Route('_handle_mall_gift', style=STYLE_REC),          # gift dialog 0x1F9 -> 0x71 (+ 0x79 / 0x6D)
+
+        # --- using cash items (P8 stage 3; premium_cash.md F8-F11, F13, F14; cashuse.py). A
+        # double-click in the Spark Items / cash bag tab opens the item's window, whose OK sends
+        # one of these (wire-identical in both builds: spec_2009 0x469072/0x48 /0x49, 0x469382/
+        # 0x4A, 0x468F05/0x4C /0x71, 0x469C54/0x70). 0x48 / 0x49 / 0x4A open the waiting box, so
+        # each always gets its 0x72 / 0x73 / 0x76 (registry.MUST_REPLY stays the backstop for a
+        # handler that raises or a payload that does not decode); 0x70 / 0x71 always get their
+        # 0x9A / 0x9B; 0x4C shows no box and gets no reply of its own. ---
+        0x48: Route('_handle_cash_item_use', style=STYLE_REC),      # window 0x3F4 OK -> 0x72 (owner + holders)
+        0x49: Route('_handle_cash_rename', style=STYLE_REC),        # window 0x3F1 -> 0x73 + 0x74
+        0x4A: Route('_handle_cash_stat_reset', style=STYLE_REC),    # window 0x3FA -> 0x76 18 B / 12 B
+        0x4C: Route('_handle_cash_megaphone', style=STYLE_REC),     # window 0x3FF -> orange 0x90 to all
+        0x70: Route('_handle_cash_region_warp', style=STYLE_REC),   # world map -> 0x471 -> 0x9A + map load
+        0x71: Route('_handle_cash_friend_warp', style=STYLE_REC),   # window 0x472 -> 0x9B + map load
 
         # Never-reply requests (roadmap 1.3) that had no branch: consume with a log line.
         # Privacy refuse options (chat_mail_gm-privacy-flags; D13): same 5 u8 in both builds.
@@ -1604,6 +1756,10 @@ class GameServer:
         log.info(f'[CARD] 0x63 -> 0x8A {deck["deck_count"]} card(s), '
                  f'0x59 re-arm for {len(rows)} quest slot(s): {rows}')
         self._send_channel_notice(sock, session)
+        # ev-e1 / ev-e3 / ev-e4 (events.py): an active event's once-per-login announcement,
+        # login gift and Event News popup are the tail of this reply (the arch09-resync-bundle
+        # slot after 0x99 sub 8); nothing without an event, nothing again on a portal.
+        self.events.after_resync(sock, session)
 
     def _handle_card_register(self, sock, session, rec, no_enc=False):
         """C2S 0x64 CardDeckRegisterRequest {u16 card_item_id} -> exactly one S2C 0x8B
@@ -1813,7 +1969,8 @@ class GameServer:
             # only from then on may the dev driver's memory samples move session['pos']
             # (_track_driver_position).
             session['map_confirmed'] = session.get('current_map')
-            if presence.advance(session, rec):
+            if presence.advance(session, rec,
+                                dash_knock=bool(self.config.get('POSITION_ESTIMATE_DASH_KNOCK', True))):
                 pos = session.get('pos') or (0.0, 0.0)
                 log.info(f'[MOVE] {session.get("char_name")!r} stops at ({pos[0]:.0f}, {pos[1]:.0f}) '
                          f'(estimate; fix: {presence.move_state(session).get("fix")})')
@@ -1888,7 +2045,7 @@ class GameServer:
             if mob is None or not mob.alive:
                 return
             if fresh and mob.uid in cast['hit']:
-                self._release_hit_lock(sock, session, mob)
+                self._release_hit_lock(sock, session, mob, event)
                 return
             if fresh:
                 sd = SK.skill_def(int(cast['skill']))
@@ -1899,7 +2056,7 @@ class GameServer:
                 dmg, what = self._compute_damage(session, 1, mob), f'strong attack (event {event})'
             killed = self._damage_monster(sock, session, mob, dmg, what, take_control=False)
             if not killed:
-                self._release_hit_lock(sock, session, mob)
+                self._release_hit_lock(sock, session, mob, event)
 
     # C2S 0x0D action_event (+0x94C) the client writes for its own death (case 0xD).
     ACTION_DIE = 0xD
@@ -2039,8 +2196,9 @@ class GameServer:
                 # HP - never a free refill.
                 rmap, rx, ry = self._revive_point(current_map)
                 cur_hp = self._revive_hp(hpmp.derive(session, char).max_hp)
+                ax, ay = self._arrival_point(rmap, rx, ry)          # where the map load lands him
                 log.warning(f'[DEATH] "{char_name_str}" was saved dead on map {current_map}; entering '
-                            f'revived on map {rmap} at ({rx:g}, {ry:g}) with {cur_hp} HP')
+                            f'revived on map {rmap} at ({ax:g}, {ay:g}) with {cur_hp} HP')
                 current_map = session['current_map'] = rmap
                 session['pos'] = (rx, ry)
             session['hp'], session['mp'] = cur_hp, max(0, cur_mp)
@@ -2073,6 +2231,14 @@ class GameServer:
         # call left the builder's default 101, so a relog always loaded the town whatever
         # the store said. No S2C 0x2B follows the 0x07: its 2000-byte padded row overwrote
         # the record 0x07 had just set.
+        if session.pop('in_cash_shop', False):
+            # An enter-world of a session the server still had in the mall (its client went
+            # back to character select without the 0x42 EXIT): this 0x2B is a fresh world
+            # entry, so the stale mall state goes - _map_transfer refuses mall sessions
+            # (premium_cash-presence, P8 stage 4).
+            session.pop('mall', None)
+            log.warning(f'[MALL] "{char_name_str}" enters the world while the server had its session in '
+                        f'the mall: mall state dropped')
         x, y = session['pos']
         self._map_transfer(sock, session, current_map, x, y, lead=None, reason='enter_world',
                            no_enc=no_enc)
@@ -2177,6 +2343,16 @@ class GameServer:
         if session.get('gm') and (lowered == self.WARP_SLASH_COMMAND
                                   or lowered.startswith(self.WARP_SLASH_COMMAND + b' ')):
             self._gm_chat_command(sock, session, b'!' + text.strip()[1:])
+            return True
+        if text.startswith(b'!') and not session.get('gm') and gm.split(text)[0] in self.PLAYER_COMMANDS:
+            # A player's command line costs a chat-rate slot like a map line (P8 review): it
+            # reaches no one else, but `!mall` is a whole mall entry and its exit a map load,
+            # so a patched client typing it in a loop is dropped the same silent way.
+            if not self._chat_rate_ok(session):
+                log.info(f'[CHAT] dropped command line from {session.get("char_name")!r}: more than '
+                         f'{self.CHAT_RATE_LINES} lines in {self.CHAT_RATE_SECS:g} s')
+                return True
+            self._player_command(session, text)
             return True
         if not (session.get('gm') and text.startswith(b'!')):
             return False
@@ -2741,14 +2917,15 @@ class GameServer:
     def _go_point(self, target):
         """(map, x, y) next to `target`: its server position (the estimate on the floor,
         presence.floor_point), GO_OFFSET_PX to the side - the right, or the left where the
-        map ends - on the floor there and GO_RISE_PX above it, so the GM's own 0x07 falls
-        onto it like a portal arrival."""
+        map ends - ON the floor there. It used to be 30 px above it for the GM's own 0x07 to
+        fall onto, but the 2009 client does not drop an idle local player: _map_transfer
+        settles every arrival onto the floor now (livetest bug 5), and this is that point."""
         code = int(target['current_map'])
         tx, ty = presence.floor_point(target)
         x, y = presence.settle(code, tx + gm.GO_OFFSET_PX, ty, gm.GO_OFFSET_PX + presence.SLOPE_SLACK_PX)
         if abs(x - tx) < gm.GO_OFFSET_PX / 2:                   # clamped at the right edge
             x, y = presence.settle(code, tx - gm.GO_OFFSET_PX, ty, gm.GO_OFFSET_PX + presence.SLOPE_SLACK_PX)
-        return code, x, y - gm.GO_RISE_PX
+        return code, x, y
 
     def _gm_go(self, session, name):
         """F10 sub 0x08 /go (and `!go`): the GM lands next to `name`.
@@ -2772,6 +2949,17 @@ class GameServer:
             return False
         if session.get('dead'):
             self._gm_reply(session, 'You cannot /go while dead.', 'warn')
+            return False
+        # premium_cash-presence (P8 stage 4): a player in the mall is hidden from his map and
+        # comes back only through his own EXIT (mall.py "Presence"), so neither side of a /go
+        # may be inside: the target's current_map is only his way back.
+        shop = mallmod.mall_name(self.client_build)
+        if session.get('in_cash_shop'):
+            self._gm_reply(session, f'Not while you are in the {shop} (close it with EXIT).', 'warn')
+            return False
+        if target.get('in_cash_shop'):
+            self._gm_reply(session, f'{target["char_name"]} is in the {shop}.', 'warn')
+            log.info(f'[GM] /go {name!r} by {session.get("char_name")!r}: the target is in the {shop}')
             return False
         code, x, y = self._go_point(target)
         if code in hpmp.ROOM_MAPS:
@@ -2836,7 +3024,8 @@ class GameServer:
                 saved += bool(self._save_world_state(s, reason='maintenance'))
             except Exception:                               # noqa: BLE001 - save the others
                 log.exception(f'[GM] maintenance save of {s.get("char_name")!r} failed')
-        self.store.flush()
+        self.store.tick_flush()                             # a tick callback: never the ~3 s backoff
+        self.bosses.tick_flush()                            # P13: the boss ledger too, same rule
         log.warning(f'[GM] MAINTENANCE: {saved} world state(s) saved, store flushed')
         return saved
 
@@ -3005,8 +3194,28 @@ class GameServer:
             getattr(self, cmd.handler)(session, args)
         except gm.DevCommandError as e:
             self._gm_reply(session, f'{e} - {cmd.usage}', 'warn')
+            # logged too, so a refused command never leaves the server log silent (polish
+            # 2026-09-28: a bare `!hp` showed nothing in the log)
+            log.info(f'[GM] !{name}{" " + args if args else ""} from {session.get("char_name")!r} refused: {e}')
         else:
             self._gm_audit(session, f'!{name}', args)
+
+    # '!' commands every PLAYER may type, not only a GM (never broadcast either). `!mall` is
+    # the only way into the Item Mall / Spark Shop: the client has no request for it - its HUD
+    # button, the Luxary "Shop Assistant" NPC and the "Enter the cash shop?" prompt all end in
+    # a no-op (mall.py "How the client enters the mall", RE 2026-09-28).
+    PLAYER_COMMANDS = frozenset({'mall'})
+
+    def _player_command(self, session, text):
+        """Run a PLAYER_COMMANDS line of a non-GM session: the same handler a GM reaches, no
+        audit line (gm_audit.log records GM actions), a refusal as one 0x15 line."""
+        name, args = gm.split(text)
+        cmd = self.DEV_COMMANDS[name]
+        try:
+            getattr(self, cmd.handler)(session, args)
+        except gm.DevCommandError as e:
+            self._gm_reply(session, f'{e} - {cmd.usage}', 'warn')
+        log.info(f'[CHAT] player command !{name} {args} from {session.get("char_name")!r}'.rstrip())
 
     # name -> DevCommand. Other groups add theirs with gm.register() instead of editing
     # this table (F11: login_character's !job, premium_cash's !mall / !cash).
@@ -3053,19 +3262,44 @@ class GameServer:
         'reports': gm.DevCommand('_dev_reports', '!reports [n]', 'the last n player reports (reports.jsonl)',
                                  owner='chat_mail_gm-report (P7 stage 3)'),
         'note': gm.DevCommand('_dev_note', '!note [count] [1894|3320]',
-                              'put Notes in your cash bag (DEV_FREE_NOTES, until P8)',
-                              owner='social_friend-memos'),
-        'gift': gm.DevCommand('_dev_gift', '!gift <name> <item_id> <msg>', 'store a gift for an account'),
+                              'put Notes in your cash bag (a cash inventory record, S2C 0x6F)',
+                              owner='social_friend-memos / premium_cash-cash-inventory-api'),
+        'cash': gm.DevCommand('_dev_cash', '!cash [<n|+n|-n> | mileage <n|+n|-n> | item <item_id> [count] '
+                                           '| box <item_id> [count] [name] | active | expire <serial|item_id> [secs]]',
+                              'your Wind Cash / Mileage (S2C 0x70) and owned cash items; item: '
+                              'put a Type 5 cash item (or a 2009 pet, bound) in your cash bag (S2C 0x6F; '
+                              '<= 70 records); box: an EVENT record (origin 3) into your / that '
+                              "character's account box, S2C 0x6C to an online owner (C7); "
+                              'active: your activated period items and their effects; expire: let '
+                              'an activated period item run out in secs (0 = now: S2C 0x93 at once)',
+                              owner='premium_cash-wallet-model (P8 stage 1) / premium_cash-expiry (stage 3)'),
+        'mall': gm.DevCommand('_dev_mall', '!mall [status]',
+                              'enter the Item Mall / Spark Shop (any player; the client has no entry '
+                              'request): S2C 0x6F, 0x6D, 0x6A. status: your wallet, box and gifts',
+                              owner='premium_cash-mall-enter (P8 stage 2)'),
+        'mileage': gm.DevCommand('_dev_mileage', '!mileage [<n> [name|all] | event <pct|off|config>]',
+                                 'a mileage event: credit n event Mileage (S2C 0x70 + the 0x98 "Mileage '
+                                 "Event\" line) to you, a character's account or every online account; "
+                                 'event: the purchase event rate (% of each Wind Cash price, '
+                                 'MILEAGE_EVENT_PCT) until a restart; no argument: both',
+                                 owner='premium_cash-mileage-event (P8 stage 4)'),
+        'gift': gm.DevCommand('_dev_gift', '!gift <name> <item_id> <msg>',
+                              "send a free gift: a record in the account's mall box + its 0x6D popup",
+                              owner='premium_cash-gift / chat_mail_gm-gift-inbox (P8 stage 2)'),
         'level': gm.DevCommand('_dev_level', '!level <1-99>', 'set your own level through exp'),
         'exp': gm.DevCommand('_dev_exp', '!exp <n|+n|-n>', 'set or add your own exp'),
         'give': gm.DevCommand('_dev_give', '!give <item_id> [count]', 'give yourself an EN item'),
+        'socket': gm.DevCommand('_dev_socket', '!socket <equip_id> <stone_id> [stone_id ...]',
+                                'put an equipment with these socket stones (1..5) in your bag; your map '
+                                'reloads in place so the client lists it (S2C 0x03)',
+                                owner='item_inventory-stone-extraction (P8 stage 4 test aid)'),
         'warp': gm.DevCommand('_dev_warp', '!warp <map> [x] [y]',
                               'load another map at a point (none: where a portal into it lands); '
                               'a GM can also type /warp'),
-        'hp': gm.DevCommand('_dev_hp', '!hp <n|+n|-n>', 'set or change your current HP (1..max)',
-                            owner='cs-hp-mp-model'),
-        'mp': gm.DevCommand('_dev_mp', '!mp <n|+n|-n>', 'set or change your current MP (0..max)',
-                            owner='cs-hp-mp-model'),
+        'hp': gm.DevCommand('_dev_hp', '!hp [n|+n|-n]', 'set or change your current HP (1..max); '
+                            'no value fills it', owner='cs-hp-mp-model'),
+        'mp': gm.DevCommand('_dev_mp', '!mp [n|+n|-n]', 'set or change your current MP (0..max); '
+                            'no value fills it', owner='cs-hp-mp-model'),
         'vitals': gm.DevCommand('_dev_vitals', '!vitals', 'your HP/MP, maxima and regen per tick',
                                 owner='cs-hp-mp-model'),
         'learn': gm.DevCommand('_dev_learn', '!learn <skill_id> [force]',
@@ -3465,66 +3699,274 @@ class GameServer:
         for line in self.reputation.report_lines(n):
             self._gm_reply(session, line)
 
-    # The serial `!note` gives its dev Note record: echoed in the S2C 0x77 success so the
-    # client consumes it (a serial it does not hold consumes nothing, C14).
-    DEV_NOTE_SERIAL = 0x4E0001
-
     def _dev_note(self, session, args):
-        """`!note [count] [3320]`: put Notes in your cash bag (DEV_FREE_NOTES, until the P8
-        cash inventory): S2C 0x6F with one record {serial DEV_NOTE_SERIAL, item 1894 (or
-        3320), count}. Using it opens the note window 0x3FD; a sent note consumes one. The
-        0x6F is a full rebuild of the cash items - there are none before P8."""
-        if not self.config.get('DEV_FREE_NOTES', True):
-            raise gm.DevCommandError('DEV_FREE_NOTES is off (the cash inventory owns notes)')
+        """`!note [count] [1894|3320]`: put Notes into your cash inventory (P8 stage 1). The
+        Note is a real limit_type 1 record (cash.CashInventory.grant: a store-wide serial,
+        persisted, merged into a Note record you already have), then the whole owned list goes
+        out as S2C 0x6F. Using one opens the note window 0x3FD; the 0x77 success of a sent
+        note names this serial and the client's consume-by-serial takes one off (livetest
+        2026-09-25: the P6 dev record had limit_type 0, which the client never decrements)."""
         parts = args.split()
         count = gm.parse_int(parts[0], 'count', lo=1, hi=99) if parts else 1
         item = gm.parse_int(parts[1], 'item', lo=1894, hi=3320) if len(parts) > 1 else 1894
         if item not in social.NOTE_ITEMS:
             raise gm.DevCommandError(f'{item} is not a Note (1894 or 3320)')
-        record = {'is_equipped': 0, 'serial': self.DEV_NOTE_SERIAL, 'item_id': item, 'limit_type': 0,
-                  'unk_07': 0, 'quantity': count, 'expire_year': 0, 'expire_month': 0,
-                  'expire_day_of_week': 0, 'expire_day': 0, 'expire_hour': 0, 'expire_minute': 0,
-                  'expire_second': 0, 'expire_milliseconds': 0, 'origin': 0, 'unk_1b': 0}
-        fields = {'count': 1, 'repeat[count]': [record]}
-        if self.client_build == cfgmod.BUILD_2009:
-            fields = {'mode': 0, **fields}               # spec_2009 0x6F: mode 0 = full rebuild
-        self._gm_packet(session, '0x6F', fields)
-        session['dev_notes'] = {item: [self.DEV_NOTE_SERIAL, count]}
-        self._gm_reply(session, f'{count} x Note {item} in your cash bag (serial {self.DEV_NOTE_SERIAL:#x}).')
+        rec = self._dev_cash_grant(session, item, count, '!note')
+        self._gm_reply(session, f'{count} x Note {item} in your cash bag (serial {rec["serial"]:#x}, '
+                                f'{rec["qty"]} in that record).')
+
+    def _dev_cash_grant(self, session, item, count, what):
+        """Grant a cash item record to the caller's character and re-send the owned list."""
+        char = self._session_char(session) if session.get('char_name') else None
+        if char is None:
+            raise gm.DevCommandError('no character in this session')
+        try:
+            rec = self.cash.grant(char, item, count, origin=cashmod.ORIGIN_EVENT, what=what)
+        except cashmod.CashError as e:
+            raise gm.DevCommandError(str(e)) from None
+        if session.get('in_world'):
+            self._send_owned_cash(session.get('sock'), session, reason=what, force=True)
+        return rec
+
+    def _dev_cash(self, session, args):
+        """`!cash`: your account's Wind Cash and Mileage and your owned cash items (P8 stage 1).
+          !cash <n|+n|-n>            set / change Wind Cash
+          !cash mileage <n|+n|-n>    set / change Mileage
+          !cash item <id> [count]    put a cash item in your cash bag: Type 5 (costumes are
+                                     refused, cash.GRANT_TYPES) or a 2009 pet (a bound pet
+                                     record, kind 3: ROADMAP_2009_ADDENDUM C1), at most
+                                     cash.OWNED_MAX (70) records - one 0x6F frame
+          !cash box <id> [count] [name]  an event record (origin 3) into your / that character's
+                                     ACCOUNT box: mall.Mall.grant_box (C7), S2C 0x6C with the
+                                     balances unchanged to an owner in the world or the mall
+        A balance change is persisted and sent as S2C 0x70 {cash, mileage, 0}: it writes the
+        mall's labels (mall+0x588 / +0x58C) and clears its charge-pending flag, with no popup
+        (bonus 0; live T-70 ran it in world), so an open mall shows the new value."""
+        acc = self.store.account(session.get('username'))
+        if acc is None:
+            raise gm.DevCommandError('no account in this session')
+        parts = args.split()
+        if not parts:
+            char = self._session_char(session) if session.get('char_name') else None
+            for line in self.cash.describe(acc, char):
+                self._gm_reply(session, line)
+            return
+        sub = parts[0].lower()
+        if sub in ('active', 'use'):
+            for line in self.cashuse.describe(session):
+                self._gm_reply(session, line)
+            return
+        if sub == 'expire':
+            self._dev_cash_expire(session, parts[1:])
+            return
+        if sub == 'box':
+            self._dev_cash_box(session, parts[1:])
+            return
+        if sub in ('item', 'give'):
+            if len(parts) < 2:
+                raise gm.DevCommandError('no item id')
+            item = gm.parse_int(parts[1], 'item_id', lo=1, hi=EC.item_max_id())
+            count = gm.parse_int(parts[2], 'count', lo=1, hi=cashmod.STACK_MAX) if len(parts) > 2 else None
+            rec = self._dev_cash_grant(session, item, count, '!cash item')
+            self._gm_reply(session, f'{EC.item_name(item) or item} ({item}) in your cash bag: serial '
+                                    f'{rec["serial"]:#x}, kind {rec["kind"]}, x{rec["qty"]}.')
+            return
+        if sub in ('mileage', 'mile'):
+            field, text = 'mileage', (parts[1] if len(parts) > 1 else '')
+        else:
+            field, text = 'cash', parts[0]
+        if not text:
+            raise gm.DevCommandError('no value')
+        value = gm.parse_int(text.lstrip('+'), field, lo=-cashmod.CASH_MAX, hi=cashmod.CASH_MAX)
+        with self.store.lock:
+            current = dict(zip(('cash', 'mileage'), cashmod.balance(acc)))[field]
+            new = current + value if text[0] in '+-' else value
+            cash, mileage = self.cash.set_balance(acc, **{field: new}, what=f'!cash {session.get("username")}')
+        if session.get('sock') is not None:
+            self._gm_packet(session, '0x70', cashmod.balance_fields(acc))
+        self._gm_reply(session, f'Wind Cash {cash}, Mileage {mileage}.')
+
+    def _dev_cash_box(self, session, parts):
+        """`!cash box <item_id> [count] [name]` (ROADMAP_2009_ADDENDUM C7, T-E6): an event record
+        (origin 3) into the caller's - or the named character's - account box through
+        mall.Mall.grant_box: S2C 0x6C {1, cash, mileage, record} with the balances unchanged to
+        an owner in the world or the mall ("Congratulation. You received an event item..")."""
+        if not parts:
+            raise gm.DevCommandError('no item id')
+        item = gm.parse_int(parts[0], 'item_id', lo=1, hi=EC.item_max_id())
+        rest = parts[1:]
+        count = None
+        if rest and rest[0].isdigit():
+            count = gm.parse_int(rest[0], 'count', lo=1, hi=cashmod.STACK_MAX)
+            rest = rest[1:]
+        who = ' '.join(rest)
+        if who:
+            found = self.store.character_by_name(who)
+            if found is None:
+                raise gm.DevCommandError(f'no character named {who!r}')
+            username = found[0]
+        else:
+            username = session.get('username')
+        try:
+            rec, told = self.mall.grant_box(username, item, count, reason=f'!cash box by {session.get("char_name")}')
+        except cashmod.CashError as e:
+            raise gm.DevCommandError(str(e)) from None
+        self._gm_reply(session, f'{EC.item_name(item) or item} ({item}) x{rec["qty"]} in {username}\'s box as an event '
+                                f'record (serial {rec["serial"]:#x}, origin 3){"; 0x6C sent" if told else ""}.')
+
+    def _dev_cash_expire(self, session, parts):
+        """`!cash expire <serial|item_id> [secs]` (premium_cash-expiry live check, exit criterion
+        4): the activated period record named by serial (0x.. or a number above 0xFFFF) or item
+        id now runs out in `secs` (default 0). 0 expires it at once through the same path the
+        60 s ticker takes (S2C 0x93 "[x] is expired."); later ones wait for the ticker."""
+        if not parts:
+            raise gm.DevCommandError('no serial or item id')
+        char = self._session_char(session) if session.get('char_name') else None
+        if char is None:
+            raise gm.DevCommandError('no character in this session')
+        wanted = gm.parse_int(parts[0], 'serial|item_id', lo=1, hi=0xFFFFFFFF)
+        secs = gm.parse_int(parts[1], 'secs', lo=0, hi=86400 * 90) if len(parts) > 1 else 0
+        when = cashmod.local_now() + datetime.timedelta(seconds=secs)
+        with self.store.lock:
+            rec = next((r for r in cashmod.ensure(char) if cashmod.is_activated(r)
+                        and (r['serial'] == wanted or r['item_id'] == wanted)), None)
+            if rec is not None:
+                rec['expire'] = cashmod.format_expire(when)
+        if rec is None:
+            raise gm.DevCommandError(f'no activated period item {parts[0]} (use one first; !cash active lists them)')
+        self.store.mark_dirty(f'!cash expire {char.get("name")}')
+        gone = self.cashuse.expire(session) if secs <= 0 else []
+        self._gm_reply(session, f'{EC.item_name(rec["item_id"]) or rec["item_id"]} ({rec["serial"]:#x}) '
+                                + ('expired now.' if gone else f'expires at {rec["expire"]} (the ticker checks every '
+                                                                f'{cashusemod.EXPIRY_SCAN_SECS:.0f} s).'))
+
+    def _dev_mall(self, session, args):
+        """`!mall`: enter the Item Mall / Spark Shop (premium_cash-mall-enter, F2) - for every
+        player (PLAYER_COMMANDS), since the client cannot ask. The answer is the mall itself
+        (S2C 0x6F / 0x6D / 0x6A); a refusal is one 0x15 line. `!mall status` lists the wallet,
+        the box and the pending gifts without entering."""
+        if args.strip().lower() == 'status':
+            for line in self.mall.describe(session):
+                self._gm_reply(session, line)
+            return
+        if args.strip():
+            raise gm.DevCommandError(f'unknown argument {args.strip()!r}')
+        refusal = self.mall.enter(session)
+        if refusal is not None:
+            self._gm_reply(session, refusal, 'warn')
+
+    def _dev_mileage(self, session, args):
+        """`!mileage` (premium_cash-mileage-event, F16; P8 stage 4):
+          !mileage                      the purchase event rate and your Mileage
+          !mileage <n> [name|all]       credit n event Mileage to you / that character's
+                                        account / every logged-in account: persisted, and an
+                                        owner in the world or the mall gets S2C 0x70 then 0x98
+                                        (the client's "※Mileage Event※ You got bonus mileage.")
+          !mileage event <pct|off|config>  the purchase event: every Wind Cash buy / gift earns
+                                        pct % of its price the same way (server memory; config
+                                        brings MILEAGE_EVENT_PCT back)"""
+        parts = args.split()
+        mall = self.mall
+        if not parts:
+            acc = self.store.account(session.get('username'))
+            cfg = max(0, int(self.config.get('MILEAGE_EVENT_PCT', 0)))
+            self._gm_reply(session, f'Mileage event: purchases earn {mall.event_pct}% '
+                                    f'(config {cfg}%{", overridden" if mall.event_pct_override is not None else ""}); '
+                                    f'your Mileage {cashmod.balance(acc)[1] if acc else 0}.')
+            return
+        if parts[0].lower() == 'event':
+            if len(parts) < 2:
+                raise gm.DevCommandError('no rate')
+            word = parts[1].lower()
+            if word == 'config':
+                mall.event_pct_override = None
+            elif word == 'off':
+                mall.event_pct_override = 0
+            else:
+                mall.event_pct_override = gm.parse_int(word.rstrip('%'), 'pct', lo=0, hi=cfgmod.MILEAGE_PCT_MAX)
+            self._gm_reply(session, f'Mileage event: purchases earn {mall.event_pct}%'
+                                    f'{" (config)" if mall.event_pct_override is None else ""}.')
+            log.info(f'[MALL] {session.get("char_name")!r}: purchase mileage event {mall.event_pct}%')
+            return
+        amount = gm.parse_int(parts[0].lstrip('+'), 'n', lo=1, hi=cashmod.CASH_MAX)
+        who = ' '.join(parts[1:])
+        if not who:
+            usernames = [session.get('username')]
+        elif who.lower() == 'all':
+            usernames = list(dict.fromkeys(s.get('username') for s in self.world.online() if s.get('username')))
+        else:
+            found = self.store.character_by_name(who)
+            if found is None:
+                raise gm.DevCommandError(f'no character named {who!r}')
+            usernames = [found[0]]
+        told = credited = 0
+        for username in usernames:
+            got, mileage, shown = mall.mileage_event(username, amount, f'!mileage by {session.get("char_name")}')
+            credited += bool(got)
+            told += bool(shown)
+        if len(usernames) == 1:
+            note = '' if shown else ' (at the cap)' if not got else ' (not in the world or the mall: not told)'
+            self._gm_reply(session, f'{usernames[0]}: +{got} event Mileage -> {mileage}{note}.')
+        else:
+            self._gm_reply(session, f'+{amount} event Mileage to {credited} account(s), {told} told.')
 
     def _dev_gift(self, session, args):
-        """Store a gift in an account's inbox (test aid for F8). The 0x6D notification and
-        the cash-item serials are premium_cash-gift-inbox."""
+        """`!gift <name> <item_id> <msg>`: the C2S 0x47 gift for free (test aid): a record in
+        the recipient ACCOUNT's mall box with an inbox entry, pushed at once to an online
+        recipient (0x79 in the mall, the 0x6D queue), else on his next map load. The item must
+        be one the client's gift popup can show (a cash item or a gift card 3327..3332,
+        chat_mail_gm F8.2)."""
         name, item_id, message = gm.args(args, 3, self.DEV_COMMANDS['gift'].usage)
         found = self.store.character_by_name(name)
         if found is None:
             raise gm.DevCommandError(f'no character named {name!r}')
-        username, acc, _char = found
         item = gm.parse_int(item_id, 'item_id', lo=1, hi=EC.item_max_id())
         if not self._grantable_item(item, '!gift'):
             raise gm.DevCommandError(f'item {item} is not in the EN client catalog')
-        with self.store.lock:
-            inbox = acc.setdefault('gift_inbox', [])
-            inbox.append({'sender': session.get('char_name') or 'GM',
-                          'message': P.cut_text(message, gm.GIFT_MESSAGE_MAX).decode('cp949', 'replace'),
-                          'item_id': item, 'serial': 0, 'delivered': False})
-        self.store.mark_dirty(f'gift {username}')
-        self._gm_reply(session, f'Gift {item} stored for {username} '
-                                f'({len(inbox)} in the inbox; delivery: gift-inbox).')
+        try:
+            username, rec = self.mall.dev_gift(session.get('char_name') or 'GM', found, item, message)
+        except cashmod.CashError as e:
+            raise gm.DevCommandError(str(e)) from None
+        pending = sum(1 for g in (self.store.account(username) or {}).get('gift_inbox') or []
+                      if not g.get('delivered'))
+        self._gm_reply(session, f'Gift {item} stored for {username} (box serial {rec["serial"]:#x}; '
+                                f'{pending} undelivered).')
+
+    @staticmethod
+    def _level_exp(level, current):
+        """(total exp, kept, lost) of `!level <level>` from `current` total exp: the level's
+        floor plus the exp the character had into his current level, at most one short of
+        the next level's floor (livetest bug 9: a `!level 15` / `!level 14` round trip took
+        42903 down to 42203, the Lv14 floor). `lost` is the progress that did not fit."""
+        cur_lv = progression.level_for_exp(current)
+        progress = max(0, current - progression.exp_for_level(cur_lv))
+        floor = progression.exp_for_level(level)
+        room = (progression.exp_for_level(level + 1) - floor - 1) if level < progression.LEVEL_MAX else 0
+        kept = min(progress, max(0, room))
+        return floor + kept, kept, progress - kept
 
     def _dev_level(self, session, args):
         """Set the caller's level by granting the exp difference, so the client levels
-        itself from S2C 0x21 exactly as a kill does (lc-exp-persist). A level DOWN is only
-        visible after a relog: the client never lowers its own level."""
+        itself from S2C 0x21 exactly as a kill does (lc-exp-persist). The exp into the
+        current level is kept (clamped to what the new level holds, _level_exp) and the reply
+        says so. A level DOWN shows at once too: the owner's client lowers its own level from
+        the negative 0x21 (live: 15 -> 14 showed 14), and grant_exp re-sends his record to
+        the observers (0x06 + 0x05 with the lower level; 0x22 would play the level-up effect)."""
         level = gm.parse_int(args, 'level', lo=1, hi=progression.LEVEL_MAX)
         char = self._session_char(session)
         if char is None:
             raise gm.DevCommandError('no character in this session')
+        self._refuse_dead(session)
         with self.store.lock:
             current = progression.clamp_exp(char.get('exp', 0))
-        self.grant_exp(session, progression.exp_for_level(level) - current)
-        self._gm_reply(session, f'Level {progression.level_for_exp(progression.exp_for_level(level))} '
-                                f'(exp {progression.exp_for_level(level)}).')
+        target, kept, lost = self._level_exp(level, current)
+        self.grant_exp(session, target - current)
+        note = ''
+        if lost:
+            note = f', {kept} of the {kept + lost} exp into the level kept (the most Lv{level} holds)'
+        elif kept:
+            note = f', {kept} exp into the level kept'
+        self._gm_reply(session, f'Level {progression.level_for_exp(target)} (exp {target}{note}).')
 
     def _dev_exp(self, session, args):
         """`!exp 500` sets the total, `!exp +500` / `!exp -500` add to it."""
@@ -3535,6 +3977,7 @@ class GameServer:
         char = self._session_char(session)
         if char is None:
             raise gm.DevCommandError('no character in this session')
+        self._refuse_dead(session)
         with self.store.lock:
             current = progression.clamp_exp(char.get('exp', 0))
         delta = value if text[0] in '+-' else value - current
@@ -3543,12 +3986,68 @@ class GameServer:
             total = progression.clamp_exp(char.get('exp', 0))
         self._gm_reply(session, f'Exp {total} (Lv.{progression.level_for_exp(total)}).')
 
+    def _dev_socket(self, session, args):
+        """`!socket <equip_id> <stone_id> [stone_id ...]` (item_inventory-stone-extraction test
+        aid, P8 stage 4): an equipment instance whose socket words w0.. are these stones goes
+        into the bag model. No packet adds an item WITH its option words (0x18 grants a zero
+        block), so the caller's map reloads in place at his floor point (_map_transfer to the
+        same map, as a same-map /go does, on the floor: livetest bug 5): the 0x03 lists the new
+        instance, and the extraction window 0x473 can take it."""
+        parts = args.split()
+        if len(parts) < 2:
+            raise gm.DevCommandError('an equipment id and 1..5 stone ids')
+        if len(parts) > 1 + invmod.WIRE_OPTION_WORDS:
+            raise gm.DevCommandError(f'at most {invmod.WIRE_OPTION_WORDS} stones')
+        item = gm.parse_int(parts[0], 'equip_id', lo=1, hi=EC.item_max_id())
+        stones = [gm.parse_int(p, 'stone_id', lo=1, hi=EC.item_max_id()) for p in parts[1:]]
+        bag = self._bag(session)
+        if bag is None or not session.get('in_world') or session.get('current_map') is None:
+            raise gm.DevCommandError('not in the world')
+        if not en_item_exists(item) or bag.tab_of(item) != 'equip':
+            raise gm.DevCommandError(f'{item} is not EN equipment')
+        missing = [s for s in stones if not en_item_exists(s)]
+        if missing:
+            raise gm.DevCommandError(f'stone(s) {missing} not in the EN client catalog')
+        # Only what the client's reinforcement writes into a socket (P8 review): a typo such as
+        # `!socket 179 70` put an equipment id there, which an extraction then granted.
+        others = [s for s in stones if not craftmod.is_option_stone(s)]
+        if others:
+            raise gm.DevCommandError(f'{others}: not elemental option stones ({craftmod.OPTION_STONE_FIRST}..'
+                                     f'{craftmod.OPTION_STONE_LAST})')
+        words = stones + [0] * (invmod.OPTION_WORDS - len(stones))
+        with self._combat_lock(session):
+            if bag.add(item, 1, words) is None:
+                raise gm.DevCommandError(f'no room: {bag.fits(item, 1, words)}')
+        self.store.mark_dirty(f'!socket {item}')
+        code = int(session['current_map'])
+        x, y = presence.floor_point(session)
+        self._gm_reply(session, f'{EC.item_name(item) or item} ({item}) with sockets {stones} in your bag; '
+                                f'reloading map {code}.')
+        self._map_transfer(session['sock'], session, code, x, y, reason='!socket',
+                           no_enc=session.get('no_enc', True))
+
+    def _dev_event(self, session, args):
+        """`!event ...` (registered by events.py through gm.register): Events.dev_event."""
+        self.events.dev_event(session, args)
+
+    def _dev_expmult(self, session, args):
+        """`!expmult [x|off]` (registered by events.py): Events.dev_expmult."""
+        self.events.dev_expmult(session, args)
+
+    def _dev_boss(self, session, args):
+        """`!boss [list] | respawn [all|<map>|<name>]` (registered by bosses.py): Bosses.dev_boss."""
+        self.bosses.dev_boss(session, args)
+
     def _dev_give(self, session, args):
         """Give the caller an item (S2C 0x18 GetItem) and mirror it in the bag model. The
         EN catalog gate refuses a KR-only id, which the client would silently drop (S2-11).
         A Type 3 skill book or Type 4 job item is applied on receipt instead of filed in a bag
         tab, so it goes through the learn (cs-skill-learn) or the class change
-        (lc-class-change) that persists what the client does with it."""
+        (lc-class-change) that persists what the client does with it. A Type 5 cash item has
+        no bag tab either: it is the grant of `!cash item` (a cash inventory record, S2C 0x6F;
+        a Note included) with the same count as any other `!give` (1 when omitted - not the
+        catalog quantity `!cash item` alone grants), and what the cash model refuses is
+        refused with its reason."""
         parts = args.split()
         if not parts:
             raise gm.DevCommandError('no item id')
@@ -3574,8 +4073,20 @@ class GameServer:
                                     f'{CC.class_name(res.cls, res.tier)}.')
             return
         bag = self._bag(session)
-        tab = None if bag is None else bag.tab_of(item)
-        if tab is not None and self._inv_add(session, item, count, '!give') is None:
+        if bag is None:
+            raise gm.DevCommandError('no character in this session')
+        tab = bag.tab_of(item)
+        if tab is None:
+            # Type 5 (cash / Spark items): no bag tab, and the S2C 0x18 below adds nothing
+            # for it (livetest bug 6: "Gave" was answered while nothing arrived). Since P8 it
+            # lives in the cash inventory: the same grant as `!cash item`, whose CashError (a
+            # pet, a slot extension, a full owned list) is the refusal - never an 0x18, never a
+            # false "Gave". The count is always passed: omitted means 1 as for every `!give`
+            # (livefix's `!give 1894` gave exactly 1), where `!cash item <id>` alone grants
+            # the catalog quantity (3320 "11 Message Pads": 11).
+            self._dev_cash(session, f'item {item} {count}')
+            return
+        if self._inv_add(session, item, count, '!give') is None:
             raise gm.DevCommandError(f"item {item} does not fit: the {tab} tab is full")
         self._send_drop(session['sock'], session, item=item, count=count)
         self._gm_reply(session, f'Gave {count} x {EC.item_name(item)} ({item}).')
@@ -3589,6 +4100,10 @@ class GameServer:
         if not parts:
             raise gm.DevCommandError('no map code')
         map_code = gm.parse_int(parts[0], 'map', lo=1, hi=0xFFFF)
+        if session.get('in_cash_shop'):
+            # premium_cash-presence: only the mall's EXIT brings its player back (_map_transfer)
+            raise gm.DevCommandError(f'not while you are in the {mallmod.mall_name(self.client_build)} '
+                                     f'(close it with EXIT)')
         # The KR Yahoo map table lacks maps the EN clients have - the herbal farms and mining
         # areas (241, 243, ...) the P4 gathering check needs - so a map with a stage .hmi in
         # the running build's own client files is valid too (en_maps.load_map, world-portal-
@@ -3608,6 +4123,7 @@ class GameServer:
         name = map_filename(map_code) or EC.map_name(map_code)
         if map_code == EC.STALL_MAP and session.get('current_map') is not None:
             self._remember_market_return(session, int(session['current_map']))
+        x, y = self._arrival_point(map_code, x, y)          # the floor point he lands on
         self._gm_reply(session, f'Warping to map {map_code} ({name}) at ({x}, {y}).')
         self._map_transfer(session['sock'], session, map_code, x, y, reason='dev warp',
                            no_enc=session.get('no_enc', True))
@@ -3633,18 +4149,37 @@ class GameServer:
     def _dev_vital_value(self, session, args, key):
         """`!hp 30` -> 30, `!hp -30` / `!hp +30` -> current -/+ 30 (the regen live check needs
         a way below max that the server model sees: an injected 0x28 would leave the model
-        at max, so it would never regenerate)."""
+        at max, so it would never regenerate). A bare `!hp` / `!mp` -> the maximum: a fill
+        (polish 2026-09-28: it only answered a usage warning, and logged nothing). A derived
+        maximum of 0 (hpmp: a class >= 7, level 0 or above 99 - "never used to clamp") has
+        nothing to fill to: refused, instead of setting HP 1 / MP 0."""
         text = args.strip()
-        if not text:
-            raise gm.DevCommandError('no value')
-        value = gm.parse_int(text.lstrip('+'), key, lo=-0xFFFF, hi=0xFFFF)
+        value = gm.parse_int(text.lstrip('+'), key, lo=-0xFFFF, hi=0xFFFF) if text else None
         if not session.get('in_world'):
             raise gm.DevCommandError('not in world')
-        if self._session_char(session) is None:
+        self._refuse_dead(session)
+        char = self._session_char(session)
+        if char is None:
             raise gm.DevCommandError('no character in this session')
         with self._combat_lock(session):
+            if value is None:
+                d = hpmp.refresh(session, char)
+                top = int(d.max_hp if key == 'hp' else d.max_mp)
+                if top <= 0:
+                    raise gm.DevCommandError(f'no {key.upper()} maximum for class {d.job} Lv{d.level} '
+                                             f'(the derived maximum is 0); give a value')
+                return top
             current = int(session.get(key) or 0)
         return current + value if text[0] in '+-' else value
+
+    @staticmethod
+    def _refuse_dead(session):
+        """A dev command that changes HP / MP or the level refuses on a corpse. livetest bug
+        11: an HP / MP change on a corpse left the server model alive with the client's death
+        dialog still up (!damage refuses the same way); a level-up by !level / !exp healed the
+        corpse to its new maxima the same way (grant_exp, review of bug 11)."""
+        if session.get('dead'):
+            raise gm.DevCommandError('dead (click Revived, or !revive)')
 
     def _dev_hp(self, session, args):
         """Set the caller's current HP through the model (S2C 0x28). Never below 1: an 0x28
@@ -5184,8 +5719,14 @@ class GameServer:
     TRAP_PAIR_SECS = 0.5
     # A C2S 0x0D action 0xD this soon after a revive is the old corpse's report, not a death.
     REVIVE_GRACE_SECS = 3.0
-    # Minimum time between two contact hits on one player (config MOB_CONTACT_DAMAGE).
-    CONTACT_MIN_SECS = 0.5
+    # Minimum time between two SWING hits (events 4/5, 7..10) of one monster on one player
+    # (config MOB_CONTACT_DAMAGE), a per-(victim, monster) slot (_swing_slot) like body
+    # contact's (events 1/6, config MOB_CONTACT_MIN_SECS, _contact_slot): sharing one slot
+    # let contact take nearly every one (livetest bug 2: 441 contact hits against 5 swings
+    # while a chasing mob walked back and forth through the player), and one swing slot per
+    # victim dropped the second of two monsters swinging within 0.5 s - whose digit and
+    # flinch the victim's client had already drawn, with no HP taken (review of bug 2).
+    MOB_SWING_MIN_SECS = 0.5
     # Vampiric Attack (0xB25..0xB2F) is in FUN_004258d0's "HP is not the caster's" list, so it
     # classifies as a target heal; policy (combat_skill.md Q4): it is a drain - it hits the
     # monsters in front and its HP column heals the caster.
@@ -5221,17 +5762,50 @@ class GameServer:
     def _hit_text(event, hit):
         return f'[event {event}: B {hit.b} + E {hit.e}' + (f', {hit.note}' if hit.note else '') + ']'
 
+    # The grade roll's dice (config DAMAGE_GRADE_ROLL; random.Random API). An instance
+    # attribute in tests pins the rolls (a seeded random.Random).
+    DAMAGE_RNG = random
+
+    def _grade_roller(self):
+        """damage.grade_roll on DAMAGE_RNG while config DAMAGE_GRADE_ROLL is on, else None.
+        livetest bug 10: the 2009 client patch (combo HUD v2) rolls the digit it DRAWS
+        (CRITICAL! x1.5 5%, BAD x0.75 13%, GOOD x1.25 13%, x0.9..1.1 jitter) while the server
+        took the unrolled value, so kill counts never varied as the digits did. The server now
+        rolls the same table on a player's hit on a monster - client-reported swings and
+        strong attacks, attack skills, traps, the detonation release - never on DoT ticks,
+        reflections or a monster's hit on a player. The digit and the server's roll are
+        INDEPENDENT draws with the same distribution and mean (damage.GRADE_MEAN), not the
+        same number per hit. The default (None, auto: config.grade_roll_on) rolls only for
+        the 2009 build: a 2008 exe draws the exact unrolled value, so rolling there would
+        make the HP taken disagree with the digit (bug 10 in reverse)."""
+        if not cfgmod.grade_roll_on(self.config):
+            return None
+        rng = self.DAMAGE_RNG
+        return lambda value: dmgmod.grade_roll(value, rng)
+
+    def _graded(self, value, what=''):
+        """The placeholder formula's value through the same roll (DAMAGE_FORMULA
+        'placeholder' has no damage() call to put it in)."""
+        roll = self._grade_roller()
+        if roll is None:
+            return value
+        grade, rolled = roll(max(1, int(value)))
+        if grade != dmgmod.GRADE_NONE:
+            log.debug(f'[DMG] placeholder {what} {grade}: {value} -> {rolled}')
+        return rolled
+
     def _formula_hit(self, session, mob, event, skill=None, *, char=None, now=None):
         """One hit of the session's player on `mob` by the client's formula (damage.damage),
-        capped at the mob's current HP. An event-9 fire skill hit opens the player's 720 ms
-        fire window (session['fire_window_t']); a later fire hit inside it gets B = 0 and E / 3,
-        as the client's +0xE14 window does. Caller holds the session's combat lock."""
+        capped at the mob's current HP and rolled (_grade_roller, config DAMAGE_GRADE_ROLL).
+        An event-9 fire skill hit opens the player's 720 ms fire window
+        (session['fire_window_t']); a later fire hit inside it gets B = 0 and E / 3, as the
+        client's +0xE14 window does. Caller holds the session's combat lock."""
         now = time.monotonic() if now is None else now
         att = self._player_stats(session, char)
         t0 = session.get('fire_window_t')
         window = t0 is not None and now - t0 < dmgmod.FIRE_WINDOW_SECS
         vic = dmgmod.monster_stats(mob)
-        hit = dmgmod.damage(att, vic, event, skill, cap=mob.hp, splash=window)
+        hit = dmgmod.damage(att, vic, event, skill, cap=mob.hp, splash=window, roll=self._grade_roller())
         if hit.fire and not window:
             session['fire_window_t'] = now
         log.debug(f'[DMG] {session.get("char_name")!r} ({dmgmod.describe(att)}) -> {mob.name} '
@@ -5249,7 +5823,8 @@ class GameServer:
         char = self._session_char(session) if char is None else char
         if not self._client_damage():
             atk, bonus = self._caster_attack(session, char)
-            return combat.skill_damage(sd, atk, mob.defense, bonus), f'{sd.name} ({sd.id})'
+            return (self._graded(combat.skill_damage(sd, atk, mob.defense, bonus), sd.name),
+                    f'{sd.name} ({sd.id})')
         hit = self._formula_hit(session, mob, event, dmgmod.cast_skill(char, sd.id), char=char)
         return hit.total, f'{sd.name} ({sd.id}) {self._hit_text(event, hit)}'
 
@@ -5259,7 +5834,7 @@ class GameServer:
         char = self._session_char(session)
         if not self._client_damage():
             atk, bonus = self._caster_attack(session, char)
-            return combat.skill_damage(sd, atk, mob.defense, bonus), ''
+            return self._graded(combat.skill_damage(sd, atk, mob.defense, bonus), 'trap'), ''
         hit = self._formula_hit(session, mob, dmgmod.EV_STRONG, dmgmod.trap_skill(char), char=char)
         return hit.total, self._hit_text(dmgmod.EV_STRONG, hit)
 
@@ -5268,15 +5843,16 @@ class GameServer:
         Client: the event-9 hit of the (p5 6, class 4, job 2) / (p5 9, class 2, job 2) cell is
         clamped to >= 1 and stored at victim +0xE20 with no digit (0x419D44, before the HP cap);
         FUN_00426b60 releases it at the end as an event-9 arg6 hit, which adds the weapon
-        element again."""
+        element again. The grade roll (DAMAGE_GRADE_ROLL) is on that release, where the client
+        patch rolls the stored hit's one digit - never on the stored value."""
         char = self._session_char(session) if char is None else char
         if not self._client_damage():
             atk, bonus = self._caster_attack(session, char)
-            return combat.skill_damage(sd, atk, mob.defense, bonus)
+            return self._graded(combat.skill_damage(sd, atk, mob.defense, bonus), 'detonation')
         att = self._player_stats(session, char)
         vic = dict(dmgmod.monster_stats(mob), hp=None)            # stored before the HP cap
         stored = dmgmod.damage(att, vic, dmgmod.EV_STRONG, dmgmod.cast_skill(char, sd.id)).total
-        return dmgmod.damage(att, vic, dmgmod.EV_STRONG, direct=stored).total
+        return dmgmod.damage(att, vic, dmgmod.EV_STRONG, direct=stored, roll=self._grade_roller()).total
 
     def _damage_monster(self, sock, session, mob, dmg, what, *, attacker=None, take_control=True, mons=None):
         """Take `dmg` off a live monster; at 0 HP it dies through the one monster lifecycle
@@ -5304,9 +5880,12 @@ class GameServer:
         self._kill_monster(sock, session, mob, no_enc=(session or {}).get('no_enc', True), mons=mons)
         return True
 
-    def _release_hit_lock(self, sock, session, mob):
+    def _release_hit_lock(self, sock, session, mob, event=HIT_REPORT_EVENT):
         """A monster SURVIVED a hit that `session`'s client caught itself (a swing @0x416AA3,
-        a trap @0x417C9A). Two packets follow:
+        a trap @0x417C9A). `event` is the interact event of the catch: HIT_REPORT_EVENT 7 the
+        basic swing (_resolve_hit), 9 / 4 a strong attack or skill hit / a guarded one
+        (_resolve_skill_report), TRAP_INTERACT_EVENT 0xC a trap catch (_resolve_trap). Two
+        packets follow:
 
         - to the attacker only: S2C 0x2A {mover = mob, 8 zero state bytes, target = his own
           uid} (16 B). His client's catch set its +0x8E2 hit-lock, which holds the mob in the
@@ -5315,18 +5894,323 @@ class GameServer:
           packs the same 16 bytes by hand). The same 16 bytes are the monster AI's command
           with lo = 0 (_mob_command): the 0x2A also sets +0x971 = 1 (0x459C89 [0x454EB3]), so
           from here the server drives the mob (MOB_AGGRO) until a 0x9E, 0x29 or 0x1A clears
-          it again. No other client has that hit-lock, and its first chase word (on the next
-          'monster-ai' tick, to everyone) takes their copies over;
+          it again. No other client has that hit-lock, and its first chase word (to everyone)
+          takes their copies over;
         - to every OTHER client holding the mob: the hit relay (_relay_hit). The attacker
-          never gets it back: his own client drew the hit already."""
+          never gets it back: his own client drew the hit already - and he never gets a
+          33-byte 0x2A before this release (only target == receiver clears the hit-lock,
+          0x459F04: a position form under it flushes the queue and freezes the mob in hurt).
+        Desync fix M1 / M3 (HIT_STUN_PER_SWING_RE_2026-09-28), for a swing or dash attack
+        (event 7) and a skill or strong-attack hit (event 9): _hit_stun reads what the hit did
+        to the attacker's own copy - the hurt L - E (what is left of his action at the hit,
+        from his own 0x0D words: hitstun.py), the stun and the slide - and
+        - no chase word goes to anyone before the hit + max(MOB_HIT_RECOVER_SECS, stun +
+          MOB_HIT_RECOVER_MARGIN_SECS) (Monster.ai_recover_until, _mob_send_decision; a
+          combo extends it, nothing shortens it): by then every copy has finished its hurt
+          and stands, so the chase restarts on all of them in the same tick from the same
+          point. An ice-element hit (stun hurt + 1000) instead sends it at the hit +
+          MOB_HIT_ICE_CHASE_SECS, inside the stun, before the copies stall (_arm_hit_gate);
+        - the relay carries the attacker's facing (_hit_knock_facing) and that hurt: the
+          33-byte swing form (MOB_HIT_RELAY_KNOCKBACK) or the 34-byte case-9 form with his
+          cast variant (MOB_HIT_RELAY_SKILL_VARIANT), and the server's point slides as the
+          copies do.
+        A guarded hit (4) and a trap catch (0xC) keep the relay from before M1 - the flinch in
+        place (facing2 0, hi 0), no slide of the server's point - and set no gate (a gate an
+        earlier hit set runs on)."""
         mons = self._mob_home(session)
         if mons is None:
             return
+        now = time.monotonic()
+        hit = self._hit_stun(session, mob, event, now) if event in self.HIT_STUN_EVENTS else None
         with mons.lock:
-            self._mob_command(mons, mob, mobai.STOP, form='2A', only=[session])
-            self._relay_hit(mons, mob, session)
+            if hit is not None:
+                self._arm_hit_gate(mons, mob, now, hit)
+            self._mob_command(mons, mob, mobai.STOP, now, form='2A', only=[session])
+            knock = hit is not None and self._hit_knock_on(event)
+            facing, why = self._hit_knock_facing(session, mob, now, hit) if knock else (None, '')
+            self._relay_hit(mons, mob, session, facing=facing, why=why, now=now, event=event, hit=hit)
 
-    def _relay_hit(self, mons, mob, attacker):
+    # The interact events whose catch has a per-kind hurt, a relay knockback and a chase gate
+    # (hitstun.py): 7 a swing / dash attack, 9 a skill or strong attack. 4 (guarded) and 0xC
+    # (trap) flinch in place.
+    HIT_STUN_EVENTS = frozenset((HIT_REPORT_EVENT, HS.SKILL_EVENT))
+
+    def _hit_knock_on(self, event):
+        """Is the knockback relay on for a catch with interact `event`? 7: config
+        MOB_HIT_RELAY_KNOCKBACK (M1), 9: MOB_HIT_RELAY_SKILL_VARIANT (M3); never for 4 / 0xC,
+        and never with MOB_AGGRO off (the 0x1B node form)."""
+        if not self._mob_ai_enabled():
+            return False
+        if event == HIT_REPORT_EVENT:
+            return bool(self.config.get('MOB_HIT_RELAY_KNOCKBACK', True))
+        if event == HS.SKILL_EVENT:
+            return bool(self.config.get('MOB_HIT_RELAY_SKILL_VARIANT', True))
+        return False
+
+    def _hit_stun(self, session, mob, event, now=None):
+        """hitstun.Hit of `session`'s client-caught hit on `mob` with interact `event` (7 /
+        9): the tail's target_action_event (session['last_hit'], when it names this mob and
+        is fresh), his class / tier / weapon type, his attack-skill cast of the last
+        SKILL_REPORT_SECS and its age (session['last_cast']: a cast younger than its L still
+        runs, and swing words then are the attack key held through it) and his action tracker
+        (session['hitstun'], _on_move_state). Config MOB_HIT_HURT_PER_SWING off:
+        MOB_HIT_RELAY_HURT_MS; a hit it cannot classify: a high guess (hitstun.classify)."""
+        now = time.monotonic() if now is None else now
+        char = self._session_char(session)
+        cls, tier = CC.of(char)
+        tae = None
+        last = session.get('last_hit')
+        if (last is not None and len(last) > 4 and (int(last[0]) & 0xFFFF) == (mob.uid & 0xFFFF)
+                and now - float(last[3]) <= self.LAST_HIT_FRESH_SECS):
+            tae = last[4]
+        cast = session.get('last_cast')
+        age = now - float(cast['t']) if cast is not None else None
+        fresh = age is not None and age <= self.SKILL_REPORT_SECS
+        return HS.classify(session.get('hitstun'), event, tae, cls=cls, tier=tier,
+                           weapon=self._weapon_class(session, char) if char is not None else 0,
+                           cast_skill=int(cast['skill']) if fresh else None,
+                           cast_age_ms=max(0.0, age * 1000.0) if fresh else None,
+                           fallback_ms=int(self.config.get('MOB_HIT_RELAY_HURT_MS', 490)),
+                           per_swing=bool(self.config.get('MOB_HIT_HURT_PER_SWING', True)),
+                           attribute_of=self._item_attribute)
+
+    @staticmethod
+    def _item_attribute(item_id):
+        """The hii Attribute (record +0x190) of `item_id`, 0 when it has none."""
+        item = en_item(item_id)
+        return int(getattr(item, 'attribute', 0) or 0) if item is not None else 0
+
+    def _arm_hit_gate(self, mons, mob, now, hit):
+        """The chase gate of a client-caught swing / skill hit (hitstun.Hit `hit`; caller holds
+        mons.lock). Every copy is in state 3 until the hit + hit.stun (Monster.ai_stun_until).
+        - Ice element (+0x95D = 2, stun = hurt + 1000, config MOB_HIT_ICE_CHASE_SECS > 0):
+          the gate is the hit + MOB_HIT_ICE_CHASE_SECS - set, not maxed: this hit restarted
+          state 3 on every copy, so no earlier hit's or cast's gate counts any more - and a
+          one-shot timer runs the mob's AI step then (_chase_at), not the next 'monster-ai'
+          tick (up to MOB_AI_TICK_SECS later). A server-driven copy's state machine runs only
+          while its last 0x2A node's 960 ms hold does (type-4 tick gate 0x4142B8..0x4142D1:
+          (+0xEE4 && +0x971) || +0x96D): with no word queued, both copies stalled their
+          +0xE9C at 960-990 and ran the rest of the stun only after the chase word (live 2b:
+          3.3-3.5 s frozen with the 2.14 s gate, retail 2.0 s). A queued word does not cut the
+          stun short: state 3 exits on +0xE9C against +0x9E4 (+1000 ice) alone (0x41528A..
+          0x4152C2) and a command's action nibble 0 never reaches pass 2 (the +0x9E4 copy at
+          0x413BAF is inside the 6..10 cases). So both copies end at 1000 + their hurt.
+          The word goes out even when the decision did not change (STOP included) and is
+          kept alive until the stun ends (_ice_word_due).
+        - Otherwise: _arm_recover_gate (the hit + max(MOB_HIT_RECOVER_SECS, stun + margin)).
+          A stun past the hold stalls the same way (a strong attack / non-ice skill, 1020..
+          1220 ms): both copies hold +0xE9C at 960-990 until the chase word at the gate, then
+          each runs the rest of its own stun (stun - 0.96 s). So the gate evens out two
+          copies' hurts only when one of them is under the hold (it stands idle, the other
+          stalls); when both are past it, it evens out nothing and freezes both for (stun -
+          0.84 s) plus up to one AI tick more than their stun. The server's estimate follows
+          that: the first word after the hit, past the hold, starts the walk at that word +
+          the rest (Monster.ai_stun_t / ai_stun_secs, _mob_word_after_stun).
+        MOB_HIT_RECOVER_SECS 0: no gate at all. Returns the gate (0.0 with none)."""
+        mob.ai_stun_until = now + float(hit.stun) / 1000.0
+        mob.ai_stun_t, mob.ai_stun_secs = now, float(hit.stun) / 1000.0
+        mob.ai_ice_until = 0.0
+        ice = self._ice_chase_secs()
+        if hit.element == HS.ELEMENT_ICE and ice > 0 and float(self.config.get('MOB_HIT_RECOVER_SECS', 0.0) or 0.0) > 0:
+            mob.ai_ice_until = mob.ai_stun_until
+            until = mob.ai_recover_until = mob.ai_ice_chase_t = now + ice
+            ticks = getattr(self, 'ticks', None)
+            if ticks is not None:
+                ticks.call_at(until, self._chase_at, mons, mob, until, name='mob-ice-chase')
+            return until
+        return self._arm_recover_gate(mob, now, hit.stun)
+
+    def _ice_chase_secs(self):
+        """Config MOB_HIT_ICE_CHASE_SECS (0: the ice rule is off)."""
+        return float(self.config.get('MOB_HIT_ICE_CHASE_SECS', 0.0) or 0.0)
+
+    def _chase_at(self, mons, mob, when):
+        """Tick callback at an ice hit's gate (_arm_hit_gate): the mob's AI step at once, so
+        its chase word reaches every copy before their +0xE9C stalls - the decision even when
+        it did not change (_ice_word_due). Nothing when the mob died, was handed back or a
+        later hit moved the gate."""
+        if not self._mob_ai_enabled():
+            return
+        now = max(time.monotonic(), float(when))
+        with mons.lock:
+            if mob.alive and mob.aggro_uid and now >= mob.ai_recover_until:
+                self._mob_ai_step_in(mons, mob, now)
+
+    @staticmethod
+    def _ice_word_due(mob, now, keepalive):
+        """True while an ice hit's stun runs past its chase time (Monster.ai_ice_until /
+        ai_ice_chase_t) and the copies need a word although the decision did not change: the
+        first at the chase time, then one every keep-alive - STOP included, which a decision
+        is otherwise never re-sent as (a mob a control effect holds at the chase time would
+        get no word, and both copies would stall at the end of the release's 960 ms hold)."""
+        if now >= getattr(mob, 'ai_ice_until', 0.0):
+            return False
+        return mob.ai_sent_t < getattr(mob, 'ai_ice_chase_t', 0.0) or now - mob.ai_sent_t >= keepalive
+
+    @staticmethod
+    def _mob_word_after_stun(mob, now):
+        """A word to every copy of `mob` at `now` (_mob_command): the first one after its last
+        client-caught hit (Monster.ai_stun_t) says when the copies' stun really ends. Past the
+        0x2A node's hold (mobai.HOLD_2A_SECS from the hit's release / relay) a stun longer than
+        the hold has stalled both copies (the type-4 tick gate 0x4142B8): they run its rest,
+        stun - the hold, from this word on, so the dead reckoning (Monster.ai_stun_until)
+        starts no earlier. Caller holds mons.lock."""
+        stun = float(getattr(mob, 'ai_stun_secs', 0.0) or 0.0)
+        if stun <= 0 or now <= mob.ai_stun_t:
+            return                                  # none, or the hit's own release / relay
+        mob.ai_stun_secs = 0.0
+        hold = mobai.HOLD_2A_SECS
+        if stun > hold and now - mob.ai_stun_t > hold:
+            mob.ai_stun_until = max(mob.ai_stun_until, now + stun - hold)
+
+    def _arm_recover_gate(self, mob, now, stun_ms):
+        """Desync fix M1: no chase word for `mob` before now + max(MOB_HIT_RECOVER_SECS,
+        stun_ms / 1000 + MOB_HIT_RECOVER_MARGIN_SECS) - never earlier than a gate already
+        running. MOB_HIT_RECOVER_SECS 0: no gate. Caller holds the map's monster lock.
+        Returns that time (0.0 with no gate)."""
+        floor = float(self.config.get('MOB_HIT_RECOVER_SECS', 0.0) or 0.0)
+        if floor <= 0:
+            return 0.0
+        margin = float(self.config.get('MOB_HIT_RECOVER_MARGIN_SECS', 0.12))
+        until = now + max(floor, float(stun_ms) / 1000.0 + margin)
+        if until > mob.ai_recover_until:
+            mob.ai_recover_until = until
+        return until
+
+    # Desync fix M1: with no +0x949 model (no 0x07 sent to him yet), no cast and no held key,
+    # a hit tail with |target_dx| below this knocks right; a tail older than
+    # LAST_HIT_FRESH_SECS is not this hit's.
+    KNOCK_FACING_MIN_DX = 8.0
+    # hitstun.report_facing (+0x949: 2 left, 6 right) -> combat.FACING_*.
+    KNOCK_FACING_OF_949 = {2: combat.FACING_LEFT, 6: combat.FACING_RIGHT}
+    LAST_HIT_FRESH_SECS = 1.0
+    # The hurt slide (state 3 moves while +0xE9C <= 0x95 from 0x3C, 0x415412..0x415426): two
+    # 30 ms ticks at the monster's walk speed (Monkey Soldier 2 x 3.75 = 7.5 px, measured) for
+    # a swing; four from 0 for a skill hit, 19 x +0x13E8 with the wind element (hitstun.Hit).
+    MOB_KNOCK_TICKS = 2
+    MOB_TICK_SECS = 0.03
+
+    def _hit_knock_facing(self, session, mob, now=None, hit=None):
+        """(facing, why) of the attacker for the knockback of his client-caught hit on `mob`
+        (desync fix M1). The attacker's copy of the mob slides in HIS facing (FUN_00412c60
+        case 7 @0x412F57 / case 9 0x4134DA..0x4134E0: mob +0x95B = attacker +0x949), not
+        toward the side the mob is on - a mob overlapping him or behind him included.
+        First his +0x949 as his own words turned it (hitstun.report_facing: the direction key
+        counts only on the ticks the turn check runs, 0x414498..0x41450F - states 8 / 0xC /
+        the air; a key pressed in a hurt, a dash, a swing or a cast turns nothing - and the
+        report's own key not yet; live 2b: 85 / 85 hits against A's +0x95B, where the held
+        key missed 5 and the tail's side 9, each leaving a 15 px gap).
+        Until his words turn him, the model is the facing his last S2C 0x07 created him with
+        (read into +0x949 at 0x453B80: the idle block's 2, left; _map_transfer seeds it).
+        With no model at all (no 0x07 sent to this session): a cast's hit (`hit` event 9
+        classified as the skill, with his attack-skill cast of the last SKILL_REPORT_SECS, of
+        the hit's variant): his facing at that cast (session['last_cast']['facing'],
+        _skill_attack) - he cannot turn in state 1, and a box with a back (Crescent Slash,
+        Heaven Strike: 300 px behind) hits mobs behind him; else his last held direction
+        (session['facing'], combat.facing_from_state); else the side of the mob in his
+        report's interact tail (session['last_hit'] from _on_move_state; target_dx = mob -
+        attacker) when |dx| >= KNOCK_FACING_MIN_DX; else right. Two case-9 exceptions (by
+        the attacker's class / tier and the cast variant): Rogue tier-1 variant 5
+        (Assassination) reverses it; Mage tier-1 variant 7 (Nova) pushes the mob away from
+        him (the side of the mob, any |dx|). `why` names the source and the values, for the
+        log."""
+        now = time.monotonic() if now is None else now
+        tail_dx = None
+        last = session.get('last_hit')
+        if (last is not None and (int(last[0]) & 0xFFFF) == (mob.uid & 0xFFFF)
+                and now - float(last[3]) <= self.LAST_HIT_FRESH_SECS):
+            tail_dx = float(last[2])
+        held = session.get('facing')
+        names = {combat.FACING_LEFT: 'left', combat.FACING_RIGHT: 'right'}
+        track = session.get('hitstun')
+        turned = self.KNOCK_FACING_OF_949.get(HS.report_facing(track))
+        cast = session.get('last_cast') if hit is not None and hit.event == HS.SKILL_EVENT and hit.kind == 'skill' else None
+        cast_facing = (cast.get('facing') if cast is not None and now - float(cast['t']) <= self.SKILL_REPORT_SECS
+                       and HS.variant_of(cast['skill']) == hit.variant else None)
+        if turned is not None:
+            origin = 'his 0x07 spawn record' if HS.report_facing_from(track) == 'spawn' else 'his words'
+            facing, src = turned, f'his +0x949 ({names[turned]}, {origin})'
+        elif cast_facing in names:
+            facing, src = cast_facing, f'the cast ({names[cast_facing]} at cast time)'
+        elif held in names:
+            facing, src = held, 'held key'
+        elif tail_dx is not None and abs(tail_dx) >= self.KNOCK_FACING_MIN_DX:
+            facing, src = (combat.FACING_RIGHT if tail_dx > 0 else combat.FACING_LEFT), 'tail dx'
+        else:
+            facing, src = combat.FACING_RIGHT, 'default'
+        if hit is not None and hit.event == HS.SKILL_EVENT and hit.variant:
+            job = CC.of(self._session_char(session)) + (hit.variant,)
+            if job == (4, 1, 5):
+                facing = combat.FACING_LEFT if facing == combat.FACING_RIGHT else combat.FACING_RIGHT
+                src += ', reversed (Rogue tier 1 variant 5)'
+            elif job == (5, 1, 7) and tail_dx:
+                facing = combat.FACING_RIGHT if tail_dx > 0 else combat.FACING_LEFT
+                src = 'the side of the mob (Mage tier 1 variant 7)'
+        tail = 'none' if tail_dx is None else f'{tail_dx:+.1f}'
+        return facing, f'facing from {src}: tail dx {tail}, held {names.get(held, "none")}'
+
+    @classmethod
+    def hit_relay_words(cls, facing=None, hurt_ms=0, action=None):
+        """(lo, hi) of the hit relay (desync fix M1 / M3): lo = the action nibble << 12 (the
+        tail's target_action_event: 7 / 8 a swing, 9 / 10 a skill hit - 9 / 10 make the 0x2A
+        handler read the u8 action_flag, 0x459DF1..0x459E10, hit_relay_fields; default
+        MOB_HIT_RELAY_EVENT 7) | f << 20 with f = 1 for an attacker facing left, 2 right, 0
+        none (the old in-place flinch: node+0x50 8); the reaction nibble (bits 16-19) stays
+        0. hi = the hurt ms, 12 bits (node+0x44 -> +0x9E8 -> +0x9E4). Right, 360: (0x00207000,
+        0x168); Ice Spear left, 1020: (0x00109000, 0x3FC) with action 9."""
+        f = {combat.FACING_LEFT: 1, combat.FACING_RIGHT: 2}.get(facing, 0)
+        action = cls.MOB_HIT_RELAY_EVENT if action is None else int(action) & 0xF
+        return (action << 12) | (f << 20), int(hurt_ms) & 0xFFF
+
+    @classmethod
+    def hit_relay_fields(cls, mob_uid, attacker_uid, x, y, facing=None, hurt_ms=0, action=None, flag=0):
+        """The S2C 0x2A of the hit relay to a client that is NOT the attacker (hit_relay_words):
+        - action 7 / 8, 33 bytes: {u32 mob, u32 lo, u32 hi, u32 target = attacker, f64 x,
+          f64 y, u8 airborne 0}. Mob 0x000F0009, right, hurt 360, attacker uid 1, (656.25,
+          1901.375): 09 00 0F 00 00 70 20 00 68 01 00 00 01 00 00 00 00 00 00 00 00 82 84 40
+          00 00 00 00 80 B5 9D 40 00;
+        - action 9 / 10 (desync fix M3), 34 bytes: the u8 action_flag `flag` (node+0x52 ->
+          +0x98C: the attacker's cast variant +0x98B) after the target, before the position
+          block. Ice Spear: mob 0x000F0000, left, hurt 1020, uid 1, flag 1, (861, 1920):
+          00 00 0F 00 00 90 10 00 FC 03 00 00 01 00 00 00 01 00 00 00 00 00 E8 8A 40 00 00
+          00 00 00 00 9E 40 00."""
+        lo, hi = cls.hit_relay_words(facing, hurt_ms, action)
+        fields = {'mover_uid': int(mob_uid) & 0xFFFFFFFF, 'move_bits': struct.pack('<II', lo, hi),
+                  'target_uid': int(attacker_uid) & 0xFFFFFFFF, 'pos_x': float(x), 'pos_y': float(y),
+                  'airborne': 0}
+        if (lo >> 12) & 0xF in HS.TAES[HS.SKILL_EVENT]:
+            fields['action_flag'] = int(flag or 0) & 0xFF
+        return fields
+
+    def _mob_knock_estimate(self, mob, facing, now, ticks=None):
+        """Desync fix M1 / M3 + P3: the server's point of a mob after a client-caught hit
+        (_relay_hit) slides as every client's copy does - `ticks` ticks (hitstun.Hit.ticks: 2
+        for a swing, 4 for a skill hit, 19 x 1.0 / 2.5 for the wind element, 0 for an airborne
+        victim; default MOB_KNOCK_TICKS) at its walk speed in the attacker's facing - and is a
+        fix at `now`. Returns the dx."""
+        ticks = self.MOB_KNOCK_TICKS if ticks is None else float(ticks)
+        dx = ((1 if facing == combat.FACING_RIGHT else -1) * ticks * self.MOB_TICK_SECS
+              * self._mob_walk_px_s(mob))
+        mob.x += dx
+        mob.fix_t = now
+        return dx
+
+    def _hitter_point(self, session, mob, now=None):
+        """Where `session`'s client had `mob` at his hit: the victim point of his report's
+        interact tail (session['last_hit'] from _on_move_state: his pos + target_dx / dy),
+        when it names this mob and is at most LAST_HIT_FRESH_SECS old; else None. His own
+        copy of the mob stands there and slides from there - the sync point of _relay_hit,
+        whether or not the mob chases him (_mob_fix_allowed rules every other fix)."""
+        now = time.monotonic() if now is None else now
+        last = session.get('last_hit')
+        if (last is None or len(last) < 4 or last[1] is None
+                or (int(last[0]) & 0xFFFF) != (mob.uid & 0xFFFF)
+                or now - float(last[3]) > self.LAST_HIT_FRESH_SECS):
+            return None
+        return float(last[1][0]), float(last[1][1])
+
+    def _relay_hit(self, mons, mob, attacker, *, facing=None, why='', now=None, event=HIT_REPORT_EVENT,
+                   hit=None):
         """The attacker's client-caught hit on the OTHER clients that hold the mob (world-
         shared-monsters + party-dep-combat-multiclient: "everyone else sees the hit feedback,
         the attacker never gets it back"). Their clients detected nothing, so the server
@@ -5343,35 +6227,106 @@ class GameServer:
           7 << 12, hi 0, target = the attacker, f64 x, f64 y, u8 airborne 0} (33 B: target !=
           receiver, so the handler reads the position block): applied at once (it flushes,
           C3), it plays the hit, takes the copy over like the attacker's (+0x971 = 1: red
-          under the aggro-rules patch, contact allowed) and puts it at the server's position
-          of the mob - the retail post-hit viewer packet (MONSTER_AGGRO_RE retail flow step 2,
-          RETAIL_COMBAT_FEEL 2.3 "Other players watching"). Every surviving hit thus re-syncs
-          the watchers' copies to one position (_mob_fix_allowed says whose).
+          under the aggro-rules patch, contact allowed) and puts it at the sync point - the
+          retail post-hit viewer packet (MONSTER_AGGRO_RE retail flow step 2,
+          RETAIL_COMBAT_FEEL 2.3 "Other players watching"). The sync point is the hitter's
+          own report tail (_hitter_point: his copy of the mob stands there and is knocked
+          from there), whoever the mob chases, and the server's point takes it too; only
+          without a fresh tail naming the mob is it the server's point. Every surviving hit
+          thus re-syncs every copy to the hitter's: the watchers' by this packet, the
+          server's here, his own never moved. Live session 3: with the server's point
+          instead, the 7 of 54 relays of a hitter the mob was not chasing (_mob_fix_allowed
+          had refused his tail) put the watchers 11..69 px off his copy.
         - MOB_AGGRO off: nothing drives the watchers' copy and a 0x2A would freeze it for
           good (+0x971 = 1 with no follow-up, Gate B), so the node is the queued S2C 0x1B
           {mob, hold MOB_HIT_RELAY_HOLD_MS, lo = 7 << 12, 0, target = the attacker}, which never
           touches +0x971.
-        Inferred from the handlers; not yet seen live (P5 exit criterion 5). Caller holds
-        mons.lock. Returns the number sent."""
-        watchers = self._mob_viewers(mons, mob, exclude=attacker)
-        if not watchers:
-            return 0
+        Desync fix M1 (config MOB_HIT_RELAY_KNOCKBACK, MOB_AGGRO on): the 0x2A also carries
+        the attacker's facing in lo bits 20-21 and the hurt time in hi (hit_relay_fields:
+        right, 360 = lo 0x00207000, hi 0x168). With target != receiver the
+        handler keeps both (node+0x50 0x459D83..0x459DA5, node+0x44 0x459D7A; only the
+        self-form forces facing2 8 and hi 0), writes the position at once (0x459E16..) and
+        sets +0x963; the type-4 consumer copies them to +0x95C / +0x9E8 and the hit
+        resolution (0x413BAF) to +0x95B / +0x9E4, so the watchers' copies slide 2 ticks and
+        stay in state 3 for hurt - 60 ms, as the attacker's own copy does from its detection.
+        The reaction nibble stays 0, the packet 33 bytes. The server's
+        point of the mob then slides the same way (_mob_knock_estimate) - also with no
+        watcher: the attacker's copy slid. False: facing2 0 and hi 0, the old flinch in place.
+        The hurt is `hit`'s (hitstun.Hit from _hit_stun: basic swing 490, dash attack 760,
+        ...; MOB_HIT_RELAY_HURT_MS for a hit it cannot classify) and the action nibble its
+        tae: 7, or 8 for an airborne victim (state 0x17 on every copy, as on the attacker's).
+        Desync fix M3 (config MOB_HIT_RELAY_SKILL_VARIANT, `event` 9): the case-9 form - action
+        9 (10 airborne) and the u8 action_flag = the attacker's cast variant (0 for a strong
+        attack; 0 too for a Priest tier-2 Vampiric Attack, whose drain FUN_004194f0 would
+        apply to the watchers' copies of the attacker: hitstun.relay_flag) before the
+        position block, 34 bytes (hit_relay_fields). The watchers' consumer
+        copies the flag to +0x98C and their pass 2 runs the attacker's: the 4-tick slide
+        (+0xE9C from 0), the stun of hi, the element FUN_004194f0 reads from THEIR copy of the
+        attacker's learned list (ice +1000 ms, wind 19 ticks) and FUN_00426840's local debuff.
+        The server's point slides `hit.ticks`. Off: the old flinch in place.
+        A guarded hit (4) and a trap catch (0xC) are always the old flinch in place.
+        Caller holds mons.lock. Returns the number sent."""
+        now = time.monotonic() if now is None else now
         attacker_uid = P.session_uid(attacker) or 0
-        blob = struct.pack('<II', self.MOB_HIT_RELAY_EVENT << 12, 0)
-        if self._mob_ai_enabled():
-            sent = self._mob_broadcast(mons, mob, '0x2A', {
-                'mover_uid': mob.uid, 'move_bits': blob, 'target_uid': attacker_uid,
-                'pos_x': float(mob.x), 'pos_y': float(mob.y), 'airborne': 0}, receivers=watchers)
+        aggro = self._mob_ai_enabled()
+        if hit is None and event in self.HIT_STUN_EVENTS:
+            hit = self._hit_stun(attacker, mob, event, now)
+        knock = hit is not None and self._hit_knock_on(event)
+        if knock and facing is None:
+            facing, why = self._hit_knock_facing(attacker, mob, now, hit)
+        server_x, server_y = float(mob.x), float(mob.y)
+        tail = self._hitter_point(attacker, mob, now)
+        if tail is not None:                                # the sync point: his copy's
+            mob.x, mob.y = tail
+            mob.fix_t = now
+        hit_x, hit_y = float(mob.x), float(mob.y)          # the copies are put here, then slide
+        moved = (f' (his tail; the server had ({server_x:.0f},{server_y:.0f}))'
+                 if abs(hit_x - server_x) >= 0.5 or abs(hit_y - server_y) >= 0.5 else '')
+        dx = self._mob_knock_estimate(mob, facing, now, hit.ticks) if knock else 0.0
+        watchers = self._mob_viewers(mons, mob, exclude=attacker)
+        sent = 0
+        action = hit.tae if knock else self.MOB_HIT_RELAY_EVENT
+        if watchers and aggro:
+            fields = self.hit_relay_fields(mob.uid, attacker_uid, hit_x, hit_y,
+                                           facing if knock else None, hit.hurt if knock else 0,
+                                           action=action, flag=hit.flag if knock else 0)
+            sent = self._mob_broadcast(mons, mob, '0x2A', fields, receivers=watchers)
             mob.ai_takers.update(self._viewer_key(s) for s in watchers)
             mob.ai_owned = True
-            form = f'0x2A, synced to ({mob.x:.0f},{mob.y:.0f})'
-        else:
+            lo, hi = struct.unpack('<II', fields['move_bits'])
+            flag = f' flag {fields["action_flag"]}' if 'action_flag' in fields else ''
+            form = f'0x2A lo {lo:#010x} hi {hi}{flag}, synced to ({hit_x:.0f},{hit_y:.0f}){moved}'
+        elif watchers:
             sent = self._mob_broadcast(mons, mob, '0x1B', {
-                'uid': mob.uid, 'hold_ms': self.MOB_HIT_RELAY_HOLD_MS, 'state_blob': blob,
+                'uid': mob.uid, 'hold_ms': self.MOB_HIT_RELAY_HOLD_MS,
+                'state_blob': struct.pack('<II', self.MOB_HIT_RELAY_EVENT << 12, 0),
                 'target_uid': attacker_uid}, receivers=watchers)
             form = '0x1B node'
-        log.info(f'[ATK] hit on {mob.name} uid={mob.uid:#x} by uid {attacker_uid:#x} relayed to '
-                 f'{sent} other client(s) ({form}, action {self.MOB_HIT_RELAY_EVENT})')
+        else:
+            form = 'no other client holds it'
+        wait = mob.ai_recover_until - now
+        held = f'; chase held {wait:.2f} s' if wait > 0 else ''
+        if held and hit is not None and hit.element == HS.ELEMENT_ICE and self._ice_chase_secs() > 0:
+            held += (f' (ice: the word goes inside the stun, before the copies\' +0xE9C stalls '
+                     f'at the 0x2A hold\'s 960 ms; they stand at {hit.stun} ms)')
+        if hit is not None:
+            elem = HS.ELEMENT_NAMES.get(hit.element, str(hit.element))
+            stun = (f'{hit.why}, stun {hit.stun}' + (f' ({elem})' if hit.element else '')
+                    + (f', slide {hit.ticks:g} ticks' if knock else ''))
+        if knock:
+            side = 'right' if facing == combat.FACING_RIGHT else 'left'
+            knock_text = (f'; knock {side}, hurt {hit.hurt} ({why}); {stun}; estimate {dx:+.1f} px -> '
+                          f'({mob.x:.0f},{mob.y:.0f}){held}')
+        elif not aggro:
+            knock_text = ''
+        elif hit is not None:
+            switch = 'MOB_HIT_RELAY_KNOCKBACK' if event == HIT_REPORT_EVENT else 'MOB_HIT_RELAY_SKILL_VARIANT'
+            knock_text = f'; interact event {event:#x}: flinch in place, no knock ({switch} off); {stun}{held}'
+        else:
+            knock_text = f'; interact event {event:#x}: flinch in place, no knock, no chase gate'
+        if watchers or knock:
+            log.info(f'[ATK] hit on {mob.name} uid={mob.uid:#x} by uid {attacker_uid:#x} relayed to '
+                     f'{sent} other client(s) ({form}, action {action}{knock_text})')
         return sent
 
     # ---- attack skills (cs-skill-damage, F3a) ----
@@ -5390,19 +6345,45 @@ class GameServer:
             side = 'right' if facing == combat.FACING_RIGHT else 'left'
             # The client catches its own victims too and reports each one (C2S 0x0D event
             # 9); _resolve_skill_report matches those reports against this cast.
-            session['last_cast'] = {'skill': sd.id, 't': time.monotonic(), 'hit': {m.uid for m in hit}}
+            # 'facing': his +0x949 for the whole cast (FUN_00414210 turns him only in states
+            # 8 / 0xC / 9 / ...: never in state 1) - the knockback of its hits (_hit_knock_facing)
+            session['last_cast'] = {'skill': sd.id, 't': time.monotonic(), 'hit': {m.uid for m in hit},
+                                    'facing': facing}
             if not hit:
                 log.info(f'[SKILL] {sd.name} ({sd.id}) cs-skill-damage: no monster in the '
                          f'{box.front}/{box.back}/{box.half_height} px box facing {side} from '
                          f'({origin[0]:g},{origin[1]:g})')
                 return []
+            gate = self._arm_cast_gate(session, char, sd, hit)
             for mob in hit:
                 dmg, what = self._skill_hit_damage(session, sd, mob, char=char)
                 self._damage_monster(sock, session, mob, dmg, what)
         log.info(f'[SKILL] {sd.name} ({sd.id}) cs-skill-damage: {len(hit)} monster(s) in the box '
                  f'facing {side} (Skill_P_A {sd.skill_p_a}, Attri_Atk {sd.attri_atk}, '
-                 f'DAMAGE_FORMULA {self.config.get("DAMAGE_FORMULA", "client")})')
+                 f'DAMAGE_FORMULA {self.config.get("DAMAGE_FORMULA", "client")}){gate}')
         return hit
+
+    def _arm_cast_gate(self, session, char, sd, mobs):
+        """Desync fix M1, config MOB_HIT_CAST_GATE: the chase gate of every monster the
+        server's box of attack skill `sd` lands on, armed BEFORE its damage (whose aggro would
+        otherwise send the chase word at cast time, live s02 15.749): the caster's client
+        catches its own hit and reports it while he is still in state 1, so within the skill's
+        length L (hitstun.cast_len: weapon type, cast variant, tier) - the gate is the cast +
+        max(MOB_HIT_RECOVER_SECS, L + MOB_HIT_RECOVER_MARGIN_SECS), and the report re-arms it
+        from the hurt it started (_release_hit_lock). No report: it just runs out. Caller
+        holds the combat lock (the map's monster lock). Returns the log text ('' = none)."""
+        if not mobs or not self.config.get('MOB_HIT_CAST_GATE', True):
+            return ''
+        wt = self._weapon_class(session, char) if char is not None else 0
+        length = HS.cast_len(sd.id, wt, CC.of(char)[1])
+        now = time.monotonic()
+        until = 0.0
+        for mob in mobs:
+            until = max(until, self._arm_recover_gate(mob, now, length))
+        if until <= 0:
+            return ''
+        return (f'; chase held {until - now:.2f} s from the cast (L {length}: weapon {wt}, '
+                f'variant {HS.variant_of(sd.id)})')
 
     # ---- heals (cs-heal-visuals, F3b/F3c/F9/F11) ----
     def _send_heal_notice(self, session, uid=None, hp=None, mp=None):
@@ -5696,7 +6677,7 @@ class GameServer:
         # dev !trap caught nothing client-side, so the monster AI takes it over itself.
         if not self._damage_monster(sock, session, mob, dmg, f'{sd.name} ({trap_id})',
                                     take_control=not client_catch) and client_catch:
-            self._release_hit_lock(sock, session, mob)
+            self._release_hit_lock(sock, session, mob, self.TRAP_INTERACT_EVENT)
         return mob
 
     # ---- C2S 0x0D: facing, positions, trap victim, death watch, contact ----
@@ -5725,6 +6706,7 @@ class GameServer:
         lo = int(rec.get('state_lo', 0))
         action, interact = (lo >> 12) & 0xF, (lo >> 16) & 0xF
         now = time.monotonic()
+        self._track_action(session, rec)
         with registry.detached(), self._combat(session):
             side = combat.facing_from_state(lo)
             if side is not None:
@@ -5740,6 +6722,11 @@ class GameServer:
                 if mob is not None and mob.alive and self._mob_fix_allowed(mob, P.session_uid(session)):
                     mob.x, mob.y = victim_pos
                     mob.fix_t = now
+                # desync fix M1: the victim's side (target_dx = victim - attacker) gives the
+                # knockback facing of the hit relay that may follow (_hit_knock_facing), the
+                # tail's target_action_event (7 / 8, 9 / 10) its action (_hit_stun)
+                session['last_hit'] = (int(rec['target_uid']), victim_pos, float(rec['target_dx']), now,
+                                       int(rec.get('target_action_event', 0) or 0))
             if interact == self.TRAP_INTERACT_EVENT:
                 pending = session.get('pending_trap')
                 if pending is not None and int(rec.get('item_id', 0)) == pending['id']:
@@ -5750,6 +6737,33 @@ class GameServer:
                 self._watch_client_death(session, now)
             elif action and self.config.get('MOB_CONTACT_DAMAGE'):
                 self._monster_contact(session, rec, action, now)
+
+    def _track_action(self, session, rec):
+        """Desync fix M1 per-swing hurt: follow the player's current action from his C2S 0x0D
+        words (hitstun.observe: the swing / dash attack / strong attack / cast that started
+        it and the logic ms since; attack words inside a cast or strong attack start nothing,
+        his client is in state 1; his own hurt - action nibble 6..10, hi its ms - ends his
+        action, and an input held through it starts its action at the hurt's end, stage 0),
+        so a hit report can say how much of it was left at the hit (_hit_stun), and his
+        facing +0x949 at the hit (hitstun.report_facing, _hit_knock_facing). One tracker per
+        session, new with every S2C 0x07 he is sent (_map_transfer: facing that record's
+        direction byte) and with a map change."""
+        track = session.get('hitstun')
+        code = session.get('current_map')
+        if not isinstance(track, dict) or track.get('map') != code:
+            track = session['hitstun'] = dict(HS.new_tracker(), map=code)
+
+        def weapon():
+            char = self._session_char(session)
+            try:
+                return self._weapon_class(session, char) if char is not None else 0
+            except (AttributeError, KeyError, TypeError, ValueError):
+                return 0                        # an odd equip record: E0 / L of no weapon
+
+        def tier():
+            return CC.of(self._session_char(session))[1]
+        HS.observe(track, rec.get('state_lo', 0), rec.get('logic_elapsed_ms', 0), weapon=weapon, tier=tier,
+                   hi=rec.get('state_hi', 0))
 
     def _watch_client_death(self, session, now):
         """C2S 0x0D action 0xD (F8 step 6). Caller holds the combat lock."""
@@ -5777,17 +6791,34 @@ class GameServer:
     MOB_HIT_KINDS = {'body_atk': 'contact', 'weak_atk': 'attack', 'strong_atk': 'strong attack'}
     # The swing events (attack A 7/8, attack B 9/10, and attack B into the victim's guard 4/5 -
     # FUN_00416ab0 writes 4/5 in the strong-swing catch, 0x417B12/0x417B1E; they hurt since the
-    # damage-formula port, 5 being 4). With MOB_AGGRO on only the server makes a field monster
-    # swing (the client chase that attacks never runs without a target), so one needs an attack
-    # command to that monster this recent (MOB_ATTACK_EVENT_SECS). 1 / 6 are body contact.
+    # damage-formula port, 5 being 4). With MOB_AGGRO on, a swing only hurts when the server
+    # commanded that monster an attack of the swing's OWN kind within MOB_ATTACK_EVENT_SECS -
+    # attack A for 7/8, attack B for 4/5/9/10 (P13 boss-b3, bosses.swing_age). The client CAN
+    # swing an un-hit mob by itself: its wander (FUN_004185b0) rolls attack A / B / dash
+    # into +0x947 (0x418C2A..0x418C70, r % 5 against the AI flags) and copies it into the
+    # motion input for the whole 3-6 s wander period (0x41926A..0x419274) while +0x971 == 0,
+    # so a Monkey Soldier (AI[0] set) swings about one decision in five and the victim's own
+    # client draws the event-7 hit (livetest bug 1). The client patch at 0x419272 (74 06 ->
+    # EB 06, patch_2009.py AGGRO_RULES) stops the wander from taking the rolled motion; this
+    # filter stays for unpatched clients. 1 / 6 are body contact.
+    # The client checks contact BEFORE the swing (FUN_00416ab0 l.103 vs l.427, every 30 ms
+    # substep): a touch sets the victim's +0x9DC = 6, which the attack-A check skips, and the
+    # ~0.5 s hurt state + 270 ms i-frames that follow cover the swing's hit frame. So body
+    # contact is how a player pinned by a swinging mob gets hurt (P7 live L2: 407 event-6
+    # reports, no event 7, in 226 s of "attack A"); event 7 comes when it steps in from a walk.
     MOB_SWING_EVENTS = frozenset((4, 5, 7, 8, 9, 10))
+    MOB_CONTACT_EVENTS = frozenset((1, 6))
 
     def _monster_contact(self, session, rec, action, now):
         """A monster's hit reported by the victim's own client (config MOB_CONTACT_DAMAGE): the
         stat of the event (MOB_HIT_STATS) against the player's defense - the client's formula
         (_monster_hit_player; DAMAGE_FORMULA 'placeholder': stat - the equipment Def sum,
-        combat.body_damage) - through damage_player: S2C 0x28, or the death at 0. At most
-        one hit per CONTACT_MIN_SECS; none from a monster under a control effect, and (config
+        combat.body_damage) - through damage_player: S2C 0x28, or the death at 0. Two rate
+        limits (livetest bug 2): body contact (events 1/6) at most once per
+        MOB_CONTACT_MIN_SECS per (victim, monster) (_contact_slot) - also from a monster in a
+        commanded attack, whose touch is the only hit a pinned player's client reports (P7
+        live L2) - and swings (4/5, 7..10) at most once per MOB_SWING_MIN_SECS per (victim,
+        monster) (_swing_slot). None from a monster under a control effect, and (config
         MOB_CONTACT_AGGRO_ONLY, with MOB_AGGRO) none from a monster that is not after this
         player - un-provoked wandering mobs are harmless to walk through, as in retail. A hit
         on the player never changes aggro. Caller holds the combat lock and the map's
@@ -5819,19 +6850,63 @@ class GameServer:
                           f'touch (C2S 0x0D action {action}) ignored')
                 return
         if (action in self.MOB_SWING_EVENTS and self._mob_ai_enabled()
-                and now - mob.ai_attack_t > self.MOB_ATTACK_EVENT_SECS):
-            log.info(f'[DAMAGE] {mob.name} uid={mob.uid:#x}: swing event {action} with no attack commanded '
-                     f'in the last {self.MOB_ATTACK_EVENT_SECS:g} s - ignored')
+                and bossmod.swing_age(mob, action, now) > self.MOB_ATTACK_EVENT_SECS):
+            # P13 boss-b3: the swing's OWN kind must have been commanded - 7/8 after an attack
+            # A, 4/5/9/10 after an attack B (bosses.swing_age). A Strong event from a mob the
+            # server never told to swing B (Monkey Lord; MOB_ATTACK_B off) is the client's own
+            # wander, and a mismatch here is also what a wrong lo 15/16 assumption would show.
+            log.info(f'[DAMAGE] {mob.name} uid={mob.uid:#x}: swing event {action} with no attack '
+                     f'{bossmod.swing_kind(action)} commanded in the last {self.MOB_ATTACK_EVENT_SECS:g} s '
+                     f'- ignored')
             return
-        if now - float(session.get('contact_t') or 0.0) < self.CONTACT_MIN_SECS:
+        if action in self.MOB_CONTACT_EVENTS:
+            # Always the contact slot, whatever the mob was commanded (P7 live L2): the
+            # client resolves an overlap as contact before the swing check, so a pinned
+            # player only ever reports event 6 (MOB_SWING_EVENTS comment).
+            if not self._contact_slot(session, mob.uid, now):
+                return
+        elif not self._swing_slot(session, mob.uid, now):
             return
-        session['contact_t'] = now
         reason = f'{mob.name} uid={mob.uid:#x} {self.MOB_HIT_KINDS[stat]} (C2S 0x0D action {action})'
         if self._client_damage():
             self._monster_hit_player(session, mob, action, reason)
             return
         dmg = combat.body_damage(getattr(mob, stat), combat.defense_power(self._session_char(session)))
         self.damage_player(session, dmg, attacker=mob.uid, reason=reason)
+
+    def _contact_slot(self, session, mob_uid, now):
+        """True (and the slot is taken) when a body-contact hit (events 1/6) of monster
+        `mob_uid` on this player may land: at most one per MOB_CONTACT_MIN_SECS per (victim,
+        monster). The client reports a touch after every 270 ms i-frame window (0x41531A) and a
+        chasing mob walks back and forth through the player, so one shared 0.5 s slot let
+        contact drain HP about every 0.54 s (livetest bug 2). session['contact_t'] maps
+        monster uid -> the last accepted contact. Caller holds the combat lock."""
+        return self._rate_slot(session, 'contact_t', mob_uid, now,
+                               float(self.config.get('MOB_CONTACT_MIN_SECS', 1.2)))
+
+    def _swing_slot(self, session, mob_uid, now):
+        """True (and the slot is taken) when a swing hit (events 4/5, 7..10) of monster
+        `mob_uid` on this player may land: at most one per MOB_SWING_MIN_SECS per (victim,
+        monster), so two monsters swinging at him together both hurt - his client drew both
+        digits and never takes HP off itself. session['swing_t'] maps monster uid -> the last
+        accepted swing. Caller holds the combat lock."""
+        return self._rate_slot(session, 'swing_t', mob_uid, now, self.MOB_SWING_MIN_SECS)
+
+    @staticmethod
+    def _rate_slot(session, key, mob_uid, now, window):
+        """The per-(victim, monster) rate limit behind _contact_slot / _swing_slot:
+        session[key] maps monster uid -> the last accepted hit (anything else there, e.g. the
+        float of an older server, is replaced); entries past `window` are pruned."""
+        slots = session.get(key)
+        if not isinstance(slots, dict):
+            slots = session[key] = {}
+        last = slots.get(mob_uid)
+        if last is not None and now - last < window:
+            return False
+        for uid in [u for u, t in slots.items() if now - t >= window]:
+            del slots[uid]
+        slots[mob_uid] = now
+        return True
 
     def _monster_hit_player(self, session, mob, action, reason):
         """DAMAGE_FORMULA 'client': a monster's hit on the player by the client's own formula
@@ -5938,7 +7013,10 @@ class GameServer:
         self._release_aggro(session, P.session_uid(session), 'its target died')
         penalty = 0
         char = self._session_char(session)
-        if not client_side and self.config.DEATH_EXP_PENALTY and char is not None:
+        # premium_cash-use-generic: an active 1891 "Waive EXP Penalty" (a period cash record,
+        # cashuse.waives_penalty) spares the server's penalty.
+        if not client_side and self.config.DEATH_EXP_PENALTY and char is not None \
+                and not self.cashuse.waives_penalty(session):
             with self.store.lock:
                 exp = char.get('exp', 0)
             penalty = combat.death_penalty(exp)
@@ -5988,8 +7066,8 @@ class GameServer:
             recreates the local player alive and controllable. A revive point on the same map
             is a full reload too: 0x08 frees every entity whatever the map code.
 
-        Returns (True, (map, x, y)) or (False, why). A failed transfer leaves the player dead
-        (HP 0) so he can ask again."""
+        Returns (True, (map, x, y) he landed on - the floor point) or (False, why). A failed
+        transfer leaves the player dead (HP 0) so he can ask again."""
         sock = session.get('sock')
         char = self._session_char(session)
         with self._combat_lock(session):
@@ -6018,6 +7096,7 @@ class GameServer:
                     session['hp'] = 0
         if not ok:
             return False, f'the MapTransfer to {dest} was refused'
+        dest = (dest[0], *self._arrival_point(*dest))          # the floor point he landed on
         log.info(f'[DEATH] {session.get("char_name")!r} revived ({reason}): map {died_on} -> map {dest[0]} '
                  f'at ({dest[1]:g}, {dest[2]:g}) with {session.get("hp")}/{session.get("max_hp")} HP')
         return True, dest
@@ -6045,6 +7124,49 @@ class GameServer:
                     if isinstance(session.get('buffs'), list) else None)
         return self.store.save_world_state(char, map_code=session.get('current_map'),
                                            x=x, y=y, hp=hp, mp=mp, buffs=kept, reason=reason)
+
+    # Desync fix P2: how often the settle check runs (presence.settle_node). With the default
+    # RELAY_SETTLE_AFTER_MS 450 a settle node goes out 450..600 ms after the mover's last 0x0D.
+    PRESENCE_SETTLE_TICK_SECS = 0.15
+    # A mover whose settle raises is logged at most once per this many seconds (the tick runs
+    # every 0.15 s); the next line counts the failures in between.
+    PRESENCE_SETTLE_FAIL_LOG_SECS = 30.0
+
+    def _tick_presence_settle(self, now=None):
+        """'presence-settle' ticker (desync fix P2, config RELAY_SETTLE_NODE; tick scheduler,
+        world lock held - the lock order is world_lock -> move lock -> presence_lock ->
+        send_lock): presence.settle_node for every in-world mover, which sends the clients holding
+        him his final idle node again with a long hold, once per stop. Each mover is on his
+        own: one that raises (a PacketError building a holder's 0x1B, ...) is logged
+        (_settle_failed, rate-limited) and the pass goes on with the next. Returns the packets
+        sent (tests drive it with an explicit clock)."""
+        if not self.config.get('RELAY_SETTLE_NODE', True):
+            return 0
+        now = time.monotonic() if now is None else now
+        sent = 0
+        for session in self.world.in_world_sessions():
+            try:
+                sent += presence.settle_node(self, session, now)
+            except Exception as e:                    # noqa: BLE001 - one mover must not end the pass
+                self._settle_failed(session, e, now)
+        return sent
+
+    def _settle_failed(self, session, error, now):
+        """One log line for a mover whose settle raised - at most one per
+        PRESENCE_SETTLE_FAIL_LOG_SECS per mover, so a mover that fails on every 0.15 s pass
+        cannot flood the log; the failures in between are counted into the next line.
+        Returns True when a line was written."""
+        uid = session.get('uid')
+        entry = self._settle_fail_log.get(uid)
+        if entry is not None and now - entry[0] < self.PRESENCE_SETTLE_FAIL_LOG_SECS:
+            entry[1] += 1
+            return False
+        more = (f' ({entry[1]} more in the {now - entry[0]:.0f} s since the last line)'
+                if entry is not None and entry[1] else '')
+        self._settle_fail_log[uid] = [now, 0]
+        log.warning(f'[MOVE] settle node for {session.get("char_name") or session.get("username")!r} '
+                    f'uid {uid} failed: {type(error).__name__}: {error}; the pass goes on{more}')
+        return True
 
     def _tick_world_state(self):
         """Mirror every in-world session into the store (world-persistence: "and every
@@ -6185,13 +7307,15 @@ class GameServer:
             back = self._market_return(session)
             if back is not None:
                 next_map, xpos, ypos = back
+        ax, ay = self._arrival_point(next_map, xpos, ypos)          # the floor point he lands on
         log.info(f'[PORTAL] map {cur_map} ({EC.map_name(cur_map) or map_filename(cur_map)}) index '
                  f'{portal_code} -> map {next_map} ({EC.map_name(next_map) or map_filename(next_map)}) '
-                 f'at ({xpos:g}, {ypos:g})')
+                 f'at ({ax:g}, {ay:g})')
         self._map_transfer(sock, session, next_map, xpos, ypos, reason='portal', no_enc=no_enc)
 
-    # world-flea-return: arrivals stand 100 px above the portal's floor line and fall onto it,
-    # like every generated portal arrival (e.g. 9701's exit line y 2268 -> arrival y 2168).
+    # world-flea-return: arrivals stand 100 px above the portal's floor line, like every
+    # generated portal arrival (e.g. 9701's exit line y 2268 -> arrival y 2168); the map load
+    # settles them back onto the line (_arrival_point, livetest bug 5).
     MARKET_RETURN_LIFT = 100.0
 
     def _remember_market_return(self, session, cur_map, portal_code=None):
@@ -6310,8 +7434,9 @@ class GameServer:
             return
         town, x, y, how = dest
         session['last_village_t'] = time.monotonic()
+        ax, ay = self._arrival_point(town, x, y)                    # the floor point he lands on
         log.info(f'[VILLAGE] {session.get("char_name")!r}: map {cur_map} -> {village.name(index)} '
-                 f'(map {town}) fee {fee} -> gold {gold}; arrival ({x:g}, {y:g}) {how}')
+                 f'(map {town}) fee {fee} -> gold {gold}; arrival ({ax:g}, {ay:g}) {how}')
         P.send(self, sock, session, '0x81', {'result': 1, 'gold': gold})
         try:
             moved = self._map_transfer(sock, session, town, x, y, reason='village', no_enc=no_enc)
@@ -6357,6 +7482,16 @@ class GameServer:
         return village.arrival(index, overrides=self.config.VILLAGE_ARRIVALS,
                                fallback=revive_town_point)
 
+    @staticmethod
+    def _arrival_point(map_code, x, y):
+        """Where a map load puts the local player: (x, y) settled onto the floor line below it
+        (presence.settle with SLOPE_SLACK_PX, as observers' records are, presence.floor_point).
+        Portal arrivals (portals_en*.json), the 101 start point and the revive points sit 100 px
+        above their floor, and the 2009 client does not drop an idle local player: he floated
+        there while the other clients drew him on the floor (livetest bug 5; the first !loot
+        pickup missed because of it). A point with no floor line below is kept as it is."""
+        return presence.settle(int(map_code), float(x), float(y), presence.SLOPE_SLACK_PX)
+
     def _map_transfer(self, sock, session, map_code, x, y, *, lead='0x08', reason='portal',
                       no_enc=False):
         """THE map load (roadmap F6). Every caller that moves a player between maps goes
@@ -6376,6 +7511,10 @@ class GameServer:
             0x28 / 0x44                 CURRENT hp/mp (max here was a free heal per portal)
             0x1A ...                    the destination map's monsters
 
+        The arrival point is settled onto the floor first (_arrival_point, livetest bug 5):
+        the 0x07, session['pos'] and the saved map/x/y all carry the floor point, for every
+        caller - portal, warp, revive, village, GM /go and enter world.
+
         Resolve and build BEFORE committing (the F6 opening line): a character that cannot
         be resolved, or a packet that will not encode, must leave the session on the map it
         is already on instead of half-moving it while the client still shows the old map.
@@ -6384,12 +7523,22 @@ class GameServer:
         """
         if lead is not None and lead not in self.LEAD_OPCODES:
             raise ValueError(f'{lead}: not a map-load lead opcode ({", ".join(self.LEAD_OPCODES)})')
+        if session.get('in_cash_shop'):
+            # premium_cash-presence (P8 stage 4, mall.py "Presence"): a player in the mall is
+            # hidden from the world and comes back ONLY through his own exit (Mall._leave
+            # clears in_cash_shop before its replay). Any other map load (a warp stone, GM
+            # /go or !warp, a revive) would drop the 0x08 into the preview scene and put him
+            # back in the world with the mall still open server-side.
+            log.warning(f'[MAP] {reason} transfer of {session.get("char_name")!r} to map {map_code} refused: '
+                        f'in the {mallmod.mall_name(self.client_build)} (only its EXIT brings him back)')
+            return False
         char = self._session_char(session)
         if char is None:
             log.warning(f'[MAP] {reason} transfer to map {map_code} without a character in '
                         f'the session - nothing sent')
             return False
-        map_code, x, y = int(map_code), float(x), float(y)
+        map_code = int(map_code)
+        x, y = self._arrival_point(map_code, x, y)
 
         # --- resolve + build (nothing is committed yet) --------------------------------
         # RegisterLocalPlayer recomputes the maxima of the new local player and clamps the
@@ -6411,6 +7560,8 @@ class GameServer:
             cur_hp, cur_mp = R.vitals(session, char)
         clock = self._game_clock(session)
         lead_key, body_lead = (None, None) if lead is None else self._lead_packet(lead, map_code, clock)
+        trades_before = trademod.commits(session)
+        grants_before = eventmod.grants(session)
         body_03 = self._build_opcode_03(session, char, current_map=map_code, clock=clock)
         body_07 = self._build_player_spawn(session, char, pos=(x, y))
 
@@ -6418,10 +7569,30 @@ class GameServer:
         #     before the lead, 0x06 to the old map's peers) -----------------------------
         self.world.hooks.fire(worldmod.BEFORE_SERVER_MAP_LOAD, self, session,
                               map_code=map_code, reason=reason)
-        if session.pop('rebuild_03', False):
+        rebuild = session.pop('rebuild_03', False)
+        if trademod.commits(session) != trades_before:
+            # The partner's confirm committed this session's trade (it had confirmed first)
+            # after the 0x03 above was built and before the hook's cancel could stop it: the
+            # bag and gold changed under it (P7 review). The commit bumps the counter under
+            # Trades.lock, which the hook's cancel also takes, so after the hooks a commit
+            # is either counted here or can no longer happen.
+            log.info(f'[MAP] {session.get("char_name")!r}: a trade committed while the map load '
+                     f'was being built - 0x03 rebuilt')
+            rebuild = True
+        if eventmod.grants(session) != grants_before:
+            # P13 (events.py): the event tick (or another thread's turn-in) granted a login gift
+            # or pushed an event quest after the 0x03 above was built and before the hook
+            # cleared events_ready - bag and quest log changed under it. The hook takes the
+            # combat lock the grant runs under, so after the hooks a grant is either counted
+            # here or can no longer happen (events.py "Once per login").
+            log.info(f'[MAP] {session.get("char_name")!r}: an event grant landed while the map load '
+                     f'was being built - 0x03 rebuilt')
+            rebuild = True
+        if rebuild:
             # A hook changed the bag model the 0x03 above was built from: the stall close
             # (market.Market.map_load, F14.1) put its escrow back. The client's window put
             # those items back too (its 0x84 {1} went out first), so the 0x03 must list them.
+            # Or the trade commit / event grant just above.
             body_03 = self._build_opcode_03(session, char, current_map=map_code, clock=clock)
         # Off the old map's shared monsters first (world-shared-monsters): from here none of
         # their packets (a despawn/respawn timer, a chase word) reaches this client, whose
@@ -6469,6 +7640,11 @@ class GameServer:
         # The 0x03 just (re)set the client's scene clock to `clock` (_client_clock anchors here).
         session['clock_t'] = time.monotonic()
         self._send_encrypted(sock, session, 0x07, body_07, use_by_array=no_enc)
+        # Desync fix M1: the 0x07 re-created his entity, +0x949 = the record's direction byte
+        # (0x453B80: the local record's idle block, 2 = left) - a fresh action tracker facing
+        # that way, so a hit before his first turn knocks the way his copy does, not the way
+        # of a key he held on the old map (_hit_knock_facing).
+        session['hitstun'] = dict(HS.new_tracker(facing=R.IDLE_MOTION['direction_8bd']), map=map_code)
         # F5: in world again only now - the 0x03 set CMessenger+0x74 (injected SubHandler3
         # packets need it) and the 0x07 re-created the local player. The session joins the
         # map's instance at the same moment: from here on it is in its peers' peers().
@@ -6489,6 +7665,15 @@ class GameServer:
         # 5) and left the client showing more HP than the record kept.
         self._send_hp(sock, session, cur_hp, no_enc=no_enc)
         self._send_mp(sock, session, cur_mp, no_enc=no_enc)
+        # premium_cash-owned-list-sync (F1 step 3): the 0x03 above memset the cash bag tab, so
+        # the owned cash list comes back here - after the own 0x07 (its tail needs the local
+        # player, 0x441D85) and the 0x28 / 0x44, before the monsters.
+        self._send_owned_cash(sock, session, reason=reason, no_enc=no_enc)
+        # chat_mail_gm-gift-inbox (P8 stage 2, mall.py): undelivered gifts go to the client's
+        # append-only 0x6D queue once per connection (their popups open at the next 0x6A); a
+        # map load that finds the queue still holding some relights the HUD gift button with
+        # a count-0 0x6D (C20). Nothing at all for an account without pending gifts.
+        self.mall.send_gift_queue(sock, session, reason=reason, relight=True)
         self._spawn_map_monsters(sock, session, map_code, no_enc=no_enc)
         # The 0x03 above emptied the client's ground list (spec correction C19): the items
         # still lying on this map come back as S2C 0x11 state 0 (item_inventory.md F6 step 5).
@@ -6497,6 +7682,154 @@ class GameServer:
                  f'({x}, {y}) lead={lead or "none"} hp={cur_hp} mp={cur_mp} '
                  f'0x03={len(body_03)}B 0x07={len(body_07)}B')
         return True
+
+    def _send_owned_cash(self, sock, session, *, reason='sync', force=False, no_enc=None):
+        """S2C 0x6F, the character's whole owned cash list (premium_cash-owned-list-sync, F1;
+        cash.owned_list_packets: 2008 one packet, 2009 mode 0 or 1/2../3 pages). Returns the
+        number of records sent, or None when nothing was sent.
+
+        Sent when the character owns a record, when this connection's client may still hold
+        some (a non-empty 0x6F went out earlier: `cash_on_client`), or when `force`d (a grant).
+        A 0x6F with count 0 to a client that holds nothing purges nothing and rebuilds empty
+        lists, so it is skipped: every map-load sequence of a character without cash items
+        stays byte-for-byte what it was (live-verified 0x03 0x07 [0x15 0x65] 0x28 0x44 0x1A).
+        The client's mall lists survive a map load (only its bag tab is memset), so once it
+        was sent a record the empty list still goes out to clear them.
+
+        ROADMAP_2009_ADDENDUM C2 (pet H5): the 0x6F frees every record, the one local +0x1628
+        (the worn pet's pet_info) points at included, and only an equipped kind-3 record in the
+        new list re-binds it. The worn pet record (cash.equipped_pet - the same record the own
+        0x07's grid slot 15 comes from, records.pet_slot_2009) is therefore in EVERY 0x6F, first
+        (cash.pet_first), and `pet_bound` remembers the serial this client bound. A later list
+        without it would leave +0x1628 dangling: that is logged as an error - taking a worn pet
+        off is S2C 0xAC first (it clears +0x1628, and the unequip path clears `pet_bound`
+        with it: P15 pet-s2)."""
+        char = self._session_char(session)
+        if char is None or sock is None:
+            return None
+        # premium_cash-expiry (F15): a period record whose date passed while its owner was
+        # offline / in the mall / loading is removed here, before the list goes out (the 0x6F
+        # leaves it out anyway), and told with the client's own words as a 0x15 line after it
+        # - not by sending it and a 0x93, which would first print its NEGATIVE remaining time
+        # (the 0x6F tail FUN_00465110, cashuse.py "Period items").
+        expired = self.cashuse.take_expired(char)
+        pages, count = self.cash.owned_packets(char, self.client_build)
+        if not count and not force and not session.get('cash_on_client'):
+            self.cashuse.expired_notice(sock, session, expired)
+            return None
+        use_by_array = session.get('no_enc', True) if no_enc is None else no_enc
+        worn = None
+        if self.client_build == cfgmod.BUILD_2009:
+            with self.store.lock:
+                pet = cashmod.equipped_pet(char)
+                worn = pet['serial'] if pet is not None else None
+            bound = session.get('pet_bound')
+            if bound is not None and bound != worn:
+                log.error(f'[CASH] {session.get("char_name")!r}: this 0x6F lacks the worn pet record {bound:#x} the client '
+                          f'bound (+0x1628) - it frees it and nothing re-binds it (ROADMAP_2009_ADDENDUM C2 / pet H5); a '
+                          f'worn pet must be taken off with S2C 0xAC before its record leaves the list')
+        for fields in pages:
+            body = P.build('0x6F', fields, client_build=self.client_build)
+            self._send_encrypted(sock, session, 0x6F, body, use_by_array=use_by_array)
+        session['cash_on_client'] = bool(count)
+        session['pet_bound'] = worn
+        bag, catalog = self._bag(session), EC.items()
+        stray = [] if bag is None else [e['id'] for tab in invmod.TABS for e in bag.slots(tab)
+                                        if getattr(catalog.get(e['id']), 'is_cash', False)]
+        if stray:
+            # The 0x6F handler purges every cash item (def+0x1F0 != 0) from every bag first; a
+            # cash item the bag MODEL holds (a dev !give of a costume) is gone client-side now.
+            log.warning(f'[CASH] {session.get("char_name")!r}: the 0x6F purged the bag cash item(s) '
+                        f'{stray} client-side; cash items belong in the cash inventory')
+        log.info(f'[CASH] {reason}: 0x6F owned list -> {session.get("char_name")!r}: {count} record(s)'
+                 f'{f" in {len(pages)} pages" if len(pages) > 1 else ""}'
+                 + (f'; worn pet {worn:#x} first (C2)' if worn is not None else ''))
+        self.cashuse.expired_notice(sock, session, expired)
+        return count
+
+    # ---- the Item Mall / Spark Shop (P8 stage 2; mall.py holds the flows) ----
+    def _handle_mall_close(self, sock, session, payload, no_enc):
+        """C2S 0x42 ItemMallCloseStorageCommit (the EXIT label of window 0x1CF, live followup
+        premium_cash#30) -> the box <-> character moves, S2C 0x6B, the map-load replay back to
+        where `!mall` was typed (premium_cash-mall-exit, F7)."""
+        self.mall.close(sock, session, payload)
+
+    def _handle_mall_buy(self, sock, session, payload, no_enc):
+        """C2S 0x43 single buy / cart / slot extension -> one S2C 0x6C per item, or 0x6C {0 |
+        0x0E} (premium_cash-buy, F4)."""
+        self.mall.buy(sock, session, payload)
+
+    def _handle_mall_delete(self, sock, session, payload, no_enc):
+        """C2S 0x45 CashItemBoxDelete -> S2C 0x6E (premium_cash-box-delete, F5)."""
+        self.mall.delete(sock, session, payload)
+
+    def _handle_mall_refresh(self, sock, session, payload, no_enc):
+        """C2S 0x46 (both send sites: the window restore after the charge button and the
+        refresh control, each only while the charge flag is set) -> exactly one S2C 0x70,
+        which clears that flag, so a minimise / restore never repeats it
+        (premium_cash-balance-refresh, F3; exit criterion 2)."""
+        if not session.get('username'):
+            log.warning('[MALL] 0x46 before login; ignored')
+            return
+        self.mall.refresh(sock, session)
+
+    def _handle_mall_gift(self, sock, session, rec, no_enc=False):
+        """C2S 0x47 CashShopSendGift -> S2C 0x71, the recipient's box + gift inbox, 0x79 / 0x6D
+        to him online (premium_cash-gift, F6; chat_mail_gm-gift-inbox)."""
+        self.mall.gift(sock, session, rec)
+
+    # ---- using cash items (P8 stage 3; cashuse.py holds the flows) ----
+    def _handle_cash_item_use(self, sock, session, rec, no_enc=False):
+        """C2S 0x48 UseCashItemConfirm -> S2C 0x72 to the owner (and the observer form to the
+        holders): hair / colour / eyes recompose the look, a period item is activated, an item
+        with a registered effect is consumed; the refusal (also for an item with no modelled
+        effect, which is kept) is 0x72 {uid, 0, 0} (premium_cash-use-generic, F8)."""
+        self.cashuse.use(sock, session, rec)
+
+    def _handle_cash_rename(self, sock, session, rec, no_enc=False):
+        """C2S 0x49 NameChangeRequest -> S2C 0x73 {1, serial} + 0x74 to self and the holders,
+        then the world.ON_RENAME hook (friends' 0x0B, the mentor's 0x7B, the party frames), or
+        0x73 {0} (premium_cash-rename, F9; ROADMAP_2009_ADDENDUM C4)."""
+        self.cashuse.rename(sock, session, rec)
+
+    def _handle_pet_rename(self, sock, session, rec, no_enc=False):
+        """2009 C2S 0x4D PetRename (window 0x4CB, a waiting box) -> S2C 0x73 {0}, the planned
+        refusal through the one 0x73 builder (ROADMAP_2009_ADDENDUM C5; pets.py, P15 pet-s6)."""
+        self.pets.rename(sock, session, rec)
+
+    def _handle_cash_add_option(self, sock, session, rec, no_enc=False):
+        """2009 C2S 0x4E CashItemAddOption -> S2C 0xC4 {0} (ROADMAP_2009_ADDENDUM C8; mall.py)."""
+        self.mall.add_option(sock, session, rec)
+
+    def _handle_cash_sale_offer(self, sock, session, rec, no_enc=False):
+        """2009 C2S 0x80 CashItemSaleOffer (a waiting box) -> S2C 0x71 {is_trade 1, 0x17}: cash
+        item sales are not offered (ROADMAP_2009_ADDENDUM C8; mall.py)."""
+        self.mall.sale_offer(sock, session, rec)
+
+    def _handle_cash_sale_reply(self, sock, session, rec, no_enc=False):
+        """2009 C2S 0x81 CashItemSaleReply (no waiting box): the seller's Cancel (1) -> S2C 0x71
+        {is_trade 1, 0x16}, which closes window 0x4B8; the buyer's 0 / 2 -> no reply, no offer
+        is ever pending (ROADMAP_2009_ADDENDUM C8; mall.py)."""
+        self.mall.sale_reply(sock, session, rec)
+
+    def _handle_cash_stat_reset(self, sock, session, rec, no_enc=False):
+        """C2S 0x4A StatResetApply -> S2C 0x76 (premium_cash-stat-reset, F10; C13 / C15)."""
+        self.cashuse.stat_reset(sock, session, rec)
+
+    def _handle_cash_megaphone(self, sock, session, rec, no_enc=False):
+        """C2S 0x4C MegaphoneMessage -> S2C 0x90 to every player (Super) / the channel, and the
+        owner's consume 0x72 (premium_cash-megaphone, F11)."""
+        self.cashuse.megaphone(sock, session, rec)
+
+    def _handle_cash_region_warp(self, sock, session, rec, no_enc=False):
+        """C2S 0x70 RegionWarpStoneUse -> S2C 0x9A {1, serial} and the map load to the
+        destination, or 0x9A {0} (premium_cash-region-warp, F13)."""
+        self.cashuse.region_warp(sock, session, rec)
+
+    def _handle_cash_friend_warp(self, sock, session, rec, no_enc=False):
+        """C2S 0x71 FriendWarpStoneUse -> S2C 0x9B {1, serial} and the map load beside the
+        named character, or 0x9B {0} (premium_cash-friend-warp, F14)."""
+        self.cashuse.friend_warp(sock, session, rec)
 
     @staticmethod
     def _get_portals():
@@ -6562,6 +7895,10 @@ class GameServer:
         # F1 step 3, in order. Every failure refuses: no 0x26, so the client keeps the log
         # it has (it closes its dialog either way).
         if not q.snpc:
+            # ev-e5 (events.py): a quest of a running event's chain is the event's to push
+            # (evb Q4: the Accept of quest 158's Finish window may send its 0x16 here).
+            if self.events.accept_request(session, q):
+                return
             # 45 EN quests have SNPC 0 and are offered by no NPC at all (open question Q13).
             self._quest_refuse(sock, session, quest_id, 'SNPC 0: no NPC offers it')
             return
@@ -6601,19 +7938,22 @@ class GameServer:
             self._quest_refuse(sock, session, quest_id, 'all 3 active slots are used',
                                f'Quest log full ({MAX_ACTIVE_QUESTS}).')
             return
-        why = self._quest_bag_space(session, q.send)
-        if why is not None:
-            # The client's own FUN_00426040 check with the same wording.
-            self._quest_refuse(sock, session, quest_id, f'no bag space for the Send items: {why}',
-                               "There isn't empty space in the inventory.")
-            return
+        # The Send items' space is checked and the grant mirrored under the combat lock, like
+        # the turn-in (P7 review): the trade commit relies on bags changing only under it.
+        with self._combat_lock(session):
+            why = self._quest_bag_space(session, q.send)
+            if why is not None:
+                # The client's own FUN_00426040 check with the same wording.
+                self._quest_refuse(sock, session, quest_id, f'no bag space for the Send items: {why}',
+                                   "There isn't empty space in the inventory.")
+                return
 
-        slot = state.accept(quest_id, needs_slot=q.needs_slot)
-        if slot is None:                       # first_free_slot raced another thread
-            self._quest_refuse(sock, session, quest_id, 'the log filled up while validating')
-            return
-        self._quest_mirror_items(session, q.send, f'quest {quest_id} send')
-        self.store.mark_dirty(f'quest {quest_id} accepted')
+            slot = state.accept(quest_id, needs_slot=q.needs_slot)
+            if slot is None:                       # first_free_slot raced another thread
+                self._quest_refuse(sock, session, quest_id, 'the log filled up while validating')
+                return
+            self._quest_mirror_items(session, q.send, f'quest {quest_id} send')
+            self.store.mark_dirty(f'quest {quest_id} accepted')
         self._send_quest_grant(sock, session, quest_id, no_enc)
         if slot >= 0:
             # F1 step 6: 0x26 does NOT reset the slot's progress byte, so a stale value from
@@ -6633,7 +7973,7 @@ class GameServer:
                             f'Reward {q.reward}, which the client does not grant on 0x26; '
                             f'no EN quest does this - content mismatch, nothing granted')
             if q.exp:
-                self.grant_exp(session, q.exp)
+                self.award_exp(session, q.exp, 'quest')
 
     def _handle_turn_in_quest(self, sock, session, payload, no_enc):
         """C2S 0x17 QuestCompleteRequest {u16 quest_id} -> S2C 0x27 + 0x21 [+ 0x3F]
@@ -6649,65 +7989,80 @@ class GameServer:
         q, state, _ = self._quest_request(session, quest_id, '0x17')
         if q is None or state is None:
             return
-        slot = state.slot_of(quest_id)
-        if slot is None:
-            # Not held: ignore in silence. This is what makes a duplicate 0x17 idempotent,
-            # and it is the gate the injected-0x27 hazard of #11 (rewards granted again)
-            # would otherwise walk straight through.
-            self._quest_refuse(sock, session, quest_id, 'not in an active slot (0x17 ignored)')
-            return
-        wallet = self._wallet_of(session)
-        if wallet is None:
-            return
-        if q.money < 0 and wallet.gold < -q.money:
-            self._quest_refuse(sock, session, quest_id,
-                               f'gold {wallet.gold} < fee {-q.money}', 'Not enough gold.')
-            return
-        if q.reqpro and state.progress[slot] < q.reqpro:
-            self._quest_refuse(sock, session, quest_id,
-                               f'progress {state.progress[slot]}/{q.reqpro}',
-                               'This quest is not finished yet.')
-            return
-        if not self._quest_demand_met(session, q):
-            self._quest_refuse(sock, session, quest_id, f'Demand items {q.demand} not in the bag',
-                               'This quest is not finished yet.')
-            return
-        # trade-escrow-guards: Demand items and a fee may not come out of a trade offer.
-        escrow = next((e for e in (self._escrow_refusal(session, item, need) for item, need in q.demand)
-                       if e is not None), None)
-        gold_why = self.trade.gold_refusal(session, -q.money) if escrow is None and q.money < 0 else None
-        if gold_why is not None:
-            escrow = (gold_why, trademod.GOLD_IN_TRADE_TEXT)
-        if escrow is not None:
-            self._quest_refuse(sock, session, quest_id, escrow[0], escrow[1])
-            return
-        # Reward space is checked the way the client's own 0x27 handler runs: the Demand
-        # items leave the bag first and the rewards go into the space they free.
-        why = self._quest_bag_space(session, q.reward, freeing=q.demand)
-        if why is not None:
-            self._quest_refuse(sock, session, quest_id, f'no bag space for the rewards: {why}',
-                               "There isn't empty space in the inventory.")
-            return
+        # ev-e5 (events.py): an event quest's refusal shows nothing at all (evb A8 "0x27, or
+        # nothing on refusal"; P13 exit criterion 4 "without the mushrooms, nothing").
+        quiet = self.events.is_event_quest(q)
 
-        # Mirror, in the client's own order (F5 step 4): slot, completed list, gold, Demand
-        # removal, Reward grant. Nothing has mutated before this point.
-        _, times = state.complete(quest_id)
-        if q.money:
-            wallet.gold = max(0, wallet.gold + q.money)      # signed; the gate above holds
-        for item, need in q.demand:
-            self._inv_remove(session, item, need)            # "Gave %u item(%s)." client-side
-        self._quest_mirror_items(session, q.reward, f'quest {quest_id} reward')
-        self.store.mark_dirty(f'quest {quest_id} completed')
+        def said(text):
+            return None if quiet else text
+
+        # Checked AND applied under the combat lock (P7 review): the bag and the wallet change
+        # under it everywhere else, and the trade commit - which holds both players' combat
+        # locks (trade.py "Lock order") - relies on that. A partner's confirm can then neither
+        # commit between these checks and the mirror nor see half of the mirror.
+        with self._combat_lock(session):
+            slot = state.slot_of(quest_id)
+            if slot is None:
+                # Not held: ignore in silence. This is what makes a duplicate 0x17 idempotent,
+                # and it is the gate the injected-0x27 hazard of #11 (rewards granted again)
+                # would otherwise walk straight through.
+                self._quest_refuse(sock, session, quest_id, 'not in an active slot (0x17 ignored)')
+                return
+            wallet = self._wallet_of(session)
+            if wallet is None:
+                return
+            if q.money < 0 and wallet.gold < -q.money:
+                self._quest_refuse(sock, session, quest_id,
+                                   f'gold {wallet.gold} < fee {-q.money}', said('Not enough gold.'))
+                return
+            if q.reqpro and state.progress[slot] < q.reqpro:
+                self._quest_refuse(sock, session, quest_id,
+                                   f'progress {state.progress[slot]}/{q.reqpro}',
+                                   said('This quest is not finished yet.'))
+                return
+            if not self._quest_demand_met(session, q):
+                self._quest_refuse(sock, session, quest_id, f'Demand items {q.demand} not in the bag',
+                                   said('This quest is not finished yet.'))
+                return
+            # trade-escrow-guards: Demand items and a fee may not come out of a trade offer.
+            escrow = next((e for e in (self._escrow_refusal(session, item, need) for item, need in q.demand)
+                           if e is not None), None)
+            gold_why = self.trade.gold_refusal(session, -q.money) if escrow is None and q.money < 0 else None
+            if gold_why is not None:
+                escrow = (gold_why, trademod.GOLD_IN_TRADE_TEXT)
+            if escrow is not None:
+                self._quest_refuse(sock, session, quest_id, escrow[0], said(escrow[1]))
+                return
+            # Reward space is checked the way the client's own 0x27 handler runs: the Demand
+            # items leave the bag first and the rewards go into the space they free.
+            why = self._quest_bag_space(session, q.reward, freeing=q.demand)
+            if why is not None:
+                self._quest_refuse(sock, session, quest_id, f'no bag space for the rewards: {why}',
+                                   said("There isn't empty space in the inventory."))
+                return
+
+            # Mirror, in the client's own order (F5 step 4): slot, completed list, gold, Demand
+            # removal, Reward grant. Nothing has mutated before this point.
+            _, times = state.complete(quest_id)
+            if q.money:
+                wallet.gold = max(0, wallet.gold + q.money)      # signed; the gate above holds
+            for item, need in q.demand:
+                self._inv_remove(session, item, need)            # "Gave %u item(%s)." client-side
+            self._quest_mirror_items(session, q.reward, f'quest {quest_id} reward')
+            self.store.mark_dirty(f'quest {quest_id} completed')
         log.info(f'[QUEST] {quest_id} turned in from slot {slot + 1} (completed {times}x): '
                  f'exp {q.exp:+} money {q.money:+} rewards {q.reward}')
         self._send_quest_complete(sock, session, quest_id, no_enc)
         if q.exp:
-            self.grant_exp(session, q.exp)                   # 0x27 applies no exp (#11)
+            self.award_exp(session, q.exp, 'quest')          # 0x27 applies no exp (#11)
         if q.money:
             # 0x3F is the silent absolute gold write (F5 step 7): the client has just added
             # Money to its own u64, and this makes both wallets agree even if they had
             # drifted (Q-B20). It names no item, so nothing is printed twice.
             self._send_gold(sock, session)
+        # ev-e5 (events.py): a quest of a running event's chain pushes its NextQuest now
+        # (0x26 + 0x59 after this 0x27 / 0x21 / 0x3F; 158 -> 159 -> 160).
+        self.events.after_turn_in(session, q)
 
     def _handle_abandon_quest(self, sock, session, payload, no_enc):
         """C2S 0x1E QuestAbandonRequest {u16 quest_id} -> S2C 0x38 QuestAbandoned
@@ -6771,11 +8126,17 @@ class GameServer:
         of the same id share a stack, and `fits` alone would pass both against the same free
         slot. Refs the client files in no bag tab (type 3 skill book, type 4 class change)
         and ids the EN client does not have are skipped: the client grants what it can and
-        silently drops the rest, so they can never be the reason a quest is refused."""
+        silently drops the rest, so they can never be the reason a quest is refused.
+
+        Callers hold the combat lock (the bag changes only under it); the scratch copy is
+        store.snapshot's, whose container copies are single C calls, so even a caller that did
+        not could never hit "dictionary changed size during iteration" as copy.deepcopy can."""
         bag = self._bag(session)
         if bag is None:
             return 'no character'
-        scratch = invmod.Inventory({'inventory': copy.deepcopy(bag.data)})
+        # the copy holds `inventory` alone: the bag's pet count rides along (a 2009 bagged pet
+        # takes an equipment-tab slot, inventory.Inventory `pets`)
+        scratch = invmod.Inventory({'inventory': storemod.snapshot(bag.data)}, pets=bag.pet_slots())
         for item, count in freeing:
             scratch.remove(item, count)
         for item, count in items:
@@ -7622,6 +8983,59 @@ class GameServer:
         if outcome.reward:
             self._quest_credit_item(sock, session, outcome.reward, 1, no_enc)
 
+    def _handle_stone_extract(self, sock, session, rec, no_enc=False):
+        """C2S 0x72 ElementalStoneExtract {u16 mode_id, u16 equip_item_id, u16 stone_item_id,
+        5 x u16 socket_stone_id, u16 equip_extra} -> S2C 0x9C + 0x18 (item_inventory F14,
+        item_inventory-stone-extraction; spec 0x46C0B8/0x72, 2009 0x4765EE/0x72 identical).
+
+        mode_id is the Element Separator the window was opened with (crafting.EXTRACT_*): its
+        cash record must be usable (cash.find = the client's FUN_0045E760). Success, 21 B:
+        0x9C {1, equip, the 6 words the client sent, the removed stone (never 0), the tool's
+        serial} - the client removes that stone from the bag slot matching id + those 12
+        bytes, shifts the rest and consumes one use of the serial (FUN_00464380 / 2009
+        FUN_0046df70); the model does the same (crafting.extract + cash.consume). Then 0x18
+        {gold, victy, stone, 1}: 0x9C grants nothing. Every refusal is 0x9C {0} ("Elemental
+        stone extraction failed.") and changes nothing on either side. One reply per request
+        (the client's busy flag, registry.MUST_REPLY 0x72): a request from outside the world
+        (the mall, a map load) gets the policy's refusal."""
+        mode = int(rec.get('mode_id', 0))
+        equip = int(rec.get('equip_item_id', 0))
+        stone = int(rec.get('stone_item_id', 0))
+        words = [int(e.get('socket_stone_id', 0)) for e in rec.get('repeat[5]', [])][:invmod.WIRE_OPTION_WORDS]
+        words = words + [0] * (invmod.WIRE_OPTION_WORDS - len(words)) + [int(rec.get('equip_extra', 0))]
+        char = self._session_char(session)
+        if char is None or not session.get('in_world'):
+            log.info(f'[EXTRACT] 0x72 tool {mode} on {equip} outside the world - the refusal answers it')
+            return
+        tool = left = None
+        with self._combat_lock(session):
+            if craftmod.extract_tool_kind(mode) is not None:
+                tool = self.cash.find(char, mode)
+            outcome = craftmod.extract(char, mode, equip, stone, words, rng=self.CRAFT_RNG,
+                                       tool_owned=tool is not None)
+            if outcome.result == craftmod.RESULT_OK:
+                left = self.cash.consume(char, tool['serial'], 1, what=f'extract {mode}')
+                self.store.mark_dirty(f'extract {equip}')
+                P.send(self, sock, session, '0x9C', {
+                    'result': craftmod.RESULT_OK, 'equip_item_id': equip & 0xFFFF,
+                    'repeat[5]': [{'socket_stone': w & 0xFFFF} for w in outcome.old_words[:invmod.WIRE_OPTION_WORDS]],
+                    'socket_extra': outcome.old_words[invmod.WIRE_OPTION_WORDS] & 0xFFFF,
+                    'stone_id': outcome.stone_id, 'cash_item_serial': tool['serial'] & 0xFFFFFFFF})
+                P.send(self, sock, session, '0x18', invmod.currency_fields(self._wallet_of(session),
+                                                                          outcome.stone_id, 1))
+            else:
+                P.send(self, sock, session, '0x9C', {'result': craftmod.RESULT_FAILED})
+        if outcome.result != craftmod.RESULT_OK:
+            log.info(f'[EXTRACT] {session.get("char_name")} tool {EC.item_name(mode) or mode} ({mode}) on '
+                     f'{EC.item_name(equip) or equip} ({equip}) block {words}, stone {stone} -> 0x9C {{0}}: '
+                     f'{outcome.why}; nothing changed')
+            return
+        state = 'not in the model' if left is None else f'{left} use(s) left' if left else 'record gone'
+        log.info(f'[EXTRACT] {session.get("char_name")} {EC.item_name(equip)} ({equip}) block {words}: '
+                 f'{EC.item_name(outcome.stone_id)} ({outcome.stone_id}) out ({outcome.why}) -> 0x9C + 0x18; '
+                 f'tool {EC.item_name(mode)} ({mode}) serial {tool["serial"]:#x}: {state}')
+        self._quest_credit_item(sock, session, outcome.stone_id, 1, no_enc)
+
     def _handle_room_query(self, sock, session, payload, no_enc):
         """0x2C inbound = room/arena list query (u8 code), sent once at spawn.
         Consume; answering with 0x33 unprompted opens the arena UI."""
@@ -8346,12 +9760,21 @@ class GameServer:
         if len(mons.uids) < len(valid):
             mons.uids.extend(self.world.alloc_monster_uids(len(valid) - len(mons.uids)))
         mons.clear()
+        placed = []
         for (sp, tpl, index), uid in zip(valid, mons.uids):
             mob = self._make_monster(tpl, index, uid, sp.x, sp.y)
             mons[uid] = mob
+            placed.append((sp, mob))
             log.debug(f'[MOB] spawn {mob.name} npc={tpl.idx} template={index} uid={uid:#x} '
                       f'at ({mob.x:g},{mob.y:g}) hp={mob.hp}')
         mons.populated = True
+        # P13 boss-b1 (bosses.py, evb B5/C): a field boss the ledger still has down is built as
+        # a corpse that is gone - no client gets its 0x1A - with a respawn timer for the rest
+        # of its time, so a discard / rebuild or a server restart is no free boss respawn.
+        for mob, wait in self.bosses.on_populate(mons, placed):
+            self._cancel_monster_timers(mob)
+            mob.timers = [self.ticks.call_later(wait, self._respawn_monster, mons, mob,
+                                                name=f'boss-respawn-{mob.uid:#x}')]
         if mons:
             names = ', '.join(sorted({m.name for m in mons.values()}))
             log.info(f'[MOB] spawned {len(mons)} monsters on map {map_id} ({names}), uids '
@@ -8362,14 +9785,24 @@ class GameServer:
         at its spawn point (x, y): the template's stats, swing stats and AI flags, its drop
         table and gold."""
         drops = [d for d in tpl.drop_ids if self._grantable_item(d, f'{tpl.name} drop table')]
+        grantable = set(drops)
         hp = max(1, tpl.hp)
         return Monster(uid=uid, npccode=tpl.idx, name=tpl.name, level=tpl.lv,
                        hp=hp, max_hp=hp, body_atk=tpl.body_atk, defense=tpl.defense,
                        exp=tpl.exp, x=float(x), y=float(y),
                        spawn_x=float(x), spawn_y=float(y), drop_items=drops,
+                       drop_table=[(i, r) for i, r in tpl.drops if i in grantable],
                        gold=monster_gold(tpl.idx, tpl.exp), template=index,
                        weak_atk=tpl.weak_atk, strong_atk=tpl.strong_atk, ai=mobai.pad_ai(tpl.ai),
-                       elem_type=tpl.type, attri_atk=tpl.attri_atk, attri_def=tpl.attri_def)
+                       elem_type=tpl.type, attri_atk=tpl.attri_atk, attri_def=tpl.attri_def,
+                       walk_px_s=self.template_walk_px_s(tpl))
+
+    @classmethod
+    def template_walk_px_s(cls, tpl):
+        """Desync fix P3: a template's walk speed, 1e7 / its hni speed px/s (Monster.walk_px_s);
+        MOB_WALK_PX_PER_SEC when the record has none."""
+        speed = int(getattr(tpl, 'speed', 0) or 0)
+        return 1e7 / speed if speed > 0 else cls.MOB_WALK_PX_PER_SEC
 
     def _clear_map_monsters(self, session):
         """Detach the session from its map's shared monsters (map change, disconnect,
@@ -8438,16 +9871,20 @@ class GameServer:
         DAMAGE_FORMULA 'client' (default): the client's own number (damage.py; FUN_0041b830's
         derived stats through FUN_004194f0), capped at the mob's HP. Live 2026-09-24 the
         placeholder had a Lv14 Berserker (STR 12, Wooden Blade) do 1 to a Monkey Soldier while
-        his client drew 7-10: the formula gives 8 (x the client's display-only grade roll).
+        his client drew 7-10: the formula gives 8 (x the client patch's grade roll on the digit).
 
         'placeholder': STR + the W_Att of every equipped item (x1.5 for a strong attack) minus
-        the monster's Def, never below 1 (combat_skill design 4.2)."""
+        the monster's Def, never below 1 (combat_skill design 4.2).
+
+        Either way the value goes through the server's own grade roll when it is on (config
+        DAMAGE_GRADE_ROLL, _grade_roller; by default the 2009 build only): the same table as
+        the combo HUD v2 digit's, an independent draw."""
         if self._client_damage():
             ev = dmgmod.EV_STRONG if skill_id else dmgmod.EV_WEAK
             return self._formula_hit(session, mob, ev).total
         atk = combat.attack_power(self._session_char(session) or {})
         raw = int(atk * (1.5 if skill_id else 1.0))
-        return max(1, raw - int(mob.defense))
+        return self._graded(max(1, raw - int(mob.defense)), 'strong attack' if skill_id else 'swing')
 
     def _resolve_hit(self, sock, session, skill_id, mob_uid, no_enc=True, ack=False):
         """Apply one hit by `session`'s player to `mob_uid`: the one monster his client named
@@ -8474,7 +9911,7 @@ class GameServer:
                                           self._compute_damage(session, skill_id, mob), 'basic',
                                           take_control=not ack)
             if ack and not killed:
-                self._release_hit_lock(sock, session, mob)
+                self._release_hit_lock(sock, session, mob, HIT_REPORT_EVENT)
 
     def _kill_monster(self, sock, session, mob, no_enc=True, *, mons=None):
         """Death of a live monster (combat_skill F6). The alive check and the flip share one
@@ -8512,6 +9949,9 @@ class GameServer:
                 self._mob_broadcast(mons, mob, '0x29', fields)
             elif killer is not None:
                 P.send(self, sock, killer, '0x29', fields)
+            # P13 boss-b1: a field boss stays down value_num * BOSS_RESPAWN_SCALE s in the
+            # ledger (before the lifecycle timers below read it), whoever or nothing killed it.
+            self.bosses.on_kill(mob, killer)
             if killer is None:
                 if mons is not None:
                     self._schedule_monster_lifecycle(mons, mob)
@@ -8525,7 +9965,7 @@ class GameServer:
                 # this holds the killer's combat and monster locks.
                 shares = self.party.exp_shares(session, self._kill_exp(session, mob),
                                                mons.map_code if mons is not None else session.get('current_map'))
-                gained = self.grant_exp(session, shares[0][1])
+                gained = self.award_exp(session, shares[0][1], 'kill')
                 # social_friend-mentor-exp-share: the killer's mentor gets a share (0x7F),
                 # deferred to the tick thread - this holds the killer's combat and monster locks.
                 self.messenger.mentee_exp(session, gained)
@@ -8535,24 +9975,35 @@ class GameServer:
             # ReqPro kill credit, after the 0x29/0x21 sends (quest doc F3 step 1). Only the
             # killer is credited; party-shared credit is undefined by the client (Q5).
             self._quest_credit_kill(sock, session, mob.npccode, no_enc)
-            item, count = 0, 0
-            if mob.drop_items and random.random() < 0.6:
-                item, count = random.choice(mob.drop_items), 1
-            if item and self.config.get('GROUND_LOOT', True):
-                # item_inventory-ground-loot-pickup (F6): the loot falls at the corpse. 0x12
-                # goes out after the 0x29, while the corpse entity still exists (its 0x06
-                # comes MOB_CORPSE_SECS later), so the client places the item on the
-                # monster's OWN position (source_uid lookup) - a roaming mob is wherever the
-                # client walked it, not at mob.x/y. owner = the killer: 15 s of loot rights.
-                # Only the 0x18 below (gold) stays; the item reaches the bag on C2S 0x1F.
-                self._loot_to_ground(session, mob, item, count)
-                item, count = 0, 0
-            elif item and self._inv_add(session, item, count, f'{mob.name} drop') is not None:
-                # GROUND_LOOT false: the P0 path, straight into the bag with the 0x18.
-                self._quest_credit_item(sock, session, item, count, no_enc)
-            else:
-                item, count = 0, 0
-            self._send_drop(sock, session, item=item, count=count, gold_gain=mob.gold, no_enc=no_enc)
+            # P13 boss-b2 (bosses.roll_drops): DROP_MODE 'rates' rolls every hni Drop entry at
+            # rate / DROP_RATE_UNIT (a boss trophy 99.99 %), 'single' one draw over the column,
+            # 'legacy' the P0 roll (60 %, one entry uniformly: exactly the old random calls).
+            drops = bossmod.roll_drops(mob, self.config.get('DROP_MODE', 'rates'),
+                                       self.config.get('DROP_RATE_UNIT', bossmod.DEFAULT_DROP_RATE_UNIT),
+                                       random)
+            bagged = []
+            for item in drops:
+                if self.config.get('GROUND_LOOT', True):
+                    # item_inventory-ground-loot-pickup (F6): the loot falls at the corpse. 0x12
+                    # goes out after the 0x29, while the corpse entity still exists (its 0x06
+                    # comes MOB_CORPSE_SECS later), so the client places the item on the
+                    # monster's OWN position (source_uid lookup) - a roaming mob is wherever the
+                    # client walked it, not at mob.x/y. owner = the killer: 15 s of loot rights
+                    # (a boss trophy too: "You don't have ownership of this item." for the
+                    # others, P13 exit criterion 5). Only the 0x18 below (gold) stays; the
+                    # item reaches the bag on C2S 0x1F.
+                    self._loot_to_ground(session, mob, item, 1)
+                elif self._inv_add(session, item, 1, f'{mob.name} drop') is not None:
+                    # GROUND_LOOT false: the P0 path, straight into the bag with the 0x18.
+                    self._quest_credit_item(sock, session, item, 1, no_enc)
+                    bagged.append(item)
+            # The first bagged item rides on the gold 0x18; any further one (only 'rates' can
+            # drop two) gets its own 0x18 {wallet unchanged, item} - the client adds each.
+            first = bagged[0] if bagged else 0
+            self._send_drop(sock, session, item=first, count=1 if first else 0, gold_gain=mob.gold,
+                            no_enc=no_enc)
+            for item in bagged[1:]:
+                self._send_drop(sock, session, item=item, count=1, no_enc=no_enc)
             if mons is not None:
                 self._schedule_monster_lifecycle(mons, mob)
 
@@ -8564,13 +10015,14 @@ class GameServer:
             log.info(f'[PARTY] {member.get("char_name")!r}: share of {killer_name!r}\'s {mob_name} kill '
                      f'dropped (no longer in world / dead)')
             return 0
-        gained = self.grant_exp(member, amount)
+        gained = self.award_exp(member, amount, 'party')
         self.messenger.mentee_exp(member, gained)
         log.info(f'[PARTY] {member.get("char_name")!r} +{gained} exp: share of {killer_name!r}\'s {mob_name} kill')
         return gained
 
     def _kill_exp(self, session, mob):
-        """The exp one kill grants: the template's Exp, +10% when the monster's Monster Card
+        """Stage 1 of arch09-exp-pipeline (award_exp), on the whole kill before the party
+        split. The exp one kill grants: the template's Exp, +10% when the monster's Monster Card
         is in the killer's deck (quest_cards_misc-card-exp-bonus, F11: the card tooltip's
         "Card effect: EXP + 10%"; cards.bonus_exp has the rounding). The client adds the
         S2C 0x21 delta as sent and applies no bonus itself, so the server is the only place
@@ -8590,10 +10042,14 @@ class GameServer:
         client traffic, so kills made by the memory combat driver respawn too. The timers
         belong to the map's monsters, not to a player: they run whoever is on the map."""
         self._cancel_monster_timers(mob)
+        # P13 boss-b1: a field boss comes back when the ledger says (value_num *
+        # BOSS_RESPAWN_SCALE s after the kill), every other monster after MOB_RESPAWN_SECS.
+        respawn = self.bosses.respawn_delay(mob)
+        respawn = MOB_RESPAWN_SECS if respawn is None else respawn
         mob.timers = [
             self.ticks.call_later(MOB_CORPSE_SECS, self._despawn_monster, mons, mob,
                                   name=f'mob-despawn-{mob.uid:#x}'),
-            self.ticks.call_later(MOB_RESPAWN_SECS, self._respawn_monster, mons, mob,
+            self.ticks.call_later(respawn, self._respawn_monster, mons, mob,
                                   name=f'mob-respawn-{mob.uid:#x}'),
         ]
 
@@ -8642,6 +10098,7 @@ class GameServer:
             debuffmod.clear(mob)
             mobai.clear(mob)
             self._cancel_monster_timers(mob)
+            self.bosses.on_respawn(mob)                  # P13 boss-b1: the ledger has it up
             sent = 0
             for s in self._mob_viewers(mons):
                 key = self._viewer_key(s)
@@ -8694,9 +10151,12 @@ class GameServer:
     # ========================================================================
     MOB_1B_HOLD_MS = 300          # the 0x1B fallback node (spec errata C29: the walk stops at hold end)
     MOB_1B_LEAD_SECS = 0.03       # send the next 0x1B once the last has <= one 30 ms tick left (C3)
-    MOB_WALK_PX_PER_SEC = 82.5    # live (C29): a commanded Pupu walks 82.5 px/s
+    # live (C29): a commanded Pupu walks 82.5 px/s - every monster's speed with
+    # MOB_SPEED_FROM_TEMPLATE off, and a template's with no hni speed (desync fix P3)
+    MOB_WALK_PX_PER_SEC = 82.5
+    MOB_DASH_FACTOR = 2.7         # state 6 moves 2.7 x the walk step (0x416403)
     MOB_GIVE_UP_PX = 400.0        # the aggro timeout only lets go of a target this far away
-    MOB_ATTACK_EVENT_SECS = 1.5   # a swing event (4/5, 7..10) needs an attack command this recent
+    MOB_ATTACK_EVENT_SECS = 1.5   # a swing event needs an attack of its kind commanded this recent
     # Timer jitter the keep-alive allows for: on the 0.3 s tick a re-send due at 0.6 s must not
     # slip to the 0.9 s tick because that tick came a few ms early (the node holds 960 ms).
     MOB_AI_JITTER_SECS = 0.05
@@ -8756,12 +10216,26 @@ class GameServer:
                 mob.ai_hold_end = now + (mobai.HOLD_2A_SECS if lo != mobai.STOP else 0.0)
         if not touch:
             return sent
+        if only is None:
+            self._mob_word_after_stun(mob, now)
         if lo != mob.ai_lo and self._mob_ai_enabled():
             log.info(f'[AGGRO] {mob.name} uid={mob.uid:#x} -> {mobai.describe(lo)} (0x{form} lo {lo:02X} '
                      f'to {sent} client(s))')
+        if mobai.is_attack(lo) and lo != mob.ai_lo:
+            # A new swing (the attack starts, turns or changes kind) - never a keep-alive: the
+            # age of the attack hold (MOB_ATTACK_HOLD_SECS, _mob_ai_step_in) counts from here.
+            mob.ai_attack_start_t = now
         mob.ai_lo, mob.ai_sent_t = lo, now
         if mobai.is_attack(lo):
+            # Every send, the keep-alive included: each 0x2A flushes the client queue and pops
+            # the attack motion back into +0x940 (MONSTER_AGGRO_RE 7), so a mob parked in its
+            # attack is still being commanded to swing - and the swing filter
+            # (_monster_contact, MOB_ATTACK_EVENT_SECS) must keep taking the events of the
+            # commanded kind: note_command refreshes ai_attack_a_t (7/8) or ai_attack_b_t
+            # (4/5/9/10, P13 boss-b3), which is what bosses.swing_age reads. ai_attack_t (either
+            # kind) gates nothing (Monster.ai_attack_t).
             mob.ai_attack_t = now
+            bossmod.note_command(mob, lo, now)
         return sent
 
     def _mob_hand_back(self, mons, mob, why):
@@ -8836,13 +10310,22 @@ class GameServer:
                     done += 1
         return done
 
+    def _mob_walk_px_s(self, mob):
+        """The walk speed the server reckons `mob` with: its template's (Monster.walk_px_s)
+        with MOB_SPEED_FROM_TEMPLATE on (desync fix P3), else MOB_WALK_PX_PER_SEC."""
+        if self.config.get('MOB_SPEED_FROM_TEMPLATE', True):
+            return float(getattr(mob, 'walk_px_s', 0.0) or self.MOB_WALK_PX_PER_SEC)
+        return self.MOB_WALK_PX_PER_SEC
+
     def _mob_dead_reckon(self, mob, now):
-        """Advance a commanded monster's x at MOB_WALK_PX_PER_SEC while its last command moves
-        it sideways and that node's hold runs, from the last step or position fix (driver
-        sample, 0x0D interact tail) - nothing else reports where a commanded mob walked when
-        the dev driver is not attached. y is left alone (jump / drop arcs are not modelled).
-        Returns the distance moved."""
-        start = max(mob.ai_step_t, mob.fix_t, mob.ai_sent_t)
+        """Advance a commanded monster's x at its walk speed (_mob_walk_px_s; x 2.7 for a dash
+        with MOB_SPEED_FROM_TEMPLATE on) while its last command moves it sideways and that
+        node's hold runs, from the last step or position fix (driver sample, 0x0D interact
+        tail, a hit's knockback) - nothing else reports where a commanded mob walked when the
+        dev driver is not attached - and never before the copies' hurt ends (ai_stun_until:
+        an ice hit's chase word is queued inside the stun). y is left alone (jump / drop
+        arcs are not modelled). Returns the distance moved."""
+        start = max(mob.ai_step_t, mob.fix_t, mob.ai_sent_t, getattr(mob, 'ai_stun_until', 0.0))
         mob.ai_step_t = max(mob.ai_step_t, now)
         lo = mob.ai_lo
         if (lo < 0 or not mob.ai_owned or mobai.motion_of(lo) not in mobai.MOVING_MOTIONS
@@ -8851,7 +10334,10 @@ class GameServer:
         dt = min(now, mob.ai_hold_end) - start
         if dt <= 0:
             return 0.0
-        dx = self.MOB_WALK_PX_PER_SEC * dt * (1 if mobai.direction_of(lo) == mobai.DIR_RIGHT else -1)
+        speed = self._mob_walk_px_s(mob)
+        if mobai.motion_of(lo) == mobai.MOTION_SKILL and self.config.get('MOB_SPEED_FROM_TEMPLATE', True):
+            speed *= self.MOB_DASH_FACTOR
+        dx = speed * dt * (1 if mobai.direction_of(lo) == mobai.DIR_RIGHT else -1)
         mob.x += dx
         return abs(dx)
 
@@ -8872,8 +10358,10 @@ class GameServer:
           Between fixes the server dead-reckons the commanded walk (_mob_dead_reckon).
         - a mob chasing nobody: any client's report is a fix (the first hit makes its author
           the target anyway).
-        Every surviving client-caught hit then re-syncs the OTHER clients' copies to that
-        position (_relay_hit's full 0x2A), so the copies converge at each hit."""
+        The one exception is the hit relay: every surviving client-caught hit re-syncs the
+        OTHER clients' copies to the HITTER's tail (_relay_hit's full 0x2A, _hitter_point)
+        and moves the server's point there, target or not - his copy stands there and is
+        knocked from there, so after the relay every copy starts from it."""
         return not mob.aggro_uid or mob.aggro_uid == reporter_uid
 
     def _mob_give_up(self, mons, mob, target, now):
@@ -8920,10 +10408,23 @@ class GameServer:
             word = mobai.STOP                      # a stunned mob stands: 0x2A 00
         else:
             prev = mobai.motion_of(mob.ai_lo) if mob.ai_lo is not None and mob.ai_lo > 0 else None
-            d = mobai.decide((mob.x, mob.y), target['pos'], mob.ai_dir, mob.flags,
+            # hold_x: an attack under way holds until the target is clearly out of reach, so
+            # the word does not flip walk / attack every tick at the reach edge (P7 live L2) -
+            # for MOB_ATTACK_HOLD_SECS after the swing began only: a commanded attack never
+            # moves the mob, so an endless hold parked it swinging at a target standing just
+            # beyond reach. Past that the plain box decides and the mob walks in again. Attack
+            # A and attack B alike (mobai.ATTACK_MOTIONS): a boss's B swing holds the same way.
+            swing = (now - mob.ai_attack_start_t
+                     if prev in mobai.ATTACK_MOTIONS and mob.ai_attack_start_t else None)
+            # P13 boss-b3: attack B (AI[8]) and the dash (AI[3]) only where config MOB_ATTACK_B /
+            # MOB_DASH allow them (not live-verified yet, evb B10); attack A always.
+            d = mobai.decide((mob.x, mob.y), target['pos'], mob.ai_dir,
+                             bossmod.command_flags(mob, self.config),
                              rng_bit=self._mob_rng_bit(), prev_motion=prev,
                              reach_x=float(self.config.MOB_ATTACK_REACH_X),
-                             reach_y=float(self.config.MOB_ATTACK_REACH_Y))
+                             reach_y=float(self.config.MOB_ATTACK_REACH_Y),
+                             hold_x=float(self.config.MOB_ATTACK_HOLD_X),
+                             swing_secs=swing, hold_secs=float(self.config.MOB_ATTACK_HOLD_SECS))
             mob.ai_dir = d.direction
             word = mobai.lo(d.direction, d.motion)
         return self._mob_send_decision(mons, mob, word, now)
@@ -8941,9 +10442,27 @@ class GameServer:
         hit's release) gets the current word at once, without restarting the others' clock.
         '1B': a node only when the last one has <= MOB_1B_LEAD_SECS left (no backlog, C3; no
         stop on expiry, C29); a client whose copy the client wander still runs gets the 0x2A
-        take-over first, because a 0x1B on +0x971 = 0 freezes it for the hold."""
+        take-over first, because a 0x1B on +0x971 = 0 freezes it for the hold.
+        Both forms (desync fix M1, MOB_HIT_RECOVER_SECS): until mob.ai_recover_until - the
+        hurt of a client-caught swing or skill hit (events 7 / 9, _release_hit_lock), or the
+        action of an attack skill the server's box landed (MOB_HIT_CAST_GATE, _skill_attack) -
+        no word goes out, only the STOP top-up (touch=False) to a client that has had no 0x2A
+        for this mob; then the chase word reaches every client in the same tick."""
         sent = 0
         fresh = [s for s in self._mob_viewers(mons, mob) if self._viewer_key(s) not in mob.ai_takers]
+        if now < mob.ai_recover_until:
+            if fresh:
+                return self._mob_command(mons, mob, mobai.STOP, now, form='2A', only=fresh, touch=False)
+            keepalive = float(self.config.MOB_CMD_KEEPALIVE_SECS) - self.MOB_AI_JITTER_SECS
+            if (now < getattr(mob, 'ai_ice_until', 0.0) and mob.ai_recover_until > getattr(mob, 'ai_ice_chase_t', 0.0)
+                    and mob.ai_owned and mob.ai_lo is not None and mob.ai_lo >= mobai.STOP
+                    and now - mob.ai_sent_t >= keepalive and self.config.get('MOB_AI_COMMAND', '2A') == '2A'):
+                # An ice hit's stun under a gate someone's later cast armed: the word every copy
+                # already holds (the release's STOP, or the chase word queued inside the stun)
+                # again - it cannot cut the stun short (state 3 is not idle, 0x412ABC keeps the
+                # hold) and without it the 960 ms node hold runs out and their +0xE9C stalls.
+                return self._mob_command(mons, mob, mob.ai_lo, now, form='2A')
+            return 0
         if self.config.get('MOB_AI_COMMAND', '2A') == '1B':
             if fresh or not mob.ai_owned:
                 sent += self._mob_command(mons, mob, mobai.STOP, now, form='2A', only=fresh,
@@ -8952,7 +10471,8 @@ class GameServer:
                 return sent
             return sent + self._mob_command(mons, mob, word, now, form='1B')
         keepalive = float(self.config.MOB_CMD_KEEPALIVE_SECS) - self.MOB_AI_JITTER_SECS
-        if mob.ai_owned and word == mob.ai_lo and (word == mobai.STOP or now - mob.ai_sent_t < keepalive):
+        if (mob.ai_owned and word == mob.ai_lo and (word == mobai.STOP or now - mob.ai_sent_t < keepalive)
+                and not self._ice_word_due(mob, now, keepalive)):
             if fresh:
                 return self._mob_command(mons, mob, word, now, form='2A', only=fresh, touch=False)
             return 0
@@ -9006,9 +10526,44 @@ class GameServer:
                 sent += self._mob_hand_back(mons, mob, 'no target to chase')
         return sent
 
-    def grant_exp(self, session, exp_delta, *, menti_id=None):
+    def award_exp(self, session, amount, source, *, menti_id=None):
+        """arch09-exp-pipeline (P13 skeleton; ROADMAP_2009_ADDENDUM 3.0, evb A6/E2, X9): THE
+        path of every EARNED exp grant - a kill ('kill'), a party member's share of one
+        ('party'), a quest ('quest') and a mentor's share of a mentee's kill ('mentor'). Later
+        writers (boss kills, the P16 dungeon party share) call it too and never send 0x21
+        themselves. The stages, in this order:
+          1. card bonus: +10% for a registered Monster Card, applied by _kill_exp to the WHOLE
+             kill before the party split (kills only, the killer's deck);
+          2. cash EXP item (P8 premium_cash-use-generic): cashuse.CashUse.boost_exp - the
+             RECEIVER's best active +50% / +100% period item (they do not stack), for
+             cashuse.EXP_BOOST_SOURCES ('kill', 'party') only: the killer's part is raised
+             by his own item, each member's share by that member's. No item: unchanged;
+          3. event multiplier: events.Events.scale_exp - int(x * mult), at least 1, per
+             receiver; never for 'mentor' (a percentage of the mentee's already scaled exp),
+             for 'quest' only with EVENT_EXP_QUESTS. No event: the amount is unchanged;
+          4. S2C 0x21 (0x7F with menti_id) through grant_exp, which persists and levels.
+        Nothing else raises earned exp: a P8 cash grant, a mall purchase or a mileage credit
+        carries none, and every writer of an earned 0x21 comes through here.
+        P14 guild tail hook: the 2009 0x21 carries a u32 guild_points exactly when the
+        RECEIVER's client-side guild id is >= 2 (_exp_delta_packet reads _receiver_guild_id,
+        0 until P14, so the tail is never sent yet). Guild points come from the PRE-multiplier
+        exp by default (X9): that amount travels to the builder as `guild_base` for P14 to
+        credit; 0x7F never has the tail. GM !exp / !level and the death penalty are not earned
+        grants: they call grant_exp directly and are never scaled (nor is the 1891 Waive EXP
+        Penalty item a stage: it only skips the death penalty). Returns the exp applied."""
+        scaled = int(amount)
+        cashuse = getattr(self, 'cashuse', None)        # a bare GameServer in unit tests
+        if cashuse is not None and source in cashusemod.EXP_BOOST_SOURCES:
+            scaled = cashuse.boost_exp(session, scaled)
+        events = getattr(self, 'events', None)
+        if events is not None:
+            scaled = events.scale_exp(scaled, source)
+        return self.grant_exp(session, scaled, menti_id=menti_id, guild_base=int(amount))
+
+    def grant_exp(self, session, exp_delta, *, menti_id=None, guild_base=None):
         """Credit (or take) exp and let the client level itself (lc-exp-persist, F6).
-        Returns the exp actually applied.
+        Returns the exp actually applied. Earned exp comes through award_exp (the
+        arch09-exp-pipeline); `guild_base` is its pre-multiplier amount, for P14's 0x21 tail.
 
         menti_id (social_friend-mentor-exp-share / lc-menti-exp): the credit is a mentor's
         share of that mentee's kill. The owner then gets S2C 0x7F {delta, menti_id} instead
@@ -9030,9 +10585,10 @@ class GameServer:
           level-UP is sent: 0x22 plays the level-up effect and sound on every receipt, even
           without a change (spec 0x22 gates_and_hazards). A level-down (only GM
           `!exp`/`!level`; the death penalty never crosses a level, combat.death_penalty)
-          just touch()es the presence record, so the next record built carries the lower
-          level (records.level_of) - like the owner's own client, which keeps the old level
-          until its next 0x07.
+          re-sends the player's record instead (presence.reshow_to_holders: 0x06, then a
+          0x05 whose level is the lower one, records.level_of) - the observers kept the old
+          level before (livetest bug 8). The owner's own client lowers its level from the
+          negative 0x21 itself (live: !level 14 from 15 showed 14).
         - A level-up mirrors the client's full heal so the next 0x28/0x44 and the next 0x07
           agree with what the player sees: HP/MP go to the new level's maxima (hpmp.refresh,
           cs-hp-mp-model); a level-down only re-clamps."""
@@ -9057,8 +10613,10 @@ class GameServer:
                     # The client's own rule on the same 0x21 (handler 0x4542C4): a level-up
                     # calls FUN_00427d40/FUN_00427f40 with 1 = full heal at the NEW maxima; a
                     # level-down (negative delta across a threshold) only re-clamps (live:
-                    # 434/434 -> 432/432 at Lv13 -> 12). cs-hp-mp-model owns the formula.
-                    hpmp.refresh(session, char, full=new_lv > old_lv)
+                    # 434/434 -> 432/432 at Lv13 -> 12). cs-hp-mp-model owns the formula. A
+                    # corpse (a DoT kill credited to a caster who died since) is only
+                    # re-clamped: the heal would leave a live model under the death dialog.
+                    hpmp.refresh(session, char, full=new_lv > old_lv and not session.get('dead'))
                     char['hp'], char['mp'] = R.vitals(session, char)
         self.store.mark_dirty(f'exp {char.get("name")}')
         log.info(f'[COMBAT] {delta:+d} exp (total={new}, lv={new_lv})')
@@ -9069,12 +10627,14 @@ class GameServer:
             if menti_id is not None and delta > 0:
                 P.send(self, sock, session, '0x7F', {'exp_delta': delta, 'menti_id': int(menti_id) & 0xFFFFFFFF})
             else:
-                P.send(self, sock, session, '0x21', *self._exp_delta_packet(session, delta))
+                P.send(self, sock, session, '0x21', *self._exp_delta_packet(session, delta, guild_base))
         if new_lv < old_lv:
-            # No 0x22 for a level-down (docstring): a record in flight is rebuilt with it.
-            presence.touch(session)
+            # No 0x22 for a level-down (docstring): every holder's copy is replaced with a
+            # record that carries the lower level (livetest bug 8), and a record in flight is
+            # rebuilt with it (touch). Same lock rules as the level-up branch below.
+            seen = presence.reshow_to_holders(self, session)
             log.info(f'[LEVEL] {old_lv} -> {new_lv} at exp {new} (level-down: no 0x22 to anyone; '
-                     f'the next presence record carries it)')
+                     f'0x06 + a Lv{new_lv} record to {seen} observer(s))')
         elif new_lv > old_lv:
             # lc-level-broadcast, after the store lock is released. A kill's caller may still
             # hold its combat and monster locks: presence takes only each observer's presence
@@ -9088,13 +10648,15 @@ class GameServer:
                      f'0x22 to him; 0x22 to {seen} observer(s))')
         return delta
 
-    def _exp_delta_packet(self, session, delta):
+    def _exp_delta_packet(self, session, delta, guild_base=None):
         """(fields, assume) of S2C 0x21 for this receiver. 2009 (spec_2009 0x21): a positive
         delta carries a trailing u32 guild_points only when the receiver's OWN entity+0x12
         guild id is >= 2 (the client prints "(+%u) guild points are gained." and stores
         nothing). No guild model exists (_receiver_guild_id 0), so the tail is never sent -
         but the gate is the receiver's guild, never a constant, so a guild model only has
-        to answer _receiver_guild_id and fill guild_points."""
+        to answer _receiver_guild_id and fill guild_points. `guild_base` (award_exp): the
+        pre-multiplier exp of an earned grant, which P14 turns into guild_points (X9); None
+        for a GM or penalty grant."""
         fields = {'exp_delta': int(delta)}
         if self.client_build != cfgmod.BUILD_2009:
             return fields, None
@@ -9312,12 +10874,15 @@ class GameServer:
                     res = SK.learn(char, sid, check=False)
                     if not res.ok:
                         log.warning(f'[CREATE] STARTING_SKILLS {sid} not learned: {res.why}')
-                self.store.add_character(username, char)       # saved immediately (F4)
+                # Saved immediately (F4), once store.lock is let go (_save_store_now).
+                self.store.add_character(username, char, save=False)
                 log.info(f'[CREATE] "{name}" created for {username!r}: Novice at map '
                          f'{char["map"]} ({char["x"]}, {char["y"]}), select slot '
                          f'{len(account["characters"]) - 1}')
             else:
                 log.warning(f'[CREATE] "{name}" refused with 0x1C result {result}: {reason}')
+        if result == self.CREATE_OK:
+            self._save_store_now(f'create "{name}"')
 
         P.send(self, sock, session, '0x1C', {'result': result})
         if result == self.CREATE_OK and self.config.CREATE_REPLY_0x02:
@@ -9358,8 +10923,11 @@ class GameServer:
             else:
                 # Order is kept for the rest: the client drops the selected entity and
                 # shifts its neighbours itself, so the remaining slots must still line up.
-                self.store.remove_character(username, char['name'])       # saves at once
+                # Saved at once, after store.lock is let go (_save_store_now below).
+                self.store.remove_character(username, char['name'], save=False)
                 result, reason = 1, f'deleted, {len(account["characters"])} left'
+        if result == 1:
+            self._save_store_now(f'delete "{name}"')
         if result == 1 and session.get('char_name') == name:
             # This session had the character selected (Back from the world keeps it): drop
             # the refs so nothing (combat driver, exp) writes to a record that is gone, and
@@ -9819,19 +11387,23 @@ class GameServer:
             P.send(self, sock, session, '0x02', {'result': 0x0E})
             return
 
+        registered = False
         with self.store.lock:
             account = self.store.account(username)
             if account is None and self.config.AUTO_REGISTER and names.is_valid(username):
                 # F2 2d exception: the account is created and the login continues. The name
                 # rules are the character ones (ASCII, <= 16 B): enough to keep a login id
                 # out of the str[41] field's ugly corners, and it becomes a JSON key.
-                account = self.store.create_account(username, password)
+                account = self.store.create_account(username, password, save=False)
+                registered = True
                 log.info(f'[LOGIN] AUTO_REGISTER created account "{username}" uid={account["uid"]}')
             known = account is not None
             ok = known and auth.verify(account.get('password'), password)
             uid = account.get('uid') if ok else None
             banned = bool(account.get('banned')) if ok else False
             deleted = bool(account.get('deleted')) if ok else False
+        if registered:
+            self._save_store_now(f'AUTO_REGISTER {username!r}')
         if not ok:
             # 2008: 0x11 "Enter the correct password" for an unknown account as well as a
             # wrong password (no account enumeration). 2009: 0x11 "ID does not exist" /
@@ -9991,6 +11563,9 @@ class GameServer:
             log.warning(f'[LOGIN] account uid {uid} has {stored} characters: only the first '
                         f'{fields["char_count"]} are sent')
         body = P.build('0x02', fields, client_build=self.client_build)
+        # The first-purchase popup this 0x02 owes: the next 0x6A shows it and clears it
+        # client-side, and Mall.enter then clears the account's flag (premium_cash.md 1.1).
+        session['first_purchase_popup_owed'] = bool(fields.get('cash_first_purchase_flag'))
         gender = fields.get('account_gender_flag', fields.get('account_gender_byte'))
         log.info(f'[LOGIN] 0x02 character list: {len(body)}B, {fields["char_count"]} char(s), '
                  f'account_id={uid} gender={gender} manner={fields["manner_points"]}'
@@ -10036,6 +11611,7 @@ def main():
         gs.start()
     except KeyboardInterrupt:
         gs.store.flush()
+        gs.bosses.flush()
         log.info('Server stopped.')
 
 if __name__ == '__main__':

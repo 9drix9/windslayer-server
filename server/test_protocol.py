@@ -11,7 +11,14 @@ test_protocol.py - check the RE protocol spec against real bytes
    either the server's builder or the spec is wrong for that opcode.
 
 usage: python test_protocol.py [spec.json] [log ...]   (default log: server_history.log)
+
+server_history.log (git-ignored) was captured on 2026-09-17 at 05:31, before P0 stage 1
+(63bdb65). Four of its S2C payloads come from builders that were wrong then and were fixed by
+P0: PRE_P0_SAMPLES lists them by the SHA-1 of their exact bytes, and a sample with those bytes
+is reported as OLD instead of failing. Any other mismatch still fails - the same opcode with
+other bytes (even at the same length), or any sample from another log.
 """
+import hashlib
 import json
 import os
 import re
@@ -34,6 +41,35 @@ MANUAL_C2S = [
     (0x74, ''), (0x75, ''), (0x2C, ''), (0x2D, ''), (0x38, ''), (0x2F, ''), (0x63, ''),
     (0x7E, '17 00 00 00'),
 ]
+
+
+# (direction, opcode, SHA-1 of the exact payload) -> what the pre-P0 builder got wrong. Keyed on
+# the bytes, not the length (master merge review): only these known frames are excused, so any
+# other history-log sample of the same opcodes is still checked against the spec. The spec is
+# right and today's builders match it; their suites decode each of these strictly (the 0x02 in
+# test_handlers, the 0x08 lead in test_maptransfer / test_mall, the 0x16 chat in test_gm, the 0x63
+# counter in test_handlers). The pre-P0 source is commit 5f35880 (windslayer_server.py).
+HISTORY_LOG = 'server_history.log'
+PRE_P0_SAMPLES = {
+    # 329 B: the TestHero list, 01 01 00 .. 04 'TestHero' ..
+    ('S2C', 0x02, '1faa192f7583912a8422587cf05c1fb2d04fe391'):
+        'lc-charlist: the character list carried 16 trailing bytes the client never reads (13 + 75n now)',
+    # 10 B: 66 00 01 00 00 00 00 00 00 00 (map 102, uid 1, 0)
+    ('S2C', 0x08, 'bc7fae5f68541e503013f25db5a611a24a56215b'):
+        'ChangeMap was [u16 map][u32 uid][u32 0]; the spec and the builder are '
+        '{u16 map_code, u32 game_time_ms}, 6 B',
+    # 37 B: 01 'Server' .. 12 'Quest 26 accepted.'
+    ('S2C', 0x16, '423ee5a99a798dbf3218fa23ac15aaaf8d24bcf1'):
+        'S2-05: "Server :" system lines had a u8 count before sender_name (system lines are S2C 0x15 now)',
+    # 0 B (the SHA-1 of no bytes)
+    ('S2C', 0x63, 'da39a3ee5e6b4b0d3255bfef95601890afd80709'):
+        'S2-01: an EMPTY 0x63 echoed C2S 0x63 (0x63 is the u16 + u8 battlefield counter; C2S 0x63 gets 0x8A)',
+}
+
+
+def pre_p0_reason(direction, op, payload):
+    """Why this exact history-log frame is a known pre-P0 builder's, or None."""
+    return PRE_P0_SAMPLES.get((direction, op, hashlib.sha1(bytes(payload)).hexdigest()))
 
 
 def load_specs(path):
@@ -116,12 +152,13 @@ def main():
             fails += 1
             print(f'  FAIL parse/roundtrip {s.get("key")} {s.get("name")}: {e}')
 
-    samples = [('C2S', op, hexbytes(hx) if hx else b'') for op, hx in MANUAL_C2S]
+    samples = [('C2S', op, hexbytes(hx) if hx else b'', False) for op, hx in MANUAL_C2S]
     for lp in logs:
         if os.path.exists(lp):
-            samples += list(log_packets(lp))
-    seen = defaultdict(lambda: [0, 0, None])            # (dir, op) -> [ok, bad, example]
-    for direction, op, payload in samples:
+            history = os.path.basename(lp) == HISTORY_LOG
+            samples += [(d, op, payload, history) for d, op, payload in log_packets(lp)]
+    seen = defaultdict(lambda: [0, 0, None, 0])         # (dir, op) -> [ok, bad, example, old]
+    for direction, op, payload, history in samples:
         specs = by[direction].get(op)
         rec = seen[(direction, op)]
         if not specs:
@@ -131,16 +168,21 @@ def main():
         ok, detail = try_decode(specs, payload)
         if ok:
             rec[0] += 1
+        elif history and pre_p0_reason(direction, op, payload) is not None:
+            rec[3] += 1
         else:
             rec[1] += 1
             rec[2] = rec[2] or f'{len(payload)}B {payload[:48].hex(" ")} -> {detail[:300]}'
 
     print(f'== real packets ({len(samples)} samples, {len(seen)} distinct direction/opcode)')
-    for (direction, op), (ok, bad, ex) in sorted(seen.items()):
-        status = 'PASS' if bad == 0 else 'FAIL'
+    for (direction, op), (ok, bad, ex, old) in sorted(seen.items()):
+        status = 'FAIL' if bad else 'OLD ' if old else 'PASS'
         if bad:
             fails += 1
-        print(f'  {status} {direction} 0x{op:02X}  exact={ok} mismatched={bad}' + (f'\n       {ex}' if bad else ''))
+        why = next((w for (d, o, _h), w in PRE_P0_SAMPLES.items() if (d, o) == (direction, op)), '')
+        print(f'  {status} {direction} 0x{op:02X}  exact={ok} mismatched={bad}'
+              + (f' pre-P0={old}' if old else '') + (f'\n       {ex}' if bad else '')
+              + (f'\n       pre-P0 builder: {why}' if old and not bad else ''))
     print(f'\n{"ALL PASS" if fails == 0 else f"{fails} FAILURE(S)"}')
     sys.exit(1 if fails else 0)
 

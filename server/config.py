@@ -31,6 +31,7 @@ Rules
 """
 import json
 import logging
+import math
 import os
 import socket
 
@@ -66,6 +67,37 @@ MOB_AI_COMMANDS = ('2A', '1B')
 # (damage.py), 'placeholder' = the old STR + W_Att - Def rules (combat.py), kept for rollback.
 DAMAGE_FORMULAS = ('client', 'placeholder')
 MOB_COMMAND_HOLD_SECS = 0.96
+# MILEAGE_BONUS_PCT / MILEAGE_EVENT_PCT: a percent of the price, at most 10x (a larger value
+# is a typo; mileage itself is clamped to the u32-safe cash.CASH_MAX anyway).
+MILEAGE_PCT_MAX = 1000
+# Keys that existed once and are ignored now, with why (a config.json that still sets one
+# gets this line instead of "unknown key"). DEV_FREE_NOTES: P6 let a Note (1894 / 3320) be
+# sent without owning one; since P8 a Note is a cash inventory record whose serial the 0x77
+# names (roadmap P8 "Turn off DEV_FREE_NOTES", retired in P8 stage 4).
+RETIRED_KEYS = {
+    'DEV_FREE_NOTES': 'retired in P8: a Note must be owned (a cash inventory record; GM `!note` grants one)',
+}
+# DROP_MODE values (P13 boss-b2, bosses.roll_drops): 'rates' = every hni Drop entry rolled on
+# its own at rate / DROP_RATE_UNIT (evb B6/E-B2, the default); 'single' = one draw over the
+# same column (the same chance per entry, at most one item a kill); 'legacy' = the P0 roll
+# (60 %, one entry picked uniformly, rates ignored), kept for rollback.
+DROP_MODES = ('rates', 'single', 'legacy')
+# MOB_ATTACK_B / MOB_DASH values (P13 boss-b3, bosses.command_flags): which monsters the chase
+# may command attack B / the dash - every template with the flag, only the field bosses, or none.
+MOB_COMMAND_SCOPES = ('all', 'bosses', 'off')
+# RELAY_START_HOLD_GAP_MS (desync fix P1): 0 or this range - above the builder's 210 ms busy
+# cadence plus one 30 ms tick, at most the 990 ms hold cap. RELAY_SETTLE_AFTER_MS >= 300.
+RELAY_START_HOLD_GAP_RANGE = (240, 990)
+RELAY_SETTLE_AFTER_MIN_MS = 300
+# MOB_HIT_RECOVER_MARGIN_SECS (desync fix M1): the chase gate is the hit + the stun + this
+# margin - at least the 60 ms of tick rounding plus one 30 ms tick (the M1 minimum), at most 1 s.
+MOB_HIT_RECOVER_MARGIN_RANGE = (0.09, 1.0)
+# MOB_HIT_ICE_CHASE_SECS (desync fix M1, ice): 0 or above 0 and below this - the node hold of
+# the hit's 0x2A (0.96 s, MOB_COMMAND_HOLD_SECS) minus a tick of relay latency: past it the
+# copies' +0xE9C stalls (the type-4 tick gate 0x4142B8) and the stun stretches.
+MOB_HIT_ICE_CHASE_MAX_SECS = 0.95
+# Keys whose value is true, false or null (auto: decided by the build, see the key).
+AUTO_BOOL_KEYS = frozenset(('DAMAGE_GRADE_ROLL',))
 
 DEFAULTS = {
     # --- client build (client-2009-login) ---
@@ -173,6 +205,51 @@ DEFAULTS = {
     # S2C 0x99 sub 8 "In channel N." once per connection, on the client's first C2S 0x63
     # (right after the enter-world burst).
     'CHANNEL_NOTICE': True,
+    # --- events (P13 stage 1: ev-e1..ev-e4, events.py) ---
+    # The event schedule: a JSON file {"events": [...]} next to this config (events.py has
+    # the format); '' = no events. A malformed file stops the start like a bad key here.
+    'EVENTS_FILE': '',
+    # Scale quest exp (the 0x21 after a 0x27) by the event multiplier too (evb E2 "optional").
+    # Off: only kills and their party shares are scaled; a mentor's 0x7F share follows the
+    # kill it comes from either way.
+    'EVENT_EXP_QUESTS': False,
+    # The entry announcement and the Event News popup are once per login; a relogin of the
+    # same character within this many seconds (a relog, a crash-reconnect, a 2009 channel
+    # change) does not repeat them (P13 exit criterion 2). The gift is persisted instead.
+    'EVENT_RELOGIN_QUIET_SECS': 1800.0,
+    # ev-e5 (P13 stage 2): push_quests only ever pushes quests whose quest-log texts (hqi
+    # title / Explain / Intro in QSTLngKo.lng) are plain ASCII - the 2009 chain 158-160. The
+    # Korean-text event quests (232-291, and the 2008 hqi's own 158-161) would show as CP949
+    # bytes in the EN font (evb A3, Q12); true pushes them anyway.
+    'EVENT_QUEST_KOREAN_TEXT': False,
+    # --- field bosses and drops (P13 stage 3: boss-b1, boss-b2, bosses.py) ---
+    # A monster spawn tile whose map value_num is one of these is a field boss (evb B1: the
+    # data has no boss flag; exactly 11 event-2 tiles carry 300 in the 2009 maps, 15 in 2008.
+    # The one Crow tile at 901 and the Shovel Frog NPC tiles at 9901 are not bosses).
+    'BOSS_TILE_VALUES': [300],
+    # A boss respawns value_num * BOSS_RESPAWN_SCALE seconds after its death (300 s at 1.0;
+    # evb B5, reading value_num as seconds is INFERRED). The respawn time is kept in the boss
+    # ledger, so it holds across a map discard, the last player leaving and a server restart.
+    'BOSS_RESPAWN_SCALE': 1.0,
+    # The boss ledger, a small JSON next to ACCOUNTS_FILE (same directory); '' = memory only
+    # (a restart respawns every boss).
+    'BOSS_LEDGER_FILE': 'boss_ledger.json',
+    # How a kill's loot is rolled over the monster's hni item/Drop columns (DROP_MODES above).
+    'DROP_MODE': 'rates',
+    # The unit of the hni Drop column: an entry drops with rate / DROP_RATE_UNIT (evb B6,
+    # INFERRED: every boss trophy is 99990 = 99.99 %, every table sums to <= 100000).
+    'DROP_RATE_UNIT': 100000,
+    # --- boss combat (P13 stage 4: boss-b3, bosses.command_flags) ---
+    # Which monsters the server's chase may command attack B (S2C 0x2A lo 15 left / 16 right:
+    # motion 5, template AI[8], its hits are Strong_Atk) and the dash (lo 19 / 1A: motion 6,
+    # AI[3]): 'all' = every template with the flag (the mobai chase since P5), 'bosses' = only
+    # the field bosses (BOSS_TILE_VALUES tiles: the Monkey King, Rynx, ...), 'off' = never (the
+    # mob swings attack A / walks instead). Attack A (lo 05/06) is live-verified (LIVE_TEST_LOG
+    # 2026-09-24, Wild Cliff); attack B and the dash are NOT yet (evb B10, T-B3): turn one off
+    # here if the live check shows it misbehaving. A template without the flag never gets the
+    # word in any mode - Monkey Lord (hni 140, AI 1100001000000) swings attack A only.
+    'MOB_ATTACK_B': 'all',
+    'MOB_DASH': 'all',
     # --- skills (cs-skill-learn) ---
     # Skill ids a new character is created knowing ("starting skills"). EN gives none at
     # creation: Dash 80, Double Jump 94, Mining 82, Herb Gathering 86, ... are quest rewards
@@ -197,6 +274,13 @@ DEFAULTS = {
     # Body_Atk, 7/8 Weak_Atk, 4/5/9/10 Strong_Atk, 2/3 a guarded weak swing - no damage),
     # S2C 0x28 or the 0x3E death (DAMAGE_FORMULA says how much).
     'MOB_CONTACT_DAMAGE': True,
+    # Minimum seconds between two BODY-contact hits (events 1/6) of one monster on one player.
+    # The client reports a touch after each 270 ms i-frame window and a chasing mob walks back
+    # and forth through the player, so at the old shared 0.5 s slot contact drained HP about
+    # every 0.54 s and starved the swings (livetest bug 2; swings keep their own 0.5 s slot,
+    # GameServer.MOB_SWING_MIN_SECS). Retail's rate is unknown; its footage shows single
+    # swing digits, not a steady drain. 0 = every reported touch.
+    'MOB_CONTACT_MIN_SECS': 1.2,
     # How the server computes a hit (both directions: the player's swings, strong attacks,
     # attack skills, traps and detonations on monsters, and a monster's hit on the player).
     # 'client' (default) = the client's own formula, ported in damage.py: the stats
@@ -206,6 +290,21 @@ DEFAULTS = {
     # damage digit before its grade roll. 'placeholder' = the old rules (STR + W_Att - Def,
     # Body_Atk - Def), for rollback. DoT ticks are the same in both.
     'DAMAGE_FORMULA': 'client',
+    # Roll the grade on the server's value of a player's hit on a monster (livetest bug 10):
+    # the 2009 client patch (combo HUD v2, WindSlayer2009/combo_hud_2009.py cave A at
+    # 0x41A55A) rolls the digit it draws - CRITICAL! x1.5 5%, BAD x0.75 13% (only BAD may
+    # reach 0), GOOD x1.25 13%, else x1.0, times a uniform 0.9..1.1 jitter, truncated, >= 1 -
+    # and the server applies the same table at the same point (damage.grade_roll):
+    # client-reported swings / strong attacks, attack skills, traps and the detonation
+    # release, under either DAMAGE_FORMULA. Never DoT ticks, reflections or a monster's hit on
+    # the player. The digit and the server's value are INDEPENDENT draws with the same
+    # distribution and mean (~1.025 x the base), not the same number per hit (that needs a
+    # seed shared with the client - an open question).
+    # None (default, "auto") = on only for CLIENT_BUILD '2009' (grade_roll_on): no 2008 exe
+    # rolls its digit, so a 2008 server rolling would make the HP taken disagree with the
+    # exact digit drawn - bug 10 in reverse. True / False force it; a 2009 exe built with
+    # patch_2009.py --no-combo-hud draws the unrolled value and needs False.
+    'DAMAGE_GRADE_ROLL': None,
     # With MOB_AGGRO on, only a monster that is after THIS player (he is its aggro target or on
     # its hate list: he hit it, or it saw him with the AI[5] proximity scan) hurts on touch.
     # Retail: walking through un-hit wandering Ssiyo does nothing; once hit they chase and
@@ -230,6 +329,17 @@ DEFAULTS = {
     'MOB_AGGRO_TIMEOUT_SECS': 15.0,    # no hit for this long and > 400 px away: give up
     'MOB_ATTACK_REACH_X': 60.0,        # the attack box in front of an AI[0]/AI[8] mob
     'MOB_ATTACK_REACH_Y': 40.0,
+    # Hysteresis of the attack box (mobai.ATTACK_HOLD_X): a swing starts with the target
+    # within MOB_ATTACK_REACH_X and keeps going until it is more than MOB_ATTACK_REACH_X +
+    # MOB_ATTACK_HOLD_X in front, so the chase word no longer flips walk / attack on every
+    # 0.3 s tick near the edge (P7 live L2: 36 flips in 21 s, each a queue-flushing 0x2A).
+    # 0 = the plain box every tick.
+    'MOB_ATTACK_HOLD_X': 30.0,
+    # ... for this long after the attack word was first commanded (about one swing: the
+    # client re-decides every 990 ms; mobai.ATTACK_HOLD_SECS). Then the plain box decides
+    # again, so a target standing 1..30 px beyond reach is walked after instead of swung at
+    # forever (a commanded attack never moves the mob). 0 = no hold.
+    'MOB_ATTACK_HOLD_SECS': 1.0,
     # --- shared monsters (P5 stage 3: world-shared-monsters) ---
     # One set of monsters per map, the same uids on every client there. A map nobody stands
     # on keeps its monsters this long - dead ones stay dead until their own respawn - before
@@ -246,6 +356,100 @@ DEFAULTS = {
     # position when true; false leaves the dead-reckoned estimate alone and only measures its
     # error against memory (`!where`, spike S-1 / decision G1).
     'POSITION_DRIVER_FIX': True,
+    # --- position sync between clients (desync fix plan 2026-09-28, POSITION_SYNC_RE) ---
+    # Each change has its own switch for the staged live rollout (one per session: P1, M1,
+    # P2, P3). Both client builds.
+    # P1: an S2C 0x1B node after idle words gets the 30 ms start hold only when more than
+    # this many ms passed (the builder's FINAL idle packet); a shorter gap - idle words sent
+    # while the mover was still busy, every 210 ms - keeps its real elapsed time, so the
+    # observer's copy replays the mover's whole timeline (presence.relay_fields). 0 = the
+    # legacy clamp after every idle node; else 240..990 (the 210 ms busy cadence + a tick).
+    'RELAY_START_HOLD_GAP_MS': 450,
+    # P2: once a mover's last relayed words are idle and no C2S 0x0D came for
+    # RELAY_SETTLE_AFTER_MS (>= 300), every client holding him gets that node once more with
+    # hold RELAY_SETTLE_HOLD_MS (30..990) - a copy left floating or mid-animation finishes
+    # and lands; an idle one ignores it (presence.settle_node, 'presence-settle' tick).
+    'RELAY_SETTLE_NODE': True,
+    'RELAY_SETTLE_AFTER_MS': 450,
+    'RELAY_SETTLE_HOLD_MS': 990,
+    # P3: the server's position estimate follows a player's dash (2.7 x walk after a 60 ms
+    # wind-up, <= 540 ms: 18 ticks, 364.5 px), knockback (7.5 px x 4 or 2 ticks along
+    # facing2) and dash attack (+37.5 px), and stands still in his own hurt (state 3 for
+    # hitstun.hurt_len after his action 6 / 7 / 9) - spawn records, keyframes and the
+    # monster chase read it (presence.advance).
+    'POSITION_ESTIMATE_DASH_KNOCK': True,
+    # P3: a commanded monster is dead-reckoned at its template's own speed (1e7 / hni speed
+    # px/s: Ssiyo 120000 -> 83.3, Monkey Soldier 80000 -> 125; x 2.7 in a dash) instead of the
+    # one measured 82.5 px/s for every template.
+    'MOB_SPEED_FROM_TEMPLATE': True,
+    # M1: the hit relay to the OTHER clients holding a monster carries the attacker's facing
+    # (lo facing2 bits 20-21) and the hurt time (hi, 0..4095), so their copies slide and stun
+    # as the attacker's own copy does; the server's point of the mob moves by the same slide.
+    # The attacker still gets only his 16-byte release. For a basic swing / dash attack
+    # (interact event 7) the packet is 33 bytes, action = the tail's target_action_event (7,
+    # or 8 for an airborne victim), a 2-tick slide and a stun of hurt - 60 ms. False = the old
+    # flinch in place (action 7, facing2 0, hi 0). A guarded hit (4) and a trap catch (0xC)
+    # always get the old flinch in place; a skill hit (9) is MOB_HIT_RELAY_SKILL_VARIANT's.
+    'MOB_HIT_RELAY_KNOCKBACK': True,
+    # The hurt of a hit whose kind or timing the server cannot tell (no swing / cast words
+    # counted, a stale action, MOB_HIT_HURT_PER_SWING off): 490 = the basic swing from
+    # standing, the median of the attacker's +0x9E4 in live session 2 (10/10). With
+    # MOB_HIT_HURT_PER_SWING on it is the floor of a guess that errs high (a low hurt lets
+    # the chase in early, a high one only holds it): a skill / strong-attack hit (event 9)
+    # gets the state-1 default L - 270 (1020 for a Warrior), a held attack key past its
+    # action the stage-2 default 760 (hitstun.classify).
+    'MOB_HIT_RELAY_HURT_MS': 490,
+    # Per-swing hurt (HIT_STUN_PER_SWING_RE_2026-09-28): hurt = L - E, what is left of the
+    # attacker's action at the hit - L its length (combo 610 / 1250 / 2140, bow 720, staff
+    # 740, skill / strong attack by weapon, variant and tier), E his elapsed time, counted
+    # from his own C2S 0x0D words (hitstun.py): basic swing 490, dash attack 760, Ice Spear
+    # 1020 (+1000 ice). False = MOB_HIT_RELAY_HURT_MS for every hit. The L / E0 / variant
+    # tables are the 2009 client's (static RE + live session 2); for CLIENT_BUILD '2008'
+    # they are UNVERIFIED (its body001.hsi and variant table were never read).
+    'MOB_HIT_HURT_PER_SWING': True,
+    # M3: a skill or strong-attack hit (interact event 9) is relayed in the case-9 form: 34
+    # bytes, action 9 (10 airborne) + the u8 action_flag = the attacker's cast variant (lo
+    # bits 5-8 of his motion-7 words; 0 for a strong attack) before the position block, hi =
+    # the hurt. The watchers' copies then run the attacker's own pass 2: the 4-tick slide,
+    # the stun, the element (ice +1000 ms, wind 19-tick slide) and the local debuff. The
+    # server's point slides 4 ticks (19 x 1.0 / 2.5 for wind). False = the old flinch in
+    # place (33 bytes, action 7, facing2 0, hi 0). A Priest tier-2 Vampiric Attack goes out
+    # with flag 0: its drain would be applied to the watchers' copies of the attacker
+    # (hitstun.NO_RELAY_FLAG). Verified for the 2009 client only; for CLIENT_BUILD '2008'
+    # the bytes match its 0x2A grammar, but how its pass 2 uses the flag is UNVERIFIED.
+    'MOB_HIT_RELAY_SKILL_VARIANT': True,
+    # M1: no chase word for a monster until its copies have finished the hurt of a
+    # client-caught swing or skill hit (interact events 7 and 9; guarded hits and trap
+    # catches set no gate): until the hit + max(MOB_HIT_RECOVER_SECS, stun +
+    # MOB_HIT_RECOVER_MARGIN_SECS), the stun being hurt - 60 for a swing and hurt (+1000 ice,
+    # >= 600 wind) for a skill. Basic swing 0.55 s, dash attack 0.82 s, Ice Spear 2.14 s. A
+    # combo extends it (never shortens it). MOB_HIT_RECOVER_SECS is the floor; 0 = no gate
+    # at all (the chase word on the next 'monster-ai' tick).
+    'MOB_HIT_RECOVER_SECS': 0.45,
+    # 60 ms of tick rounding plus the relay's latency; >= 0.09 (the M1 minimum), <= 1.
+    'MOB_HIT_RECOVER_MARGIN_SECS': 0.12,
+    # The gate armed at CAST time too: an attack skill the server's box lands on a monster
+    # holds its chase for the skill's action length L + the margin (the client reports its
+    # own catch within L), so the skill damage / aggro path sends no chase word into the
+    # hurt the client is about to start; the report then extends it. Needs
+    # MOB_HIT_RECOVER_SECS > 0.
+    'MOB_HIT_CAST_GATE': True,
+    # The chase gate of an ice-element skill hit (+0x95D = 2: the stun is hurt + 1000 ms, at
+    # least 1 s on every copy): no longer the stun + the margin but the hit + this. A server-
+    # driven copy's state machine runs only while its last 0x2A node's 960 ms hold does (the
+    # type-4 tick gate (+0xEE4 && +0x971) || +0x96D, 0x4142B8), so with no word queued both
+    # copies stalled their +0xE9C at 960-990 until the chase word came and then ran the rest
+    # of the stun (live session 2b: 3.3-3.5 s frozen, retail 2.0 s). A word queued before the
+    # stall keeps them ticking and does not cut the stun short (the state-3 exit is +0xE9C
+    # against +0x9E4 + 1000 alone, 0x41528A..0x4152C2; a word's action nibble 0 never reaches
+    # pass 2): both end at 1000 + their own hurt and walk. The word goes out at that time on
+    # its own (a one-shot timer), not on the next 'monster-ai' tick, even when the decision
+    # did not change (STOP included), and is kept alive until the stun ends. 0.6 (the
+    # keep-alive cadence) leaves about 0.36 s before the copies stall (their 0x2A arrival +
+    # 960 ms) for downlink jitter and the shared 'world' scheduler thread; an earlier word
+    # costs nothing (live session 2: a word 0.17 s after the hit still gave the 2.0 s stun).
+    # 0 = the plain stun gate; else above 0 and below 0.95. Needs MOB_HIT_RECOVER_SECS > 0.
+    'MOB_HIT_ICE_CHASE_SECS': 0.6,
     # --- village transfer (world-village-transfer, world_movement_npc.md F5) ---
     # {"<town map>": [x, y]}: where a Garan Maria transfer to that town lands. Arrival
     # points are not in the client (T-5D-3), so the default is next to Garan Maria in the
@@ -273,6 +477,28 @@ DEFAULTS = {
     # days (UI 8944 "the same person only once a week" -> 0x94 {6}). 0 = no such rule; the
     # giver's own once-a-day rule (0x94 {7}) always applies.
     'COMPLIMENT_REPEAT_DAYS': 7,
+    # --- the Item Mall / Spark Shop (P8 stage 2: premium_cash-buy / -gift, mall.py) ---
+    # Percent of a Wind Cash purchase's (or gift's) price credited as Mileage. The client pops
+    # "50% bonus mileage has been deposited." whenever the balance it is sent rises; the
+    # retail rate is unknown (premium_cash Q9), so the default credits nothing. Mileage
+    # purchases never earn mileage.
+    'MILEAGE_BONUS_PCT': 0,
+    # A MILEAGE EVENT (P8 stage 4: premium_cash-mileage-event, F16): percent of every Wind Cash
+    # purchase / gift price credited as event Mileage on top, told the retail way - S2C 0x70
+    # {cash, mileage, 0} then S2C 0x98, the client's own chat line "※Mileage Event※ You got
+    # bonus mileage." (spec 0x98). 0 = no event running. GM `!mileage event <pct|off>`
+    # overrides it until a restart; `!mileage <n> [name|all]` credits an event bonus directly.
+    'MILEAGE_EVENT_PCT': 0,
+    # Sell and gift the 2009 pets (hii Type 6) in the Spark Shop (ROADMAP_2009_ADDENDUM C1,
+    # mall.py "Pets"). The pet records, their box -> character binding and the 0x6A / 0x6F /
+    # 0x6C encodings are in place either way; off until P15 answers C2S 0x82 PetEquip, since a
+    # bought pet could otherwise only sit in the bag.
+    'MALL_PETS': False,
+    # --- using cash items (P8 stage 3: premium_cash-megaphone, cashuse.py) ---
+    # How a megaphone's count goes down on its owner's client (the original packet is unknown,
+    # premium_cash Q7): '0x72' = the client's own consume-by-serial through S2C 0x72 {uid, item,
+    # serial} (plays the use sparkle 0x140), '0x6F' = the whole owned list again (no sparkle).
+    'MEGAPHONE_CONSUME_PACKET': '0x72',
     # --- parties (P6 stage 3: party.md party-exp-share / party-map-change-hud) ---
     # Share a kill's exp with the killer's party members alive on the same map (server
     # policy - no client packet or string implies one, party.md Q10 - but the retail footage
@@ -293,10 +519,9 @@ DEFAULTS = {
     'STARTER_WEAPON': 0,
     # --- dev flags ---
     'DEV_MEMORY_COMBAT': True,        # the ReadProcessMemory swing driver (F10 dev path)
-    # Note items (1894/3320, C2S 0x4B) are accepted without a cash inventory, which does not
-    # exist before P8 (roadmap 1.12 / D6): the S2C 0x77 success carries the serial `!note`
-    # handed out, else 0 (the client then consumes nothing, C14). P8 turns this off.
-    'DEV_FREE_NOTES': True,
+    # (DEV_FREE_NOTES is gone: RETIRED_KEYS.) A Note (1894/3320, C2S 0x4B) is a record of the
+    # cash inventory (cash.py; `!note` grants one, limit_type 1) and the S2C 0x77 success names
+    # its serial, so the client uses one up (livetest 2026-09-25); none owned -> 0x77 {0}.
     # The driver's swing-based damage. Off: the client reports its own connecting swings in
     # C2S 0x0D (61 B, interact event 7) and the server applies those, so a driver hit on top
     # would count every swing twice. The driver keeps position tracking and the `hit` hook.
@@ -389,7 +614,20 @@ def ip_host_order(ip):
     return (a << 24) | (b << 16) | (c << 8) | d
 
 
+def grade_roll_on(cfg):
+    """DAMAGE_GRADE_ROLL resolved for a config mapping: None (auto) is on only for
+    CLIENT_BUILD '2009', whose combo HUD v2 patch rolls the digit (the key's comment)."""
+    flag = cfg.get('DAMAGE_GRADE_ROLL')
+    if flag is None:
+        return cfg.get('CLIENT_BUILD') == BUILD_2009
+    return bool(flag)
+
+
 def _check_type(key, value, default):
+    if key in AUTO_BOOL_KEYS:
+        if value is None or isinstance(value, bool):
+            return value
+        raise ConfigError(f'{key}: expected true, false or null (auto), got {value!r}')
     if isinstance(default, bool):
         ok = isinstance(value, bool)
     elif isinstance(default, int):
@@ -438,8 +676,18 @@ def _validate(values):
         ok = str(key).isdigit() and isinstance(row, list) and len(row) == 2
         if not ok or not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in row):
             raise ConfigError(f'VILLAGE_ARRIVALS: {key!r}: {row!r} must be "<town map>": [x, y]')
+    for key in ('MILEAGE_BONUS_PCT', 'MILEAGE_EVENT_PCT'):
+        if not 0 <= values[key] <= MILEAGE_PCT_MAX:
+            raise ConfigError(f'{key}: {values[key]} must be 0..{MILEAGE_PCT_MAX} (percent of a cash price)')
+    if values['MEGAPHONE_CONSUME_PACKET'].lower() not in ('0x72', '0x6f'):
+        raise ConfigError(f'MEGAPHONE_CONSUME_PACKET: {values["MEGAPHONE_CONSUME_PACKET"]!r} is not "0x72" or "0x6F"')
     if not 0 <= values['PARTY_EXP_BONUS_PCT'] <= 100:
         raise ConfigError(f'PARTY_EXP_BONUS_PCT: {values["PARTY_EXP_BONUS_PCT"]} must be 0..100')
+    # json.load takes NaN / Infinity: NaN would turn the limit off (every `<` is False), inf
+    # would let each monster touch a player once for ever and never prune its slot.
+    if not math.isfinite(values['MOB_CONTACT_MIN_SECS']) or values['MOB_CONTACT_MIN_SECS'] < 0:
+        raise ConfigError(f'MOB_CONTACT_MIN_SECS: {values["MOB_CONTACT_MIN_SECS"]} must be a finite '
+                          f'number >= 0 (0 = no limit)')
     if not 1 <= values['COMPLIMENT_DELTA'] <= 1000:
         raise ConfigError(f'COMPLIMENT_DELTA: {values["COMPLIMENT_DELTA"]} must be 1..1000')
     if values['COMPLIMENT_DAILY_CAP'] < 1:
@@ -448,6 +696,9 @@ def _validate(values):
         raise ConfigError(f'COMPLIMENT_REPEAT_DAYS: {values["COMPLIMENT_REPEAT_DAYS"]} must be 0..366')
     if values['VILLAGE_COOLDOWN_SECS'] < 0:
         raise ConfigError(f'VILLAGE_COOLDOWN_SECS: {values["VILLAGE_COOLDOWN_SECS"]} must be >= 0')
+    if values['EVENT_RELOGIN_QUIET_SECS'] < 0:
+        raise ConfigError(f'EVENT_RELOGIN_QUIET_SECS: {values["EVENT_RELOGIN_QUIET_SECS"]} must be >= 0 '
+                          f'(0 = every login repeats the announcement and the popup)')
     if not 0 <= values['MOB_SPAWN_EFFECT_ID'] <= 0xFFFF:
         raise ConfigError(f'MOB_SPAWN_EFFECT_ID: {values["MOB_SPAWN_EFFECT_ID"]} is not a u16 effect id')
     if values['GROUND_ITEM_SECS'] <= 0:
@@ -468,10 +719,56 @@ def _validate(values):
                 'MOB_ATTACK_REACH_Y'):
         if values[key] <= 0:
             raise ConfigError(f'{key}: must be > 0')
+    if not math.isfinite(values['MOB_ATTACK_HOLD_X']) or values['MOB_ATTACK_HOLD_X'] < 0:
+        raise ConfigError(f'MOB_ATTACK_HOLD_X: {values["MOB_ATTACK_HOLD_X"]} must be a finite number >= 0 '
+                          f'(0 = no hysteresis)')
+    if not math.isfinite(values['MOB_ATTACK_HOLD_SECS']) or values['MOB_ATTACK_HOLD_SECS'] < 0:
+        raise ConfigError(f'MOB_ATTACK_HOLD_SECS: {values["MOB_ATTACK_HOLD_SECS"]} must be a finite number '
+                          f'>= 0 (0 = no hold): an endless hold parks a mob swinging at a target just '
+                          f'out of reach')
     if values['MOB_MAP_KEEP_SECS'] < 0:
         raise ConfigError(f'MOB_MAP_KEEP_SECS: {values["MOB_MAP_KEEP_SECS"]} must be >= 0 (0 = discard at once)')
+    tiles = values['BOSS_TILE_VALUES']
+    if not all(isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 0x7FFFFFFF for v in tiles):
+        raise ConfigError(f'BOSS_TILE_VALUES: map tile value_num numbers (positive ints), got {tiles!r}')
+    if not 0 < values['BOSS_RESPAWN_SCALE'] <= 1000:
+        raise ConfigError(f'BOSS_RESPAWN_SCALE: {values["BOSS_RESPAWN_SCALE"]} must be above 0 and at most 1000')
+    if values['DROP_MODE'] not in DROP_MODES:
+        raise ConfigError(f'DROP_MODE: {values["DROP_MODE"]!r} is not one of {DROP_MODES}')
+    if not 1 <= values['DROP_RATE_UNIT'] <= 100_000_000:
+        raise ConfigError(f'DROP_RATE_UNIT: {values["DROP_RATE_UNIT"]} must be 1..100000000')
+    for key in ('MOB_ATTACK_B', 'MOB_DASH'):
+        if values[key] not in MOB_COMMAND_SCOPES:
+            raise ConfigError(f'{key}: {values[key]!r} is not one of {MOB_COMMAND_SCOPES}')
     if values['DEAD_PEER_SECS'] < 0:
         raise ConfigError(f'DEAD_PEER_SECS: {values["DEAD_PEER_SECS"]} must be >= 0 (0 = off)')
+    gap = values['RELAY_START_HOLD_GAP_MS']
+    if gap != 0 and not RELAY_START_HOLD_GAP_RANGE[0] <= gap <= RELAY_START_HOLD_GAP_RANGE[1]:
+        raise ConfigError(f'RELAY_START_HOLD_GAP_MS: {gap} must be 0 (legacy clamp) or '
+                          f'{RELAY_START_HOLD_GAP_RANGE[0]}..{RELAY_START_HOLD_GAP_RANGE[1]} (the 210 ms busy '
+                          f'cadence plus a tick, up to the 990 ms hold cap)')
+    if values['RELAY_SETTLE_AFTER_MS'] < RELAY_SETTLE_AFTER_MIN_MS:
+        raise ConfigError(f'RELAY_SETTLE_AFTER_MS: {values["RELAY_SETTLE_AFTER_MS"]} must be >= '
+                          f'{RELAY_SETTLE_AFTER_MIN_MS} (a busy mover sends every 210 ms)')
+    if not 30 <= values['RELAY_SETTLE_HOLD_MS'] <= 990:
+        raise ConfigError(f'RELAY_SETTLE_HOLD_MS: {values["RELAY_SETTLE_HOLD_MS"]} must be 30..990')
+    hurt = values['MOB_HIT_RELAY_HURT_MS']
+    if not 0 <= hurt <= 0xFFF:
+        raise ConfigError(f'MOB_HIT_RELAY_HURT_MS: {hurt} must be 0..4095 (the 12-bit hi word)')
+    recover = values['MOB_HIT_RECOVER_SECS']
+    if not math.isfinite(recover) or recover < 0:
+        raise ConfigError(f'MOB_HIT_RECOVER_SECS: {recover} must be a finite number >= 0 (the floor '
+                          f'of the chase gate; 0 = no gate)')
+    margin = values['MOB_HIT_RECOVER_MARGIN_SECS']
+    if not (math.isfinite(margin) and MOB_HIT_RECOVER_MARGIN_RANGE[0] <= margin <= MOB_HIT_RECOVER_MARGIN_RANGE[1]):
+        raise ConfigError(f'MOB_HIT_RECOVER_MARGIN_SECS: {margin} must be {MOB_HIT_RECOVER_MARGIN_RANGE[0]}..'
+                          f'{MOB_HIT_RECOVER_MARGIN_RANGE[1]} (the gate is the stun plus this: 60 ms of '
+                          f'tick rounding and a tick of relay latency at least)')
+    ice = values['MOB_HIT_ICE_CHASE_SECS']
+    if not (math.isfinite(ice) and (ice == 0 or 0 < ice < MOB_HIT_ICE_CHASE_MAX_SECS)):
+        raise ConfigError(f'MOB_HIT_ICE_CHASE_SECS: {ice} must be 0 (the plain stun gate) or above 0 and '
+                          f'below {MOB_HIT_ICE_CHASE_MAX_SECS} (the chase word must come before the '
+                          f'copies stall at the end of the 0x2A node hold)')
     if not 0 < values['MOB_CMD_KEEPALIVE_SECS'] < MOB_COMMAND_HOLD_SECS:
         raise ConfigError(f'MOB_CMD_KEEPALIVE_SECS: {values["MOB_CMD_KEEPALIVE_SECS"]} must be above 0 and '
                           f'below the 0x2A node hold ({MOB_COMMAND_HOLD_SECS} s), or a chasing mob stops')
@@ -514,6 +811,9 @@ def from_dict(overrides, path=None):
     values = json.loads(json.dumps(DEFAULTS))
     for key, value in (overrides or {}).items():
         if key.startswith('_'):
+            continue
+        if key in RETIRED_KEYS:
+            log.warning(f'[CONFIG] {key!r} ignored: {RETIRED_KEYS[key]}')
             continue
         if key not in DEFAULTS:
             log.warning(f'[CONFIG] unknown key {key!r} ignored')

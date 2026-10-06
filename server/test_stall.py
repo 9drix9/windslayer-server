@@ -20,7 +20,9 @@ shop_storage-stall-registry / -stall-open-close / -stall-browse-buy / -stall-pre
   merged at login, self-buy / price / quantity / block / gold / room refusals (0x88 {0} and a
   fresh 0x87 to that buyer only), two buyers racing for the last unit, trade-locked gold;
   review round 1: rows a full bag kept survive the next Start (back in the bag or refused
-  with 0x82 {2}), a Stop that crossed our 0x83 / 0x84 is ignored, no trade while selling.
+  with 0x82 {2}), a Stop that crossed our 0x83 / 0x84 is ignored, no trade while selling;
+  P7 review: a trade that opens while a Start is being processed wins (the Start rolls
+  back), and a login releases the stall of the session it replaced or kicked.
 
 No port is bound, no client is started and the live accounts.json is never opened (temp
 copies; the module checks its hash at the end).
@@ -35,6 +37,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -656,6 +659,93 @@ class _Stalls(_Base):
         a.expect(0x45)
         self.assertEqual(trades.accept(a.session, 'Watcher'), 'open')
 
+    def test_a_trade_that_opens_while_the_stall_opens_wins(self):
+        """P7 review: open() checked trades.busy() in _open_gate, before any lock, and only
+        then registered the stall, so an accept on another thread could open a trade in
+        between and the seller ended up trading AND selling. The stall is now registered
+        first and the trade checked after: a trade that got in first makes the Start roll
+        back (escrow back in the bag, 0x82 {2}). P7 review of that fix: the stall is visible
+        to sign_fields while busy() waits for Trades.lock, so a presence record built then
+        carries its 0x85 - the rollback sends the 0x86 (a no-op on a client that never got
+        the sign), and its audit has an 'open' line for its 'close'."""
+        a, b = self.a, self.b
+        market, trades = self.server.market, self.server.trade
+        gate, busy = market._open_gate, trades.busy
+        signs = []
+
+        def busy_seen_by_presence(session):
+            # what a peer's presence record (presence.spawn -> sign_fields) would get right now
+            signs.append(market.sign_fields(session))
+            return busy(session)
+
+        def gate_then_trade(session):
+            why = gate(session)
+            if why is None and trades.trades == {}:
+                # B's request and A's accept land between the gate and the registration
+                self.assertEqual(trades.request(b.session, 1), 'requested')
+                self.assertEqual(trades.accept(session, 'Watcher'), 'open')
+            return why
+
+        with mock.patch.object(market, '_open_gate', side_effect=gate_then_trade),                 mock.patch.object(trades, 'busy', side_effect=busy_seen_by_presence):
+            self.send(a, 'open', {'item_count': 1, 'shop_name': TITLE,
+                                  'repeat[item_count]': [item(POTION, 5, 20)]})
+            prompt, opened, refused = a.expect(0x45, 0x46, 0x82)
+        self.assertEqual(a.s2c(refused), {'result': ST.OPEN_FAILED})
+        # the gate's busy() saw no stall, the check after the registration did: a sign in the
+        # window, so B gets the rollback's 0x86 (and never a 0x85 from the open itself)
+        self.assertEqual(signs[0], None)
+        self.assertEqual(signs[-1], ST.sign_fields(1, TITLE))
+        self.assertEqual(_ops(b.recv_until_quiet(0.2)), [0x46, 0x86])
+        self.assertEqual(market.stalls, {})
+        audit = self.audit_lines()
+        self.assertEqual([(e['event'], e.get('rolled_back')) for e in audit], [('open', True), ('close', None)])
+        self.assertEqual(audit[1]['reason'], 'a trade opened while the stall was opening')
+        self.assertEqual((len(audit[0]['entries']), audit[1]['kept']), (1, []))   # all back in the bag
+        self.assertIsNotNone(trades.trade_of(a.session))
+        self.assertEqual(self.bag('TestHero'), {STICK: 1, POTION: 5})
+        self.assertEqual(self.rec('TestHero')['stall_escrow'], [])
+        self.assertEqual(self.disk('TestHero')['stall_escrow'], [])
+        # the other order: the stall registered first, the accept refuses
+        trades.cancel(a.session, 'test')
+        a.expect(0x49)
+        b.expect(0x49)
+        self.assertEqual(trades.request(b.session, 1), 'requested')
+        a.expect(0x45)
+        self.open_stall(rows=[item(POTION, 5, 20)])
+        self.sign(b)
+        self.assertEqual(trades.accept(a.session, 'Watcher'), 'selling')
+        self.assertEqual(self.notice(a.expect(0x15), a), '[Warning] ' + TR.CANT_NOW_TEXT)
+
+    def test_a_replaced_session_s_stall_is_released_at_login(self):
+        """P7 review: a login found the account's stall still registered to the session it
+        had just replaced or kicked and skipped the character, so the escrow came back only
+        when the old connection's cleanup reached Market.gone - after the new session's 0x03
+        had perhaps been built without the items. recover() now releases that stall itself
+        (escrow back, 0x86 to the map); the old cleanup then finds nothing to do."""
+        a, b = self.a, self.b
+        self.open_stall(rows=[item(POTION, 5, 20)])
+        self.sign(b)
+        self.assertEqual(self.bag('TestHero'), {STICK: 1})
+        old = a.session
+        account = self.server.store.account('test')
+        self.server.market.recover(account)                     # its session is live: kept
+        self.assertIn(1, self.server.market.stalls)
+        self.assertEqual(self.bag('TestHero'), {STICK: 1})
+        b.expect_silence(0.1)
+        # the old session is kicked, its cleanup has not run yet: a login recovers at once
+        old['kicked'] = 'test: a newer login'
+        self.server.market.recover(account)
+        self.assertEqual(self.server.market.stalls, {})
+        self.assertEqual(self.bag('TestHero'), {STICK: 1, POTION: 5})
+        self.assertEqual(self.rec('TestHero')['stall_escrow'], [])
+        self.assertEqual(self.disk('TestHero')['stall_escrow'], [])
+        self.assertEqual(_ops(b.recv_until_quiet(0.2)), [0x86])
+        self.assertEqual([e['event'] for e in self.audit_lines()], ['open', 'close'])
+        # the old connection's own cleanup changes nothing any more
+        self.server.market.gone(old, 'test')
+        self.assertEqual(self.bag('TestHero'), {STICK: 1, POTION: 5})
+        b.expect_silence(0.1)
+
     # ------------------------------------------------------------ guards ---
     def test_no_buying_from_yourself(self):
         a = self.a
@@ -805,6 +895,31 @@ class Stalls2008(_Stalls, unittest.TestCase):
 
 class Stalls2009(_Stalls, unittest.TestCase):
     build = B9
+
+    def test_a_2009_relogin_while_selling_gets_the_escrow_back_before_its_0x03(self):
+        """P7 review: the 2009 client reconnects with its session key while its stall is
+        open. The login replaces the old session and releases its stall (recover) even while
+        the old connection's cleanup cannot run yet - here it is held on the old session's
+        combat lock - so the new session's 0x03 always lists the escrowed items."""
+        a, b = self.a, self.b
+        self.open_stall(rows=[item(POTION, 5, 20)])
+        self.sign(b)
+        old = a.session
+        c = F.FakeClient(self.server)
+        self.extra.append(c)
+        with self.server._combat_lock(old):                     # Market.gone of the old one waits
+            self.assertEqual(c.login('test', 'test', session_key=old['session_key'])['result'], 1)
+            self.assertTrue(self.server.world.superseded(old))
+            self.assertEqual(self.server.market.stalls, {})
+            self.assertEqual(self.bag('TestHero'), {STICK: 1, POTION: 5})
+            self.assertEqual(self.rec('TestHero')['stall_escrow'], [])
+            self.assertIn(0x86, _ops(b.recv_until_quiet(0.2)))
+        self.assertTrue(_wait(lambda: old.get('closed')))
+        c.char_name = 'TestHero'
+        pkts = c.enter_world('TestHero', port=F.P2P_PORT_BASE)
+        bag03 = c.s2c(next(p for p in pkts if p.opcode == 0x03), allow_trailing=True)
+        self.assertIn((POTION, 5), [(r['item_id'], r['quantity']) for r in bag03['repeat[consume_item_count]']])
+        self.assertEqual(self.bag('TestHero'), {STICK: 1, POTION: 5})
 
 
 if __name__ == '__main__':

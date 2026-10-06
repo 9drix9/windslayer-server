@@ -20,6 +20,11 @@ The server runs the **English Outspark client v1.04, Build 14 (Jan 2009)**, the 
   - The combo counter with CRITICAL! / GOOD / BAD hits.
   - Monsters only fight back after you hit them, and their name turns red while they're fighting.
   - Monster melee and chasing.
+  - **Position sync between players.**
+    - Each player's moves are replayed on the other clients with the right timing.
+    - A hit relays the monster's knockback and stun, matched to the attacker's swing: basic swing, combo stage, dash attack or skill.
+    - Ice freezes last the same time on every screen.
+    - Live two-client tests: every settled player position matches to the pixel; every resting monster is within 7.5 px.
 - **Progression:** EXP, leveling, stats, class change, HP/MP regen, death and revive, village return.
 - **World and items:**
   - Quests and quest items.
@@ -31,15 +36,27 @@ The server runs the **English Outspark client v1.04, Build 14 (Jan 2009)**, the 
   - Players see each other move, fight and level up.
   - Chat, whispers, friends, messenger, memos, mentors, parties, Player Info.
   - GM commands (`/go`, `/kick`, `/manner`, …).
-- **Built, now in live testing:** player trading, personal shops (stalls), Praise/Report.
+- **Exchange:** player trading, personal shops (stalls), Praise/Report.
+- **Spark Shop (cash shop):**
+  - Wind Cash/Mileage wallet: there is no top-up yet, so a GM credits it with `!cash <n>`.
+  - Buying and gifting cash-bag items (costumes and pets are not sold yet), the cash box, the gift popup.
+  - Hair dye, rename, megaphone, stat reset, region/friend warp stones, period EXP items with expiry.
+  - Bag slot extensions, memo notes.
+  - Players inside the mall are hidden from the map.
+  - Enter with `!mall`: Build 14's own Spark Shop button only shows "Coming Soon!!!".
+- **Events** (off by default: set `"EVENTS_FILE": "events.json"` in `server/config.json`, then a GM types `!event start p13-exit`, or set `"enabled": true` in `events.json`):
+  - A UTC schedule and "[Announcement]" lines, EXP multipliers.
+  - One-time login gifts, the Event News popup, event quests handed in to Nicolas.
+- **Field bosses:**
+  - 11 field-boss spawns (Rynx, Monkey King, two Wasablanca, Leo Wolf, Drill Mole, Wook, King Frog, Waterfrog, Firefrog, Blue Shark), with respawn timers that survive restarts.
+  - Per-entry drop rolls, killer-owned trophies, boss attacks A/B and dash, boss quests.
 
 ### In progress (being built; not in this repo yet)
-- **Spark Shop** (cash shop): wallet, buying, gifting, hair dye, rename, megaphones, period items.
-- **Events:** EXP x2, login gifts, the Event News popup, event quests.
-- **Field bosses:** Rynx, Monkey King and 9 more, with persistent respawn timers, boss drops and boss quests.
+- Blacklist and channels 1-4, with Change Channel.
+- Guilds: tags, guild points, create/apply/kick, guild chat, grades.
 
 ### Researched, coming next
-Guilds, pets, blacklist, 4 channels, instance dungeons, PvP (Arena / Battlefield / Play & Chat / Guild Battle). Specs are in [`docs/systems_2009/`](docs/systems_2009/) and the plan is in [`docs/ROADMAP_2009_ADDENDUM.md`](docs/ROADMAP_2009_ADDENDUM.md).
+Pets (need a client data patch), instance dungeons, PvP (Arena / Battlefield / Play & Chat / Guild Battle). Specs are in [`docs/systems_2009/`](docs/systems_2009/) and the plan is in [`docs/ROADMAP_2009_ADDENDUM.md`](docs/ROADMAP_2009_ADDENDUM.md).
 
 ---
 
@@ -67,6 +84,7 @@ This writes `WindSlayer_patched.exe` and leaves the original exe unchanged. Befo
 - fixes the movement stutter;
 - applies the retail monster-aggro and name-colour rules;
 - adds the combo/grade HUD. Skip it with `--no-combo-hud`.
+- fixes a client bug where about 2.5 % of your own knockbacks were never reported to the server, leaving other players' view of you 30 px off. Skip it with `--no-knock-fix`; details in `docs/CATCHUP_KNOCK_FIX_RE_2026-10-05.md`.
 
 The script header lists every patched address.
 
@@ -113,7 +131,7 @@ For a second player on the same PC:
 | Path | What |
 |---|---|
 | `server/` | The server. `windslayer_server.py` is the main file. Most systems have their own module: `packets.py` (spec-driven codec for both clients), `store.py` (accounts, migrations), `combat.py`, `damage.py`, `mobai.py`, `quests.py`, `inventory.py`, `trade.py`, `stall.py`, `social.py`, `gm.py`, etc. |
-| `server/test_*.py` | 44 offline test suites with fake clients for both builds. Run one with `python test_combat.py`. They never touch your real `accounts.json`.<br><br>Most suites read game data from a client install: the 2008 client at `CLIENT_DIR` and the 2009 client at `CLIENT_DIR_2009`. Without one, they skip or fail. Keep the shipped `config.json` on `"2008"` when you run `test_store.py`; it compares the file with the defaults. |
+| `server/test_*.py` | 54 offline test suites with fake clients for both builds. Run one with `python test_combat.py`. They never touch your real `accounts.json`.<br><br>Most suites read game data from a client install: the 2008 client at `CLIENT_DIR` and the 2009 client at `CLIENT_DIR_2009`. Without one, they skip or fail. Keep the shipped `config.json` on `"2008"` when you run `test_store.py`; it compares the file with the defaults. |
 | `server/protocol_spec*.json` | Machine-readable packet grammars for the 2008 and 2009 clients, used by the codec. |
 | `server/wsdev.py`, `wsview.py`, `wsre.py` | Dev harness:<br>• `wsdev`: start the server and client and run `!` dev commands;<br>• `wsview`: screenshots, live entity state from client memory, and input;<br>• `wsre`: the reverse-engineering toolkit. |
 | `client_2009/` | Client patcher (`patch_2009.py`), the combo HUD patch and the launcher `.bat`. |
@@ -133,7 +151,7 @@ GM chat commands:
 - `/kick <slot>` (slot numbers come from `!who`)
 - `/manner <name> <n>`
 
-For a GM, a chat line starting with `!` is a dev command. For anyone else it is ordinary chat. You can also send one from the command line: `python wsdev.py --build 2009 dev <character> "!cmd"`. Examples: `!warp <map> [x y]`, `!level <n>`, `!give <item> [n]`, `!gold <n>`, `!hp <n>`, `!learn <skill> [force]`, `!who`, `!mobs`, `!where`.
+For a GM, a chat line starting with `!` is a dev command. For anyone else it is ordinary chat, except `!mall` (and `!mall status`), which every player can type to enter the Spark Shop. You can also send one from the command line: `python wsdev.py --build 2009 dev <character> "!cmd"`. Examples: `!warp <map> [x y]`, `!level <n>`, `!give <item> [n]`, `!gold <n>`, `!hp <n>`, `!learn <skill> [force]`, `!who`, `!mobs`, `!where`.
 
 ---
 

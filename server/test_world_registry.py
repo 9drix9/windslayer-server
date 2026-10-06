@@ -308,8 +308,9 @@ class WorldUnit(unittest.TestCase):
         self.assertIsNone(WM.client_number({}))
 
     def test_hook_names(self):
+        # on_rename: the rename hook (ROADMAP_2009_ADDENDUM C4; test_carryins.C4RenameHook2009)
         self.assertEqual(ALL_HOOKS, ('before_server_map_load', 'on_map_change', 'on_enter_world',
-                                     'on_leave_world', 'on_disconnect'))
+                                     'on_leave_world', 'on_disconnect', 'on_rename'))
         with self.assertRaises(KeyError):
             self.w.hooks.register('on_teleport', print)
         fn = self.w.hooks.register(WM.ON_LEAVE_WORLD, lambda *a, **k: None)

@@ -180,12 +180,15 @@ class _Base:
 # ===================================================================== /go ===
 class _Go(_Base):
     def test_exit8_go_lands_next_to_the_target_on_the_same_map(self):
-        """/go Watcher on 101: a full reload in place next to B (x + 40, 30 px above the floor
-        there); B's client sees A leave (0x06) and arrive (0x05)."""
+        """/go Watcher on 101: a full reload in place next to B (x + 40, on the floor there -
+        livetest bug 5: no longer 30 px above it); B's client sees A leave (0x06) and arrive
+        (0x05)."""
         a, b = self.a, self.b
         code, x, y = self.server._go_point(b.session)
         fx, fy = W.presence.floor_point(b.session)
-        self.assertEqual((code, x, y + gm.GO_RISE_PX), (101, fx + gm.GO_OFFSET_PX, y + gm.GO_RISE_PX))
+        self.assertEqual((code, x), (101, fx + gm.GO_OFFSET_PX))
+        # ON the floor line: the map load's own settle keeps it where it is
+        self.assertEqual(W.presence.settle(code, x, y, W.presence.SLOPE_SLACK_PX), (x, y))
         self.sub(a, 0x08, target_name='Watcher')
         pkts = a.recv_until_quiet(0.4)
         ops = _ops(pkts)

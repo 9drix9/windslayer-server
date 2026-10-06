@@ -37,11 +37,12 @@ route lets the policy send it (logged as "stub route"), and a handler with side 
 calls send_refusal() so the reply bytes live in this one table. When the owner item lands,
 its handler answers every request itself and the row stays as the exception backstop (P4
 stage 3: C2S 0x67 / 0x68 / 0x69 are GameServer._handle_craft_complete / _reinforce_ /
-_gather_ now; P7 stage 2: C2S 0x5E..0x62 are the stall handlers of market.py; 0x72 is still
-the stub route).
+_gather_ now; P7 stage 2: C2S 0x5E..0x62 are the stall handlers of market.py; P8 stage 4:
+C2S 0x72 is GameServer._handle_stone_extract).
 """
 import contextlib
 import logging
+import os
 import threading
 from dataclasses import dataclass
 
@@ -118,6 +119,16 @@ def _join_room_refusal(field):
         # 0x34 result 2 rewrites message box 0x16 with an error; both bytes are always read.
         return [('0x34', {'result': 2, 'room_type': _field(rec, field) & 0xFF}, None)]
     return refusal
+
+
+def _cash_balance_refusal(server, session, rec):
+    # premium_cash-balance-refresh backstop: S2C 0x70 with the account's REAL balances (the
+    # P8 stage 1 wallet, cash.balance_fields) and no first-purchase popup. Any 0x70 clears
+    # the client's charge-pending flag (mall+0x5AC), which stops the 0x46 re-send on every
+    # window restore; the Wind Cash label shows what the store holds, not 0.
+    import cash as cashmod
+    acc = server.accounts.get(session.get('username')) if hasattr(server, 'accounts') else None
+    return [('0x70', cashmod.balance_fields(acc), None)]
 
 
 GIFT_REPLY_NOTE_ID = 9999
@@ -239,6 +250,17 @@ def _cash_item_use_refusal(server, session, rec):
              {'item_def(item_id) == null': True})]
 
 
+def _stat_reset_refusal(server, session, rec):
+    # premium_cash-stat-reset (P8 stage 3, cashuse.py): the 18-byte owner form of S2C 0x76 with
+    # the stats the client holds (the stored char['str'/'dex'/'int'/'spr'] every 0x07 / 0x03
+    # carries since P1), serial 0 and count 0 - it closes the waiting box and consumes nothing.
+    # The handler sends the same bytes for every refused request; this is its backstop.
+    cashuse = getattr(server, 'cashuse', None)
+    if cashuse is None:
+        return []
+    return [('0x76', cashuse.refusal_76(session), {'target_uid == local_player_uid': True})]
+
+
 def _trade_refusal(server, session, rec):
     # trade-cancel-lifecycle backstop (trade.md 2.8): a trade handler that raised (or a 0x24 /
     # 0x25 whose payload does not decode) leaves the sender's window with End/Cancel
@@ -280,17 +302,15 @@ MUST_REPLY = {
                     'premium_cash-gift'),
     0x48: MustReply('modal', _cash_item_use_refusal, '0x72 {uid, 0, 0}', 'premium_cash-use-generic'),
     0x49: MustReply('modal', _reply('0x73', result=0), '0x73 {0}', 'premium_cash-rename'),
-    # 0x76 local form must carry the stats the client holds; our 0x07 sends zero base stats
-    # (+0xE6..+0xEC), so there is no truthful "unchanged" value yet. Unreachable without a
-    # stat-reset cash item.
-    0x4A: MustReply('modal', None, '0x76 local form, unchanged stats, serial 0, count 0',
+    # 0x76 local form with the stats the client holds (the stored ones, sent in every 0x07)
+    # - since P8 stage 3 the backstop of the stat-reset handler (cashuse.py).
+    0x4A: MustReply('modal', _stat_reset_refusal, '0x76 local form, unchanged stats, serial 0, count 0',
                     'premium_cash-stat-reset'),
     0x4B: MustReply('modal (Note item send; the 9999 gift reply has none)', _note_refusal,
                     '0x77 {0} (not for note item 9999)', 'social_friend-memos'),
-    # No cash/mileage model before P8 (D16: Wind Cash is not victy), so both balances are 0.
+    # The account's Wind Cash / Mileage (P8 stage 1 wallet; D16: Wind Cash is not victy).
     # Answering stops the client re-sending 0x46 on every window restore.
-    0x46: MustReply('re-sent on every restore', _reply('0x70', cash_balance=0, mileage_balance=0,
-                                                       first_purchase_bonus=0),
+    0x46: MustReply('re-sent on every restore', _cash_balance_refusal,
                     '0x70 {cash, mileage, 0}', 'premium_cash-balance-refresh'),
     0x51: MustReply('dialog closes, nothing opens', _reply('0x80', result=0), '0x80 {0}',
                     'shop_storage-password-gate'),
@@ -324,6 +344,9 @@ MUST_REPLY = {
     0x69: MustReply('busy flag ctx+0x28', lambda server, session, rec: [
                         ('0x8F', {'result': 2, 'tool_item_id': _field(rec, 'tool_item_id')}, None)],
                     '0x8F {2, tool}', 'item_inventory-gathering'),
+    # P8 stage 4: GameServer._handle_stone_extract answers every in-world request itself; the
+    # 0x9C {0} (nothing changes, no tool consumed) stays the backstop for a request from
+    # outside the world and a handler that raises.
     0x72: MustReply('busy flag', _reply('0x9C', result=0), '0x9C {0}', 'item_inventory-stone-extraction'),
     # P7 stage 1 (trade.py): both handlers answer every request themselves (0x49 / 0x4A, or
     # the deliberate wait of a first 0x25: defer_reply). The refusal is the exception
@@ -373,7 +396,33 @@ BUILD_NEVER_REPLY = {
         0x9E: 'X-Trap response (the server never sends S2C 0xC5)',
     },
 }
-BUILD_MUST_REPLY = {BUILD_2009: {}}
+BUILD_MUST_REPLY = {
+    BUILD_2009: {
+        # The 2009-only cash / pet requests P8 owns (ROADMAP_2009_ADDENDUM C5 / C8; mall.py "The
+        # 2009-only cash opcodes", pets.py). Their handlers answer every request themselves;
+        # these rows are the exception backstop (the same bytes):
+        #   0x4E CashItemAddOption (window 0x4DA, send 0x468706): NO waiting box (Add + Send,
+        #        return) - S2C 0xC4 {0} "You failed to buy the item." is the feedback the
+        #        dialog would otherwise never get (spec_2009 0xC4: failures rewrite box 0x16).
+        #   0x80 CashItemSaleOffer (window 0x4B8): Send, then the waiting box FUN_0049ebc0(..,
+        #        3, 3, 3, 0) at 0x4689B6; 0x71 {is_trade 1, 0x17} rewrites it ("Your target user
+        #        does not exist in the server.") and hides windows 0x4B9 / 0x4B8 (2009
+        #        FUN_0046a2e0 case 0x71, 0x46B32E).
+        #   0x4D PetRename (window 0x4CB, cp-2 patched exe only): "Waiting for the server to
+        #        respond." (0x52CF5C); the planned refusal is S2C 0x73 {0} (pet F9, C5), which
+        #        closes box 0x16 first.
+        # C2S 0x81 CashItemSaleReply is no row: it opens no waiting box (0x468D84 Send, return);
+        # mall.Mall.sale_reply closes the seller's window 0x4B8 on a Cancel (reply 1) and leaves
+        # the buyer's replies 0 / 2 - which need an S2C 0xA9 the server never sends - unanswered.
+        0x4E: MustReply('dialog 0x4DA gets no feedback (no waiting box)', _reply('0xC4', result=0), '0xC4 {0}',
+                        'premium_cash cash item options (ROADMAP_2009_ADDENDUM C8; mall.add_option)'),
+        0x80: MustReply('window 0x4B8 waiting box', _reply('0x71', is_trade=1, result=0x17),
+                        '0x71 {is_trade 1, 0x17}',
+                        'premium_cash cash item sale (ROADMAP_2009_ADDENDUM C8; mall.sale_offer)'),
+        0x4D: MustReply('modal', _reply('0x73', result=0), '0x73 {0}',
+                        'pet rename (ROADMAP_2009_ADDENDUM C5; pets.PetStub.rename, P15 pet-s6)'),
+    },
+}
 
 
 def _merged(base, overrides):
@@ -475,6 +524,38 @@ def _fmt_value(v):
     return v
 
 
+def _neutral_name(names, count):
+    """One name for several send sites that decoded the same bytes: their common name
+    without the per-site '(...)' note, else their common prefix, else a plain count."""
+    bases = {n.split(' (', 1)[0].strip() for n in names}
+    if len(bases) == 1 and '' not in bases:
+        return bases.pop()
+    prefix = os.path.commonprefix(list(names)).rstrip(' (-_/,:')
+    return prefix or f'one of {count} send sites'
+
+
+def record_label(rec, client_build=None, *, with_key=True):
+    """'<name> (<key>)' of a decoded C2S for the log (with_key=False: the name alone).
+    packets.parse returns the FIRST send site whose grammar decodes the payload and lists
+    every one that did in rec.candidates: same-grammar sites cannot be told apart by their
+    bytes (livetest bug 12: the 2009 W-key pickup 0x43DA4E/0x1F was logged as
+    "GroundItemPickupRequest (pet auto-loot)" because the pet's 0x42EA76/0x1F comes first in
+    the spec). Such a record always gets a neutral name and every candidate key, so the log
+    never names a site it cannot know."""
+    if rec is None:
+        return ''
+    keys = tuple(rec.candidates or ()) or (rec.key,)
+    if len(keys) <= 1:
+        return f'{rec.name} ({rec.key})' if with_key else str(rec.name)
+    names = []
+    for key in keys:
+        try:
+            names.append(str(P.spec(key, 'C2S', client_build=client_build).get('name') or ''))
+        except KeyError:
+            names.append('')
+    return f'{_neutral_name(names, len(keys))} ({" | ".join(keys)})'
+
+
 def format_fields(rec):
     """Short one-line rendering of a decoded record for the log."""
     if rec is None:
@@ -508,7 +589,7 @@ def dispatch(server, routes, sock, session, opcode, payload, no_enc=False):
         log.warning(f'[C2S] 0x{opcode:02X} {len(payload)}B matches no C2S grammar: '
                     f'{payload.hex(" ")} ({err[:200]})')
     elif rec is not None and route is not None and not route.quiet:
-        log.debug(f'[C2S] 0x{opcode:02X} {rec.name} ({rec.key}) {format_fields(rec)}')
+        log.debug(f'[C2S] 0x{opcode:02X} {record_label(rec, _build_of(server))} {format_fields(rec)}')
 
     dead = getattr(server, 'DEAD_C2S_KEYS', {}).get(_build_of(server) or '2008', {})
     if rec is not None and rec.key in dead:
@@ -526,7 +607,10 @@ def dispatch(server, routes, sock, session, opcode, payload, no_enc=False):
     failed = False
     try:
         if route is None:
-            name = rec.name if rec is not None else ('(no C2S spec)' if err is None else '(malformed)')
+            if rec is not None:
+                name = record_label(rec, _build_of(server), with_key=False)
+            else:
+                name = '(no C2S spec)' if err is None else '(malformed)'
             log.info(f'[FIREWAY] Unhandled opcode 0x{opcode:02X} {name} {len(payload)}B: '
                      f'{payload.hex(" ") or "(empty)"}' + (f' {{{format_fields(rec)}}}' if rec else ''))
         elif route.handler is None:

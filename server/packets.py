@@ -62,15 +62,15 @@ wire form of a stored block for comparisons (trade.md "Item descriptor").
 import json
 import os
 import re
-import sqlite3
 import struct
 import threading
 from collections import defaultdict
 
-from wsproto import Grammar, GrammarError, _eval, ClientStateCondition
+from wsproto import Grammar, GrammarError, _eval, ClientStateCondition, RawChars  # noqa: F401 (RawChars: re-export)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SPEC_PATH = os.path.join(HERE, 'protocol_spec.json')
+# The KR content DB (read only through en_content.gamedef_item since ROADMAP_2009_ADDENDUM C3).
 GAMEDEF_PATH = os.path.join(HERE, 'gamedef.sqlite3')
 # config CLIENT_BUILD -> spec file (client-2009-login). '2008' is the default everywhere.
 DEFAULT_BUILD = '2008'
@@ -381,8 +381,8 @@ def _apply_field_rules(skey, g, rec, unsafe_counts):
         name = n[2]
         if name not in level:
             return
-        if n[0] == 'str' and n[1].isdigit():
-            level[name] = cut_text(level[name], int(n[1]) - 1)
+        if n[0] == 'str' and n[1].isdigit() and not isinstance(level[name], RawChars):
+            level[name] = cut_text(level[name], int(n[1]) - 1)       # RawChars: raw record bytes
         elif n[0] == 'scalar' and name in caps and not unsafe_counts:
             count = int(level[name])
             if not 0 <= count <= caps[name]:
@@ -503,10 +503,11 @@ def _apply_text_rules(skey, rec, unsafe, client_build=None):
 # ----------------------------------------------------------- assume table ---
 class Receiver:
     """What build() knows about the client that will read the packet."""
-    __slots__ = ('uid',)
+    __slots__ = ('uid', 'client_build')
 
-    def __init__(self, uid=None):
+    def __init__(self, uid=None, client_build=None):
         self.uid = None if uid is None else int(uid)
+        self.client_build = client_build
 
 
 def _field_is_receiver(field):
@@ -523,35 +524,65 @@ def _field_is_not_receiver(field):
     return resolve
 
 
-_CASH_T = {}
-_CASH_T_LOCK = threading.Lock()
+def _content_build():
+    """The build whose client files en_content has loaded (DEFAULT_BUILD without it)."""
+    try:
+        import en_content as EC                 # lazy: packets is imported before the content
+        return EC.client_build()
+    except Exception:                           # noqa: BLE001
+        return DEFAULT_BUILD
 
 
-def cash_duration_type(item_id):
-    """gamedef items.Cash_T (0 permanent, 1 counted, 2 period) or None if unknown.
-    The EN client's item def +0x1F6 is this column (premium_cash.md 1.7)."""
+def _client_cash_t(item_id, client_build):
+    """hii Cash_T of `client_build`'s own item table (en_content), or _NO_HII when that
+    table is not the one loaded (the other build's client files, or the dump fallback, which
+    has no cash columns)."""
+    try:
+        import en_content as EC                 # lazy: packets is imported before the content
+        if EC.client_build() != client_build:
+            return _NO_HII                      # the loaded hii is the other client's
+        catalog = EC.items()
+    except Exception:                           # noqa: BLE001 - no client files: use gamedef
+        return _NO_HII
+    if not str(getattr(catalog, 'source', '')).lower().endswith('.hii'):
+        return _NO_HII
+    d = catalog.get(item_id)
+    return None if d is None else int(d.cash_t)
+
+
+_NO_HII = object()
+
+
+def kr_item_idx(item_id, client_build=None):
+    """The KR gamedef idx of a `client_build` item id, or None for the 4 EN-only event items:
+    en_content.kr_item_idx, THE arch09-id-shift rule (ROADMAP_2009_ADDENDUM C3: above 4248 an
+    EN 2009 id is KR + 4)."""
+    import en_content as EC                     # lazy: packets is imported before the content
+    return EC.kr_item_idx(item_id, _build_name(client_build))
+
+
+def cash_duration_type(item_id, client_build=None):
+    """The client's item def +0x1F6 (0 permanent, 1 counted, 2 period) or None if unknown.
+    client_build: the build being encoded (None = the one en_content has loaded).
+    premium_cash-catalog (P8 stage 1): that client's own hii Cash_T first - the 0x72 expiry
+    block follows the CLIENT's def - then, for a server started without the client files,
+    gamedef items.Cash_T (premium_cash.md 1.7) of the KR row en_content.gamedef_item finds for
+    that build (a 2009 id above 4248 is KR + 4, ROADMAP_2009_ADDENDUM C3; 4249..4252: None)."""
     item_id = int(item_id)
-    with _CASH_T_LOCK:
-        if item_id in _CASH_T:
-            return _CASH_T[item_id]
-        value = None
-        if os.path.exists(GAMEDEF_PATH):
-            try:
-                con = sqlite3.connect(f'file:{GAMEDEF_PATH}?mode=ro', uri=True)
-                try:
-                    row = con.execute('SELECT Cash_T FROM items WHERE idx = ?', (item_id,)).fetchone()
-                finally:
-                    con.close()
-                value = None if row is None or row[0] is None else int(row[0])
-            except sqlite3.Error:
-                value = None
-        _CASH_T[item_id] = value
+    build = _content_build() if client_build is None else _build_name(client_build)
+    value = _client_cash_t(item_id, build)
+    if value is not _NO_HII:
         return value
+    import en_content as EC
+    row = EC.gamedef_item(item_id, build, columns='Cash_T')
+    if row is None or row.get('Cash_T') is None:
+        return None
+    return int(row['Cash_T'])
 
 
 def _cash_item_is_period(rec, rx):
-    """gamedef items.Cash_T(item_id) == 2 (period item; unknown id = required)"""
-    t = cash_duration_type(rec.get('item_id', 0))
+    """client def+0x1F6 (hii Cash_T) of item_id == 2 (period item; unknown id = required)"""
+    t = cash_duration_type(rec.get('item_id', 0), rx.client_build)
     return None if t is None else t == 2
 
 
@@ -857,7 +888,7 @@ def build(key, fields=None, assume=None, *, receiver_uid=None, allow_unassumed=F
             raise PacketError(f'{skey} ({_build_name(client_build)}): fields the grammar never reads: {bad} '
                               f'(another build\'s names? wsproto would send 0 for the real ones)')
     rec = dict(fields or {})
-    rx = Receiver(receiver_uid)
+    rx = Receiver(receiver_uid, _build_name(client_build))     # the build being encoded
     merged = _merged_assume(skey, rec, assume, rx, client_build)
     _derive(skey, rec)
     _apply_text_rules(skey, rec, unsafe_text, client_build)

@@ -59,6 +59,21 @@ JUMP_MIN_DY = 10.0
 # 0x41912C); the .hsi rects are not ported, so a box in front of the mob stands in for it.
 ATTACK_REACH_X = 60.0
 ATTACK_REACH_Y = 40.0
+# Hysteresis of that box (server-side only; the client re-tests its rects once per 990 ms
+# decision, the server every 0.3 s tick on positions it partly dead-reckons): a swing that
+# started at ATTACK_REACH_X keeps going until the target is more than this much further in
+# front. One 0.3 s tick of the commanded walk is 82.5 px/s x 0.3 s ~ 25 px, which is how far
+# the server's x of a mob that walked to the reach edge swings per tick (P7 live L2 "Related":
+# 36 walk/attack flips in 21 s); 30 px covers that plus sample noise.
+ATTACK_HOLD_X = 30.0
+# ... and it holds for about one swing only: the client re-decides every 990 ms (MONSTER_AGGRO_RE
+# T4), so a swing lasts one decision. The hold is spatial AND timed: a commanded attack does
+# not move the mob (only MOVING_MOTIONS are dead-reckoned) and nothing fixes its position
+# while nothing hits, so a hold without a time limit parked the mob swinging at air for good
+# once its target stood 1..30 px beyond reach (P7 live L2 review). After ATTACK_HOLD_SECS the
+# plain box decides again: the mob walks in and starts a new swing at reach - at the edge at
+# most one flip pair per ~1 s instead of one flip per 0.3 s tick.
+ATTACK_HOLD_SECS = 1.0
 # Hold of the 0x2A self-form node (0x459F04: 960 - min(+0xE3C, hi12), hi = 0).
 HOLD_2A_SECS = 0.96
 
@@ -156,7 +171,8 @@ Decision = namedtuple('Decision', 'direction motion')
 
 
 def decide(mob_xy, target_xy, ai_dir, flags, *, rng_bit=0, prev_motion=None,
-           reach_x=ATTACK_REACH_X, reach_y=ATTACK_REACH_Y, jump_dy=JUMP_MIN_DY):
+           reach_x=ATTACK_REACH_X, reach_y=ATTACK_REACH_Y, jump_dy=JUMP_MIN_DY, hold_x=0.0,
+           swing_secs=None, hold_secs=ATTACK_HOLD_SECS):
     """One pass of the client's chase branch 0x418EA0..0x41919A [0x4184BE..0x4187AB] for a
     mob at `mob_xy` chasing a target at `target_xy` (screen y grows downward). Returns the
     (direction, motion) it would write into +0x93F / +0x940:
@@ -171,6 +187,14 @@ def decide(mob_xy, target_xy, ai_dir, flags, *, rng_bit=0, prev_motion=None,
       else B; it overrides jump/drop when the target stands in the reach box in front of the
       mob (FUN_0041dc70's rect overlap). An attack already running keeps its kind, so the rng
       does not flip A/B every tick.
+    - hysteresis (server-side, `hold_x`, ATTACK_HOLD_X): an attack STARTS with the target
+      within `reach_x`, and one already running (`prev_motion` an attack, no turn this
+      decision - a turn aims a new swing) keeps going while the target stays within
+      `reach_x + hold_x` in front - but only for `hold_secs` (ATTACK_HOLD_SECS, about one
+      client decision) after that attack word was first commanded: `swing_secs` is its age
+      (None: unknown - no hold). Past that the plain box decides, so a target parked just
+      beyond reach gets walked after instead of swung at forever. The facing, jump, drop and
+      dash rules above are the client's, unchanged. hold_x 0 = the plain box every tick.
     - dash (AI[3], 0x419180): +0x940 = 6 when nothing else was decided.
     The counter-jump (AI[6], 0x418FDA) reads the target's swing state and is not modelled."""
     mx, my = float(mob_xy[0]), float(mob_xy[1])
@@ -199,7 +223,10 @@ def decide(mob_xy, target_xy, ai_dir, flags, *, rng_bit=0, prev_motion=None,
         else:
             use_a = flags.attack_a and (bool(rng_bit) or not flags.attack_b)
         ahead = (tx - mx) * (1 if direction == DIR_RIGHT else -1) >= 0
-        if ahead and adx <= reach_x and abs(ty - my) <= reach_y:
+        swinging = (prev_motion in ATTACK_MOTIONS and direction == ai_dir
+                    and swing_secs is not None and float(swing_secs) < float(hold_secs))
+        reach = reach_x + (max(0.0, float(hold_x)) if swinging else 0.0)
+        if ahead and adx <= reach and abs(ty - my) <= reach_y:
             motion = MOTION_ATTACK_A if use_a else MOTION_ATTACK_B
     if flags.skill and motion == MOTION_WALK:
         motion = MOTION_SKILL
@@ -221,6 +248,15 @@ def clear(mob):
     mob.ai_hit_t = 0.0
     mob.ai_hold_end = 0.0
     mob.ai_attack_t = 0.0
+    mob.ai_attack_a_t = 0.0         # P13 boss-b3: the last attack A / attack B commanded, so a
+    mob.ai_attack_b_t = 0.0         # swing event hurts only after its own kind (bosses.swing_age)
+    mob.ai_attack_start_t = 0.0
+    mob.ai_recover_until = 0.0      # desync fix M1: no hurt gate left over
+    mob.ai_stun_until = 0.0         # ... and no stun end for the dead reckoning
+    mob.ai_ice_until = 0.0
+    mob.ai_ice_chase_t = 0.0
+    mob.ai_stun_t = 0.0             # ... nor a stun whose rest the next word starts
+    mob.ai_stun_secs = 0.0
     mob.ai_owned = False
     mob.ai_takers = set()           # 0x9E / 0x29 / 0x1A cleared +0x971 on every client
     mob.aggro_x = 0.0

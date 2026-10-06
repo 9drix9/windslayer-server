@@ -47,6 +47,15 @@ class ClientStateCondition(Exception):
     """Raised internally when an expression needs client state, not packet fields."""
 
 
+class RawChars(bytes):
+    """A value for a fixed str[N] field that the client copies as raw RECORD bytes (one
+    GetDataFromPacket of the whole field into a struct), not as a C string: encode() writes
+    it verbatim - cut / NUL-padded to N, no NUL forced inside and nothing after a NUL dropped
+    - and packets.build leaves it alone too. The caller owns the terminator. Only for a
+    field whose tail bytes mean something: the 2009 0x6A / 0x6F pet_name (str[15] at record
+    +0x0D, whose name[13] is the record's origin byte +0x1A: cash.wire_record)."""
+
+
 # ------------------------------------------------------------------ parsing ---
 _TOKEN = re.compile(r'\s*(\{|\}|[^{}\n]+)')
 
@@ -354,7 +363,7 @@ class Grammar:
                 size = int(_eval(n[1], env, assume))
                 v = rec.get(n[2], b'' if k == 'bytes' else '')
                 raw = v.encode('latin-1') if isinstance(v, str) else bytes(v)
-                if k == 'str' and size > 0 and n[1].isdigit():
+                if k == 'str' and size > 0 and n[1].isdigit() and not isinstance(v, RawChars):
                     # Fixed char arrays (str[17] names, str[25] titles, str[93] memo
                     # text) are strcpy'd / drawn as C strings by the client, so keep a
                     # NUL inside them (roadmap S1-13). Length-prefixed str[len] text

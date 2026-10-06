@@ -74,10 +74,9 @@ MAINTENANCE_CLOSE_SECS = 180.0
 # it a 0x5D shows nothing and the client never exits; only a restart clears it). It is kept
 # as a spec builder for a future server-transfer flow and must never precede a kick.
 TRANSFER_LATCH_KEY = '0x17'
-# F10 sub 0x08 /go: the GM lands this far to the side of the target, GO_RISE_PX above the floor
-# there (a local 0x07 falls onto the floor under it, like a portal arrival).
+# F10 sub 0x08 /go: the GM lands this far to the side of the target, on the floor there (the
+# 30 px rise it used to add left the 2009 client's idle local player floating: livetest bug 5).
 GO_OFFSET_PX = 40.0
-GO_RISE_PX = 30.0
 
 
 def kick_reason(client_build=None):

@@ -270,7 +270,7 @@ class CharacterList(unittest.TestCase):
         return body, P.parse('0x02', body, direction='S2C')
 
     def test_fields_and_length(self):
-        account = an_account(uid=2, gender=1, manner=-7, cash_first_purchase=1, characters=[
+        account = an_account(uid=2, gender=1, manner=-7, first_purchase_notice=True, characters=[
             a_char(name='Nova', exp=0, look=list(LOOK)),
             a_char(name='Tier2', **{'class': 1, 'job2': 2, 'exp': 30_485}),
         ])

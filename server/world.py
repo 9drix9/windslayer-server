@@ -112,7 +112,17 @@ ON_MAP_CHANGE = 'on_map_change'                     # left the old map (no map, 
 ON_ENTER_WORLD = 'on_enter_world'                   # after the session's own 0x07
 ON_LEAVE_WORLD = 'on_leave_world'                   # off every map for good (disconnect, delete)
 ON_DISCONNECT = 'on_disconnect'                     # the connection is gone
-HOOK_NAMES = (BEFORE_SERVER_MAP_LOAD, ON_MAP_CHANGE, ON_ENTER_WORLD, ON_LEAVE_WORLD, ON_DISCONNECT)
+# The rename hook (ROADMAP_2009_ADDENDUM C4, premium_cash-rename): a character changed its
+# name. Fired by cashuse.CashUse.rename after the store renamed the record (its stable `cid`
+# stays, store.py) and the renamed client got its 0x73 / 0x74; fn(server, session, old=, new=,
+# cid=) tells the OTHER clients that show the old name: the messenger (friends' 0x0B, the
+# mentor's 0x7B) and the party frames now, P14 guild (0xB3 sub 22) and P12 blacklist later.
+# The stored references moved already (store.Store.rename_rewriters, which run under
+# db_lock and so touch stored data only: no group lock, no packet, no I/O). Everything live -
+# group locks (Group.lock -> store.lock order), session state, packets - belongs here: the
+# hook fires after db_lock is let go.
+ON_RENAME = 'on_rename'
+HOOK_NAMES = (BEFORE_SERVER_MAP_LOAD, ON_MAP_CHANGE, ON_ENTER_WORLD, ON_LEAVE_WORLD, ON_DISCONNECT, ON_RENAME)
 
 # The client's own UDP P2P port (C2S 0x2B p2p_udp_port): 42907 = WindSlayer_patched.exe,
 # 42908 = WindSlayer_p2.exe (2008 project_multiclient; 2009 patch_2009.py --p2). The only

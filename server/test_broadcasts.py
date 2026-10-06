@@ -12,7 +12,8 @@ on map 101 - for the 2008 and the 2009 build:
   rate limit drops only the lines past it;
 - lc-level-broadcast: a level-up from grant_exp -> S2C 0x22 {uid, level} to the clients
   that hold the player, never the owner (0x21 only); a level-down sends no 0x22 (it would
-  play the level-up effect) but the next record carries it; a late joiner's record has the
+  play the level-up effect) but re-sends the record to those clients (0x06 + a 0x05 with the
+  lower level, livetest bug 8) and the next record carries it; a late joiner's record has the
   level; a shadowed GM's level-up reaches no non-GM client;
 - item_inventory-observer-broadcast: equip 0x1D / unequip 0x1E / drop-worn 0x24 with the
   model's block to the clients that hold the player; a dropped item's 0x12 falls at their
@@ -276,15 +277,35 @@ class _Broadcasts:
         self.a.expect(0x21)
         self.b.expect_silence(0.2)
         # a level-down (only a GM !exp) sends B no 0x22: it plays the level-UP effect and heal
-        # on every receipt (spec 0x22 gates_and_hazards). The record is touched instead, so
-        # one built from now on (a late joiner's) carries level 1.
+        # on every receipt (spec 0x22 gates_and_hazards). livetest bug 8: B kept level 2, so
+        # B's copy of A is replaced instead - 0x06, then a 0x05 whose record says level 1 -
+        # and the record is touched, so one built from now on (a late joiner's) says 1 too.
         rev = self.a.session.get('presence_rev')
         self.server.grant_exp(self.a.session, -2)
         self.a.expect(0x21)
-        self.b.expect_silence(0.2)
+        self.a.expect_silence(0.1)                               # nothing else for the owner
+        gone, back = self.b.expect(0x06, 0x05)
+        self.assertEqual(self.b.s2c(gone), {'uid': 1})
+        row = self.b.s2c(back)
+        self.assertEqual((row['uid'], row['level']), (1, 1))
+        self.b.expect_silence(0.2)                               # and never a 0x22
+        self.assertIs(PR.spawned(self.b.session)[1], self.a.session)
         self.assertNotEqual(self.a.session.get('presence_rev'), rev)
         c, entry = self.enter_third()
         self.assertEqual(self.rows_of(c, entry)[1]['level'], 1)
+        # only the clients that hold him get the new record: B went to 102, Late stayed
+        self.portal(self.b, PORTAL_101_TO_102, 102)
+        self.a.recv_until_quiet()
+        c.recv_until_quiet()
+        self.server.grant_exp(self.a.session, progression.exp_for_level(3) - self.char()['exp'])
+        self.a.expect(0x21)
+        self.assertEqual(c.s2c(c.expect(0x22)), {'uid': 1, 'level': 3})
+        self.server.grant_exp(self.a.session, -1)
+        self.a.expect(0x21)
+        c.expect(0x06, 0x05)
+        self.b.expect_silence(0.2)
+        self.assertEqual(PR.reshow_to_holders(self.server, self.b.session), 0)    # nobody holds B
+        self.b.expect_silence(0.1)
 
     def test_the_admin_dev_command_levels_a_character_the_live_check_way(self):
         """`wsdev dev TestHero !level 3` (admin port {"dev", "cmd"}): the command runs as A,

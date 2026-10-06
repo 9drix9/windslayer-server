@@ -225,7 +225,8 @@ class Builders2009(ServerCase):
         self.assertEqual((grid[5]['equip_item_id'], [w['equip_item_attr'] for w in grid[5]['repeat[6]']]),
                          (179, [1, 2, 3, 0, 0, 9]))
         cash = [(r['cash_equip_item_id'], r['cash_equip_item_attr0']) for r in rec['repeat[10]']]
-        # slot 15 = the 2009 pet slot (always empty: no pets), 16 from the grid with its word 0,
+        # slot 15 = the 2009 pet slot (the worn pet record's item - none here: a 2008 slot-15
+        # item is no pet, records.pet_slot_2009), 16 from the grid with its word 0,
         # 17..24 from the 2008 +0x15C list the 2008 build sends them in
         self.assertEqual(cash, [(0, 0), (3000, 7), (3101, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0),
                                 (0, 0), (3108, 0)])
@@ -406,14 +407,22 @@ class Routes2009(ServerCase):
             route = routes.get(op)
             if route is None or route.handler is not None or op in W.GameServer.ROUTES:
                 continue                        # only the new log-only consumes
+            policy = registry.must_reply_table(B9).get(op)
             with self.subTest(key=key), self.assertLogs('WS', logging.INFO) as cm:
                 c.send_c2s(key)
-                c.expect_silence(0.1)
+                if policy is not None and op not in registry.MUST_REPLY:
+                    # a 2009-only request with a waiting box whose route is a log-only consume
+                    # still gets its 2009 refusal (the backstop). 0x4D / 0x4E / 0x80 / 0x81 have
+                    # handlers since the P8 carry-ins C5 / C8 (test_carryins.py)
+                    want = [P.opcode(k, client_build=B9) for k, _, _ in policy.refusal(self.server, c.session, None)]
+                    c.expect(*want, quiet=0.1)
+                else:
+                    c.expect_silence(0.1)
             self.assertFalse([line for line in cm.output if 'Unhandled opcode' in line or 'ERROR' in line
                               or 'matches no C2S grammar' in line], cm.output)
             self.assertTrue(any('consumed' in line for line in cm.output), cm.output)
             sent += 1
-        self.assertGreater(sent, 25)
+        self.assertGreater(sent, 20)                # 23 since 0x4D / 0x4E / 0x80 / 0x81 got handlers
 
     def test_dead_room_host_sites_are_dropped_before_the_handlers(self):
         c, _ = self.enter()

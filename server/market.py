@@ -66,13 +66,25 @@ shop_open 0 - a record with the flag set would make the following 0x85 a no-op.
 
 Locks (world.py "Locks"; the trade.py ladder): world_lock -> combat_lock (the seller's; a
 buy takes both players' in (uid, id) order, like the trade commit) -> Market.lock ->
-store.lock -> send_lock. Nothing here takes a presence lock while holding Market.lock (the
-0x85 / 0x86 broadcasts run after it is released), and sign_fields takes no lock at all (a
-dict lookup and attribute reads), because presence calls it under a receiver's lock.
+store.lock -> send_lock. open() also asks Trades.busy() under Market.lock (Market.lock ->
+Trades.lock, never the reverse: Trades.selling reads the stall table lock-free), after
+store.lock is released. Nothing here takes a presence lock while holding Market.lock (the
+0x85 / 0x86 broadcasts run after it is released), and sign_fields takes no ladder lock -
+only World's leaf lock, in world.map_of - because presence calls it under a receiver's lock.
 Packets to the seller about its own stall (0x82 / 0x83 / 0x84, a sale's 0x89) are queued
 under Market.lock, so a 0x89 can never overtake the 0x82 {1} that opened selling mode.
 
-Audit: stall_log.jsonl next to accounts.json, one JSON line per open / close / sale.
+No trade while selling (P7 stage 2 review fix 3; the open race, P7 review): open() registers
+the stall FIRST and only then asks Trades.busy(); Trades.accept checks selling() and creates
+the trade inside one Trades.lock section. Whichever runs second sees the other: an accept
+after the registration refuses, a trade that opened before the busy() check makes open()
+release the stall again (escrow back) and answer 0x82 {2}. The stall was in the table while
+busy() waited for Trades.lock, so a peer's presence record built then may have carried its
+0x85 sign: the rollback sends the 0x86 too, after the locks (to a holder that never got the
+0x85 it is a no-op, as in gone()).
+
+Audit: stall_log.jsonl next to accounts.json, one JSON line per open / close / sale; a
+rolled-back open writes its 'open' line (rolled_back: true) before its 'close'.
 """
 import json
 import logging
@@ -140,11 +152,13 @@ class Market:
 
     def sign_fields(self, subject):
         """S2C 0x85 fields for `subject`'s open stall on the map it is on, else None.
-        LOCK-FREE: presence.spawn / show_peers_to call it under a receiver's presence lock,
-        under which only send_lock may be taken. A dict get and attribute reads are atomic;
-        open() registers a stall before its 0x85 broadcast and every close unregisters it
-        before its 0x86, so a record decided under that lock either sees the stall and
-        follows it with 0x85 or does not and gets the broadcast (market docstring)."""
+        No ladder lock: presence.spawn / show_peers_to call it under a receiver's presence
+        lock, under which only send_lock may be taken. It takes only World's private leaf
+        lock (world.map_of), which any thread may take under any lock (world.py "Locks");
+        the rest is a dict get and attribute reads, which are atomic. open() registers a
+        stall before its 0x85 broadcast and every close unregisters it before its 0x86, so a
+        record decided under that lock either sees the stall and follows it with 0x85 or
+        does not and gets the broadcast (market docstring)."""
         st = self.stalls.get((subject or {}).get('uid'))
         if st is None or st.session is not subject or self.server.world.map_of(subject) != st.map_code:
             return None
@@ -182,8 +196,9 @@ class Market:
         this uid still has (a lost 0x83, a repeated Start) gives its escrow back first (F9
         3.7); rows a full bag kept at an earlier close come back next, and while some still do
         not fit -> 2 (module docstring "Kept rows"). Commit: the items leave the bag into
-        char['stall_escrow'], persisted, then 0x82 {1} to the seller and 0x85 to every peer
-        holding it."""
+        char['stall_escrow'], persisted, the stall is registered, and - no trade opened
+        meanwhile (module docstring "No trade while selling"; else released again -> 2, 0x86
+        to the map) - 0x82 {1} to the seller and 0x85 to every peer holding it."""
         session['stall_client_selling'] = True
         server, me = self.server, name_of(session)
         rec, err = registry.decode(0x5E, bytes(payload), server.client_build)
@@ -197,7 +212,7 @@ class Market:
             return self._refuse_open(session, *why)
         uid, map_code = uid_of(session), server.world.map_of(session)
         store = server.store
-        replaced = st = None
+        replaced = rolled_back = st = None
         result, kept, left = ST.OPEN_TAMPERED, [], []
         with server._combat_lock(session):
             with self.lock:
@@ -234,9 +249,26 @@ class Market:
                 if why is None:
                     st = Stall(session, uid, me, map_code, title, list(entries), char, opened=time.monotonic())
                     self.stalls[uid] = st
-                    self._push(session, '0x82', {'result': ST.OPEN_OK})
+                    # Registered first, THEN the trade check (module docstring "No trade
+                    # while selling"): a trade another thread's accept opened since
+                    # _open_gate is seen here, and any later accept sees the stall.
+                    trades = getattr(server, 'trade', None)
+                    if trades is not None and trades.busy(session):
+                        # The entries just left this bag, so they all fit back (_release).
+                        # The stall was visible (sign_fields) while busy() waited, so a peer's
+                        # presence record may carry its 0x85: sign it off below like `replaced`.
+                        # Its 'open' audit line keeps every 'close' paired with one.
+                        self.audit('open', st, rolled_back=True)
+                        self._release(st, 'a trade opened while the stall was opening')
+                        rolled_back, st, result = st, None, ST.OPEN_FAILED
+                        why = 'trading (a trade opened while the stall was opening; escrow back)'
+                    else:
+                        self._push(session, '0x82', {'result': ST.OPEN_OK})
         if replaced is not None:
             self._sign_off(replaced)
+        if rolled_back is not None:
+            # A 0x86 to a holder that never got the 0x85 is a no-op (gone() relies on it too).
+            self._sign_off(rolled_back)
         if kept:
             back = sum(e.qty for e in kept) - sum(e.qty for e in left)
             log.info(f'[STALL] {me!r}: kept stall items ({", ".join(e.describe() for e in kept)}): '
@@ -529,11 +561,14 @@ class Market:
 
     def _save(self, reason):
         """One atomic accounts.json write now (caller holds store.lock); a failed write keeps
-        the store dirty for the next flush - the model is already committed."""
+        the store dirty for the next flush - the model is already committed. Only the short
+        replace backoff (QUICK_REPLACE_DELAYS) and as short a wait for another writer:
+        every handler waits on store.lock meanwhile, and the store's own retry takes a
+        failure or a busy file from there (review of livetest bug 7)."""
         store = self.server.store
         store.dirty = True
         try:
-            store.save_now()
+            store.save_now(delays=storemod.QUICK_REPLACE_DELAYS, wait=storemod.QUICK_REPLACE_BUDGET_SECS)
         except Exception:                               # noqa: BLE001 - the next flush retries
             log.exception(f'[STALL] {reason}: the accounts.json save failed; kept dirty')
             store.mark_dirty(reason)
@@ -581,14 +616,30 @@ class Market:
     def recover(self, account):
         """Login (F14.5): a character whose record still holds a stall escrow and has no open
         stall (the server stopped while it was selling, or a full bag kept part of it) gets
-        it back into the bag - as much as fits; the rest waits for the next Start or login."""
+        it back into the bag - as much as fits; the rest waits for the next Start or login.
+
+        A stall of this account that is still registered to a session the login just
+        replaced (2009 relogin: world.superseded) or kicked (duplicate login) is released
+        first: its escrow goes back into the bag here instead of whenever the old
+        connection's cleanup reaches Market.gone, so the new session's 0x03 always lists the
+        items. Its 0x86 goes out after Market.lock is released. The old cleanup then finds
+        no stall (stall_of is identity-checked) and changes nothing."""
         back = []
+        chars = [c for c in list((account or {}).get('characters') or []) if isinstance(c, dict)]
+        mine = {id(c) for c in chars}
+        stale = []
         with self.lock:
+            world = self.server.world
+            for st in list(self.stalls.values()):
+                if id(st.char) in mine and (st.session.get('kicked') or world.superseded(st.session)):
+                    left = self._release(st, 'its session was replaced by a new login')
+                    stale.append((st, left))
+            released = {id(st.char) for st, _ in stale}
             live = {id(st.char) for st in self.stalls.values()}
             store = self.server.store
             with store.lock:
-                for char in list((account or {}).get('characters') or []):
-                    if not isinstance(char, dict) or not char.get('stall_escrow') or id(char) in live:
+                for char in chars:
+                    if not char.get('stall_escrow') or id(char) in live or id(char) in released:
                         continue
                     entries = ST.escrow_entries(char)
                     left = [e for e in ST.return_to_bag(invmod.Inventory(char), entries) if e.qty > 0]
@@ -596,6 +647,11 @@ class Market:
                     back.append((char.get('name'), entries, left))
                 if back:
                     self._save('stall escrow recovered at login')
+        for st, left in stale:
+            sent = self._sign_off(st)
+            log.info(f'[STALL] {st.name!r}: stall of a replaced session released at login: escrow back '
+                     f'in the bag' + (f' except {", ".join(e.describe() for e in left)}' if left else '')
+                     + f'; 0x86 to {sent} peer(s)')
         for name, entries, left in back:
             log.warning(f'[STALL] {name!r}: a stall escrow left in the record '
                         f'({", ".join(e.describe() for e in entries)}) is back in the bag'
