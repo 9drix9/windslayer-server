@@ -49,7 +49,12 @@ a village transfer repeats nothing. A relogin is a new connection, so:
     character and event (server memory, `ledger`): a relog, a crash-reconnect and the 2009
     channel change (a disconnect plus a relogin, evb E3/E4) repeat nothing. P12's
     arch09-session-continuity owns real channel-hop detection; this window is the cheap
-    stand-in the P13 exit criterion 2 needs ("a relog repeats none of them").
+    stand-in the P13 exit criterion 2 needs ("a relog repeats none of them");
+  - a 2009 channel HOP (continuity.Hop in session['channel_hop'], P12) repeats none of the
+    effects - not even the gift attempt - whatever this window says (_skip_entries). The skip
+    covers the events active at the hop's first 0x63 only, once per connection: an event
+    that starts afterwards - even while that connection is in a later map load - is
+    delivered at its next 0x63 like on any connection (HOP_SKIPPED_KEY).
 An event that starts while players are in the world (schedule or `!event start`) reaches
 them on the next tick (TICK_SECS), but only after their latest map load's C2S 0x63
 (session['events_ready']: cleared by a before_server_map_load hook), so no event packet ever
@@ -191,6 +196,9 @@ GRANTS_KEY = 'events_grants'
 # at the loads - only the latest load's 0x63 re-arms events_ready (after_resync).
 LOADS_KEY = 'events_loads'
 RESYNCS_KEY = 'events_resyncs'
+# session: a channel hop's entry skip ran (after_resync): it runs once per connection - the
+# events active at the hop - and a later 0x63 delivers what started since (P12 review).
+HOP_SKIPPED_KEY = 'events_hop_skipped'
 
 ID_RE = re.compile(r'^[A-Za-z0-9_.-]{1,32}$')
 EVENT_KEYS = frozenset({'id', 'enabled', 'start', 'end', 'exp_mult', 'announce', 'popup_event_news',
@@ -747,19 +755,58 @@ class Events:
         docstring "Once per login"): an earlier load's, handled after the next load's hook
         ran, leaves the effects off until that load's own. Returns the number of effects
         delivered."""
+        skipped = []
+        hop = self._hop_of(session)
+        hop_entry = False
         with self.server._combat_lock(session):
             loads = int(session.get(LOADS_KEY) or 0)
             seen = session[RESYNCS_KEY] = min(loads, int(session.get(RESYNCS_KEY) or 0) + 1)
             latest = seen >= loads
             if latest:
+                if hop is not None and not session.get(HOP_SKIPPED_KEY):
+                    # Marked BEFORE events_ready goes up, under the same lock: the tick never
+                    # sees a ready hop session without its marks. ONCE per connection (P12
+                    # review): only the events active at the hop's own entry were delivered
+                    # on the old connection; one that starts later - even while this
+                    # connection is in a map load - is new to it and runs below.
+                    skipped = self._skip_entries(session, self.active())
+                    session[HOP_SKIPPED_KEY] = hop_entry = True
                 session['events_ready'] = True
         if not latest:
             log.info(f'[EVENT] {session.get("char_name")!r}: the C2S 0x63 of an earlier map load ({seen} of '
                      f'{loads}); the events wait for the latest one\'s')
             return 0
+        if hop_entry:
+            if skipped:
+                log.info(f'[EVENT] {session.get("char_name")!r}: channel hop {hop.from_channel} -> {hop.to_channel}'
+                         f' - no entry effects for {skipped} (once per login)')
+            return 0
         if not session.get('in_world') or self.server._session_char(session) is None:
             return 0
         return self._run_entries(session, self.active(), 'world entry')
+
+    @staticmethod
+    def _hop_of(session):
+        """P12 arch09-session-continuity: the continuity.Hop when this connection continues the
+        login of its character (a 2009 channel change), else None."""
+        hop = session.get('channel_hop')
+        if hop is None or str(hop.char_name).lower() != str(session.get('char_name') or '').lower():
+            return None
+        return hop
+
+    def _skip_entries(self, session, events):
+        """A channel hop repeats none of the once-per-login effects - entry announcement,
+        login gift, ev-e5 quest push, Event News popup (evb E3/E4, ADDENDUM X11) - whatever
+        EVENT_RELOGIN_QUIET_SECS says: the events active now count as done for this
+        connection, so the tick does not deliver them either; an unclaimed gift (a full bag at
+        the real login) waits for the next real login. The caller holds the combat lock.
+        Returns the event ids marked."""
+        with self.lock:
+            done = session.setdefault('events_entry', set())
+            fresh = [ev.id for ev in events if ev.id not in done]
+            done.update(fresh)
+            session.setdefault('events_gift_tried', set()).update(fresh)
+        return fresh
 
     def _run_entries(self, session, events, why):
         """The once-per-connection effects of `events` for one session, in the resync order:

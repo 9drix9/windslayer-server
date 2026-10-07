@@ -28,6 +28,15 @@ Rules
   value (GameServer.client_build), never a module global, so one process can run both.
 - Later items add their keys here (lc-version-config: notice, maintenance, user counts;
   lc-create: CREATE_REPLY_0x02; pvp: BF_MATCH_SIZE, room limits).
+- CHANNELS (P12 ch-1 / ch-5, channels.py): one entry per channel slot of the S2C 0x01 table,
+  {"no" 1..10 ascending, "name", "ip" (default PUBLIC_IP), "port" (2009 only, default
+  GAME_PORT), "open" (default true; false = "(inspection)"), "max_users" (default MAX_ONLINE)}.
+  The server binds one game listener per distinct port in ONE process, and the listener a
+  connection arrived on is its channel (blch R1: C2S 0x01 carries no channel number). The
+  shipped default stays ONE channel on GAME_PORT. The dev setup of the P12 exit criteria
+  (channels 1-3 on 7022-7024, channel 4 configured but closed) is config_channels_dev.json:
+  `set WS_CONFIG=config_channels_dev.json` before starting the server. Multi-channel stays
+  dev-only until P18 (ch-2): every channel still shares ONE world.
 """
 import json
 import logging
@@ -44,8 +53,13 @@ ENV_PATH = 'WS_CONFIG'
 # The port the EN client hard-codes for the game connection (VA 0x44080E).
 CLIENT_GAME_PORT = 7022
 # S2C 0x01 channel table limits (login_character.md F1 step 2): <= 10 slots, channel_no
-# strictly ascending. Every channel needs its own IP because the game port is fixed.
+# strictly ascending. A 2008 channel needs its own IP because the game port is fixed; a 2009
+# channel its own (ip, port) (blch B.1, R1). A channel number is its slot (the parser stores
+# entry `channel_no` at slot channel_no - 1, and slot_count > 10 overwrites the next server
+# record: spec 0x01 gates), so it must be 1..10 too.
 MAX_CHANNELS = 10
+# The keys a CHANNELS entry may carry (P12 ch-1 / ch-5; '_'-prefixed keys are comments).
+CHANNEL_KEYS = ('no', 'name', 'ip', 'port', 'open', 'max_users')
 # S2C 0x01 notice: the launcher copies it into a fixed buffer (login_character.md F1).
 NOTICE_MAX_BYTES = 1000
 # S2C 0x01 version_code (login_character.md 1.2 step 1): 3 = OK, >= 0xEA61 = notice +
@@ -70,6 +84,13 @@ MOB_COMMAND_HOLD_SECS = 0.96
 # MILEAGE_BONUS_PCT / MILEAGE_EVENT_PCT: a percent of the price, at most 10x (a larger value
 # is a typo; mileage itself is clamped to the u32-safe cash.CASH_MAX anyway).
 MILEAGE_PCT_MAX = 1000
+# P12 bl-3 (blacklist.FILTER_MODES; spelled out here so config.py imports no server module).
+BLACKLIST_FILTERS = ('client', 'silent', 'refuse')
+# GUILD_POINTS_BASE (P14 guild-g5): the exp the guild points are a percentage of.
+GUILD_POINTS_BASES = ('pre', 'post')
+# CLIENT_ITEM_IDS (P15, en_content.CLIENT_ITEM_IDS; spelled out here so config.py imports no
+# server module): the item ids the installed 2009 exe hard-codes - 'en' (cp-2) or 'kr' (stock).
+CLIENT_ITEM_IDS = ('en', 'kr')
 # Keys that existed once and are ignored now, with why (a config.json that still sets one
 # gets this line instead of "unknown key"). DEV_FREE_NOTES: P6 let a Note (1894 / 3320) be
 # sent without owning one; since P8 a Note is a cash inventory record whose serial the 0x77
@@ -113,7 +134,26 @@ DEFAULTS = {
     # --- identity of this server ---
     'PUBLIC_IP': '127.0.0.1',         # S2C 0x01 game_server_ip: the address clients connect to
     'WORLD_NAME': 'WindSlayer',
-    'CHANNELS': [{'no': 1, 'name': 'Channel 1'}],   # optional per-channel "ip" (default PUBLIC_IP)
+    # optional per-channel "ip" (default PUBLIC_IP), "port" (2009, default GAME_PORT), "open",
+    # "max_users" (module docstring; channels.py). One channel = the live-proven setup.
+    'CHANNELS': [{'no': 1, 'name': 'Channel 1'}],
+    # --- channels (P12 ch-5 / ch-4, channels.py / continuity.py) ---
+    # S2C 0x01 user_count = online on the channel x LOAD_SCALE (u16-clamped): the label is
+    # user_count / 200 -> Idle (green) / Normal (yellow) / Busy (red) (blch B.2, 0x4421DE), so a
+    # small server can show Normal / Busy. Display only: nothing else in the client reads it.
+    'LOAD_SCALE': 1.0,
+    # arch09-session-continuity: a 2009 relogin with the account's live session key within
+    # this many seconds of the old socket closing is a channel HOP (Change Channel / Change
+    # Avatar: a disconnect plus a relogin, blch B.5 R2-R3). The hop repeats no once-per-login
+    # effect (welcome, event announcement / gift / popup, friend login and logout lines, the
+    # P14 guild lines). 0 = no hop detection (every relogin is a login).
+    'CHANNEL_HOP_SECS': 30.0,
+    # A hop's logout (friend 0x60 offline, P14 guild sub 21) is held back for CHANNEL_HOP_SECS
+    # only when the closing client fetched the version list from the same IP just before
+    # (Change Channel / Avatar reconnect to 7011 BEFORE they close the game socket:
+    # FUN_00448730 case 0x1AE steps 2-3); a plain quit then still logs out at once. false =
+    # hold back every 2009 logout (the friends see "logged out" CHANNEL_HOP_SECS late).
+    'CHANNEL_HOP_VERSION_HINT': True,
     # --- version server / login gate (lc-version-config, lc-login-errors) ---
     # S2C 0x01 notice text (<= NOTICE_MAX_BYTES). The launcher prints its first line under
     # the announcement panel; in maintenance it is the whole message box.
@@ -466,6 +506,57 @@ DEFAULTS = {
     # Percent of a mentee's kill exp its online mentor gets as S2C 0x7F "(Menti[name])"
     # (the retail rate is unknown: UI 2672/8970 only say "bonus EXP"). 0 = no share.
     'MENTOR_EXP_SHARE_PCT': 10,
+    # --- the 2009 blacklist (P12 bl-3, blacklist.py; ignored by a 2008 server) ---
+    # The server-side mirror of the client's blacklist filter (blacklist_channels.md F-B4):
+    # 'client' = nothing server-side (the receiving client drops the packet; a blocked trade
+    # request then holds the target's one prompt and other requesters get "busy" for 30 s);
+    # 'silent' = not delivered and no pending state, the requester sees what a dropping client
+    # gives it (a whisper its own "<To: X>" echo); 'refuse' = the consumers' refusals ("X is
+    # rejecting whispers.", trade 0x47 4, party 0x15, friend 0x0C 4, chat 0x0F 4, mentor 0x66).
+    'BLACKLIST_FILTER': 'silent',
+    # --- the 2009 guilds (P14 guild-g1, guild.py; ignored by a 2008 server) ---
+    # The guild store, a JSON next to ACCOUNTS_FILE (same directory); '' = memory only (a restart
+    # forgets every guild). Members are keyed by the character's stable cid; the first load that
+    # repairs an existing file writes the one-time <file>.bak-pre-p12+p14.
+    'GUILDS_FILE': 'guilds.json',
+    # Guild points the S2C 0x21 tail shows for an earned exp grant (kill, party share, quest), in
+    # percent of its PRE-multiplier exp (ROADMAP_2009_ADDENDUM X9). INFERRED: the one retail sample
+    # is 41 exp -> 20 GP (guild.md F12, a 2010 client). The client only prints the number; the
+    # points are credited to the guild at logout (guild-g5).
+    'GUILD_POINTS_PCT': 50,
+    # Which exp the guild points are a percentage of (ROADMAP_2009_ADDENDUM X9, open policy):
+    # 'pre' (default) = the grant BEFORE the cash EXP item and the event multiplier (a P13 EXP x2
+    # event does not double the guild points), 'post' = the exp the 0x21 actually carries.
+    'GUILD_POINTS_BASE': 'pre',
+    # Guild chat (C2S 0x8D -> S2C 0xB5, guild-g5): a line within this many seconds of the
+    # sender's last relayed one is dropped - the client's own anti-spam is 700 ms ("Do not
+    # Spam.", FUN_004462e0 case 0x8D), so a real client never hits it; a forged one is held to it.
+    'GUILD_CHAT_MIN_SECS': 0.7,
+    # Retail rules the EN 2009 client has the texts for but whose enforcement is unknown
+    # (guild.md F4 / F6, open question 9). 0 = off (the default: no such rule). Retail text says
+    # 24 ("You can leave the guild after 1 day.", sub 6 result 0xC) and 7 ("You can delete your
+    # guild after 7 days from it's starting day.", sub 8 result 0xB).
+    'GUILD_LEAVE_MIN_HOURS': 0.0,
+    'GUILD_DISBAND_MIN_DAYS': 0.0,
+    # Who may change grades (C2S 0x92; the client's grade editor has NO master check, guild.md
+    # 1.4 / F7, open question 3): the lowest grade allowed - 5 (default) = the master only, 4 =
+    # Guardians too, 3 = Vanguards too. Below the master a changer may only move members below
+    # his own grade to grades below his own grade.
+    'GUILD_GRADE_MIN_GRADE': 5,
+    # Master change (C2S 0x91): the conditions of sub 11 result 8 ("This member can't be the
+    # guild master.") are unknown (guild.md F8). False (default) = any other member; True = the
+    # member must also meet the create prerequisites (Lv 30 and a 2nd class).
+    'GUILD_MASTER_NEEDS_CREATE_RULES': False,
+    # --- the 2009 Guild Plaza boards (P15 guild-g6, boards.py; ignored by a 2008 server) ---
+    # The live boards, a JSON next to ACCOUNTS_FILE ('' = memory only: a restart forgets them),
+    # keyed (channel, map, guild) (arch09-channel-key); expired rows are dropped at the load.
+    'GUILD_BOARDS_FILE': 'guild_boards.json',
+    # How long a placed board stays (C2S 0x88; then S2C 0xB8 to 9702). INFERRED from the KR item
+    # texts (guild F13 step 3: "usable for 1 hour" / "24 hours"): the Guild Billboard (EN 4284,
+    # Moiba's 1,000-gold sale) and the Premium Guild Billboard (EN 4283, a cash item). GM
+    # `!guild board ttl <guild> <secs>` shortens one live board for a test.
+    'GUILD_BOARD_MINUTES': 60.0,
+    'GUILD_PREMIUM_BOARD_MINUTES': 1440.0,
     # --- reputation (P7 stage 3: social_friend-compliment, reputation.py) ---
     # Manner points one compliment (popup Praise, C2S 0x6D) gives the target's account. The
     # client prints whatever S2C 0x96 carries ("<A> added N of your manner points.").
@@ -489,11 +580,54 @@ DEFAULTS = {
     # bonus mileage." (spec 0x98). 0 = no event running. GM `!mileage event <pct|off>`
     # overrides it until a restart; `!mileage <n> [name|all]` credits an event bonus directly.
     'MILEAGE_EVENT_PCT': 0,
-    # Sell and gift the 2009 pets (hii Type 6) in the Spark Shop (ROADMAP_2009_ADDENDUM C1,
-    # mall.py "Pets"). The pet records, their box -> character binding and the 0x6A / 0x6F /
-    # 0x6C encodings are in place either way; off until P15 answers C2S 0x82 PetEquip, since a
-    # bought pet could otherwise only sit in the bag.
-    'MALL_PETS': False,
+    # Sell and gift the 2009 pets (hii Type 6, Cash_Cls 17) and pet gear (Type 1 Kind 15 / 16,
+    # Cash_Cls 18) in the Spark Shop (P15 pet-s7, mall.py "Pets"; ROADMAP_2009_ADDENDUM C1).
+    # Pet food and the pet name ticket (Cash_Cls 19, Type 5) are ordinary cash-bag items and
+    # sold either way. A bought pet is a level-0 box record, bound to the character by the 0x42
+    # move to the bag (pet F13 [I]) and never moved back; it can then be worn (C2S 0x82) and
+    # dressed (C2S 0x0F). On since pet-s7; false refuses those buys / gifts (0x6C {0} / 0x71
+    # {0}) - records already in a box still move. A 2008 hii has no such rows.
+    'MALL_PETS': True,
+    # --- the 2009 client patch set and pets (P15; pets.py; ignored by a 2008 server) ---
+    # Which item ids the installed 2009 EXE hard-codes at its 17 id sites (CLIENT_PATCH_SET_RE
+    # 8.2: the Pet Bell gate, the four pet foods, the pet name ticket, the two guild
+    # billboards): 'en' = the cp-2 patched exe (patch_2009.py default; gate G-CP approved and
+    # installed on the live clients 2026-10-06): EN 4283..4289 and 4322; 'kr' = the stock Build
+    # 14 exe, which compares against the KR ids, 4 lower (4279..4285, 4318). The item ROWS are
+    # the EN hii's in both (arch09-id-shift: the hii is authoritative); only these constants -
+    # and what the client sends or reads through them - follow the switch: the guild board item
+    # of S2C 0xBA / 0xBB / 0xB3 sub 185 (en 4284 / 4283, kr 4280 / 4279: guild.board_items) and
+    # the pet-food path (en: C2S 0x85; kr: the generic cash dialog's C2S 0x48, pets.py C6).
+    'CLIENT_ITEM_IDS': 'en',
+    # cp-3, the Pet Bell source (pet.md B4: no EN hni merchant lists it): extra items the server
+    # sells at a merchant on top of its hni `item:` stock, {"<hni npc idx>": [EN item ids]}.
+    # The client builds the shop window from the hni (2009 FUN_0046F6E0, record+0x288), so a
+    # row only SHOWS once a data patch lists it there; the server accepts and prices it (hii Buy) the
+    # same as any stocked row. Default: the Pet Bell (4285, 500 gold) at every potion grocer of
+    # the 2009 towns (Misty 8, Eve 48, Hikaru 50, Margaret 86, Sophia 107, Celine 138,
+    # Catherine 152, Evan 172). Only non-cash ids the loaded hii has count: pet food (Cash 1,
+    # Buy 0) is a Spark Shop item and a GM grant (`!pet food`), never an NPC sale. An id the
+    # NPC's hni row already lists is skipped (GameServer._shop_extras): with the cp-3d data patch
+    # installed the hni grocer rows end with 4285 themselves, so either hni sells it once.
+    'SHOP_EXTRA_ITEMS': {str(npc): [4285] for npc in (8, 48, 50, 86, 107, 138, 152, 172)},
+    # The pet tick (P15 pet-s3, pets.Pets.tick; pet.md 2.7 / F4). Every rate here is [I]: the
+    # EN client's own hunger / EXP code (FUN_00425d90) is host-only and dead (scene+0xF40 is
+    # only ever written 0), so the server owns gauge, EXP and level and pushes them with S2C
+    # 0xAE / 0xAF / 0xAD - these defaults are that dead host code's rates. Only time the owner
+    # spends in world on a field map counts (not a room / arena map, not the mall, not dead).
+    #   awake: every PET_HUNGER_SECS the gauge falls PET_HUNGER_STEP and the EXP rises
+    #          PET_EXP_STEP (cap 30600); below 2 % the pet falls asleep (gauge 0, S2C 0xAD 0);
+    #   asleep: every PET_SLEEP_REGEN_SECS the gauge rises PET_SLEEP_REGEN_STEP (cap 100).
+    'PET_HUNGER_SECS': 60.0,
+    'PET_HUNGER_STEP': 1,
+    'PET_EXP_STEP': 1,
+    'PET_SLEEP_REGEN_SECS': 300.0,
+    'PET_SLEEP_REGEN_STEP': 1,
+    # Feeding (P15 pet-s4, C2S 0x85 / the stock exe's 0x48) sets the gauge to at least this
+    # [I: the hii food text "stamina will be recovered up to 90%"].
+    'PET_FOOD_GAUGE': 90,
+    # The server-side throttle of C2S 0x86 pet emotes [I: the client's own anti-spam is 700 ms].
+    'PET_EMOTE_MIN_SECS': 0.7,
     # --- using cash items (P8 stage 3: premium_cash-megaphone, cashuse.py) ---
     # How a megaphone's count goes down on its owner's client (the original packet is unknown,
     # premium_cash Q7): '0x72' = the client's own consume-by-serial through S2C 0x72 {uid, item,
@@ -679,6 +813,45 @@ def _validate(values):
     for key in ('MILEAGE_BONUS_PCT', 'MILEAGE_EVENT_PCT'):
         if not 0 <= values[key] <= MILEAGE_PCT_MAX:
             raise ConfigError(f'{key}: {values[key]} must be 0..{MILEAGE_PCT_MAX} (percent of a cash price)')
+    if values['BLACKLIST_FILTER'] not in BLACKLIST_FILTERS:
+        raise ConfigError(f'BLACKLIST_FILTER: {values["BLACKLIST_FILTER"]!r} is not one of {BLACKLIST_FILTERS}')
+    if values['CLIENT_ITEM_IDS'] not in CLIENT_ITEM_IDS:
+        raise ConfigError(f'CLIENT_ITEM_IDS: {values["CLIENT_ITEM_IDS"]!r} is not one of {CLIENT_ITEM_IDS} '
+                          f'(en = the cp-2 patched 2009 exe, kr = the stock exe)')
+    for key, ids in values['SHOP_EXTRA_ITEMS'].items():
+        # the key must be the canonical decimal: the lookup is str(int(npc_id)), so "08" would be
+        # accepted and then never apply
+        if not str(key).isdigit() or str(int(key)) != str(key) or not 1 <= int(key) <= 0xFFFF \
+                or not isinstance(ids, list) or not all(_is_int(v) and 1 <= v <= 0xFFFF for v in ids):
+            raise ConfigError(f'SHOP_EXTRA_ITEMS: {key!r}: {ids!r} must be "<hni npc idx>" (no leading '
+                              f'zero): [EN item ids]')
+    # P15 pet-s3 / pet-s4 rates (pets.py; NaN / inf would stop or flood the tick)
+    for key in ('PET_HUNGER_SECS', 'PET_SLEEP_REGEN_SECS'):
+        if not math.isfinite(values[key]) or not 1.0 <= values[key] <= 86400.0:
+            raise ConfigError(f'{key}: {values[key]} must be 1 .. 86400 seconds')
+    for key, hi in (('PET_HUNGER_STEP', 100), ('PET_SLEEP_REGEN_STEP', 100), ('PET_EXP_STEP', 30600)):
+        if not 0 <= values[key] <= hi:
+            raise ConfigError(f'{key}: {values[key]} must be 0..{hi} (0 = off)')
+    if not 1 <= values['PET_FOOD_GAUGE'] <= 100:
+        raise ConfigError(f'PET_FOOD_GAUGE: {values["PET_FOOD_GAUGE"]} must be a gauge percent 1..100')
+    if not math.isfinite(values['PET_EMOTE_MIN_SECS']) or not 0 <= values['PET_EMOTE_MIN_SECS'] <= 60:
+        raise ConfigError(f'PET_EMOTE_MIN_SECS: {values["PET_EMOTE_MIN_SECS"]} must be 0 (off) .. 60 seconds')
+    if not 0 <= values['GUILD_POINTS_PCT'] <= 1000:
+        raise ConfigError(f'GUILD_POINTS_PCT: {values["GUILD_POINTS_PCT"]} must be 0..1000 (percent of the '
+                          f'pre-multiplier exp; 0 = the 0x21 tail always says +0)')
+    if values['GUILD_POINTS_BASE'] not in GUILD_POINTS_BASES:
+        raise ConfigError(f'GUILD_POINTS_BASE: {values["GUILD_POINTS_BASE"]!r} is not one of {GUILD_POINTS_BASES}')
+    for key, hi in (('GUILD_CHAT_MIN_SECS', 60.0), ('GUILD_LEAVE_MIN_HOURS', 24.0 * 365),
+                    ('GUILD_DISBAND_MIN_DAYS', 365.0)):
+        if not math.isfinite(values[key]) or not 0 <= values[key] <= hi:
+            raise ConfigError(f'{key}: {values[key]} must be 0 (off) .. {hi:g}')
+    if not 1 <= values['GUILD_GRADE_MIN_GRADE'] <= 5:
+        raise ConfigError(f'GUILD_GRADE_MIN_GRADE: {values["GUILD_GRADE_MIN_GRADE"]} must be a grade 1..5 '
+                          f'(5 = the master only)')
+    for key in ('GUILD_BOARD_MINUTES', 'GUILD_PREMIUM_BOARD_MINUTES'):
+        # NaN would never expire a board, inf would keep it for ever (P15 guild-g6)
+        if not math.isfinite(values[key]) or not 0.1 <= values[key] <= 43200.0:
+            raise ConfigError(f'{key}: {values[key]} must be 0.1 .. 43200 minutes (30 days)')
     if values['MEGAPHONE_CONSUME_PACKET'].lower() not in ('0x72', '0x6f'):
         raise ConfigError(f'MEGAPHONE_CONSUME_PACKET: {values["MEGAPHONE_CONSUME_PACKET"]!r} is not "0x72" or "0x6F"')
     if not 0 <= values['PARTY_EXP_BONUS_PCT'] <= 100:
@@ -779,23 +952,62 @@ def _validate(values):
         ip_host_order(values['PUBLIC_IP'])
     except (OSError, ValueError):
         raise ConfigError(f'PUBLIC_IP: {values["PUBLIC_IP"]!r} is not a dotted IPv4 address') from None
+    _validate_channels(values)
+    if not math.isfinite(values['LOAD_SCALE']) or not 0 <= values['LOAD_SCALE'] <= 10000:
+        raise ConfigError(f'LOAD_SCALE: {values["LOAD_SCALE"]} must be 0..10000 (displayed users = online x scale)')
+    if not math.isfinite(values['CHANNEL_HOP_SECS']) or not 0 <= values['CHANNEL_HOP_SECS'] <= 3600:
+        raise ConfigError(f'CHANNEL_HOP_SECS: {values["CHANNEL_HOP_SECS"]} must be 0 (off) .. 3600')
+
+
+def _is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _validate_channels(values):
+    """CHANNELS (module docstring). A 2009 channel is the (ip, port) its S2C 0x01 entry names,
+    so two channels on the same pair would be one listener the client calls two numbers - the
+    0x03 channel_id, "In channel N." and the minimap "(channel-N)" would disagree (blch R6):
+    refused. The 2008 client always connects to 7022 (VA 0x44080E): a shared IP is only
+    warned about (one listener, the first channel wins), a "port" is ignored."""
     chans = values['CHANNELS']
     if not 1 <= len(chans) <= MAX_CHANNELS:
         raise ConfigError(f'CHANNELS: 1..{MAX_CHANNELS} entries (S2C 0x01 slot table), got {len(chans)}')
+    build_2009 = values['CLIENT_BUILD'] == BUILD_2009
     last = 0
     for c in chans:
-        if not isinstance(c, dict) or not isinstance(c.get('no'), int) or isinstance(c.get('no'), bool):
+        if not isinstance(c, dict) or not _is_int(c.get('no')):
             raise ConfigError(f'CHANNELS: every entry needs an int "no", got {c!r}')
-        if not last < c['no'] <= 0xFF:
-            raise ConfigError(f'CHANNELS: channel numbers must be ascending u8 values, got {c["no"]} after {last}')
+        if not last < c['no'] <= MAX_CHANNELS:
+            raise ConfigError(f'CHANNELS: channel numbers must be ascending slots 1..{MAX_CHANNELS} '
+                              f'(S2C 0x01 channel_no <= channel_slot_count <= 10), got {c["no"]} after {last}')
         last = c['no']
+        extra = [k for k in c if k not in CHANNEL_KEYS and not str(k).startswith('_')]
+        if extra:
+            log.warning(f'[CONFIG] CHANNELS: channel {c["no"]}: unknown key(s) {extra} ignored')
         if c.get('ip') is not None:
             try:
                 ip_host_order(c['ip'])
             except (OSError, ValueError, TypeError):
                 raise ConfigError(f'CHANNELS: channel {c["no"]} ip {c["ip"]!r} is not a dotted IPv4 address') from None
+        if c.get('port') is not None:
+            if not _is_int(c['port']) or not 1 <= c['port'] <= 0xFFFF:
+                raise ConfigError(f'CHANNELS: channel {c["no"]} port {c["port"]!r} is not a TCP port')
+            if not build_2009 and c['port'] != values['GAME_PORT']:
+                log.warning(f'[CONFIG] CHANNELS: channel {c["no"]} port {c["port"]} ignored: the 2008 client '
+                            f'connects to {CLIENT_GAME_PORT} (VA 0x44080E), every 2008 channel is on GAME_PORT')
+        if c.get('open') is not None and not isinstance(c['open'], bool):
+            raise ConfigError(f'CHANNELS: channel {c["no"]} "open" must be true or false, got {c["open"]!r}')
+        if c.get('max_users') is not None and (not _is_int(c['max_users']) or c['max_users'] < 1):
+            raise ConfigError(f'CHANNELS: channel {c["no"]} max_users {c["max_users"]!r} must be an int >= 1')
     ips = [c.get('ip') or values['PUBLIC_IP'] for c in chans]
-    if len(set(ips)) != len(ips):
+    if build_2009:
+        pairs = [(ip, c.get('port') or values['GAME_PORT']) for ip, c in zip(ips, chans)]
+        dup = sorted({p for p in pairs if pairs.count(p) > 1})
+        if dup:
+            raise ConfigError(f'CHANNELS: {", ".join(f"{ip}:{port}" for ip, port in dup)} named by more than one '
+                              f'channel - a 2009 channel is its (ip, port) (S2C 0x01 entry; blch R1/R6): give each '
+                              f'one its own "port"')
+    elif len(set(ips)) != len(ips):
         # Not fatal, but the client always connects to port 7022 (VA 0x44080E), so two
         # channels on one IP are the same server twice (login_character.md F1 step 4).
         log.warning(f'[CONFIG] CHANNELS: {ips} - channels sharing an IP are the same game '

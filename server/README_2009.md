@@ -1,6 +1,6 @@
 # EN 2009 client (Outspark v1.04 "Build 14")
 
-> Developer notes. For setup, start with the top-level README.md; the patcher is in `client_2009/`.
+> Developer notes. For setup, start with the top-level README.md; the patchers are in `client_2009/`.
 
 The server speaks either the EN 2008 client (`WindSlayer2Game`, the default) or the EN 2009
 client (`Desktop\WindSlayer2009`). One config key picks the build; the dev tools
@@ -147,13 +147,68 @@ Run these with `CLIENT_BUILD "2009"` in `config.json` and the patched exe built.
     - `!cash box 3381` in the world: the client pops "Congratulation. You received an event
       item.." (S2C 0x6C, origin 3, T-E6) and the next `!mall` lists the Megaphone in the box;
       the Wind Cash / Mileage labels do not change.
-    - `!cash item 4294`: Picky lands in the equipment tab as a bound pet record (limit_type 3).
-      With the stock hii no sprite can appear (pet B1). Double-clicking it sends C2S 0x82, which
-      stays unanswered until P15 (no lock).
+    - `!cash item 4294` (or `!pet give picky`): Picky lands in the equipment tab as a bound pet
+      record (limit_type 3). Double-clicking it sends C2S 0x82, answered since P15 stage 1 with
+      S2C 0xAB (see 13). With the stock hii no sprite can appear (pet B1).
     - Using Pet Food 20 (`!cash item 4289`) from the bag on the unpatched exe opens the generic
       "use" dialog; its OK must close again with the food kept (no pet worn).
     - If the Spark Shop's sell-to-player window (0x4B8) can be opened: its OK must end in "Your
       target user does not exist in the server." and its Cancel must close the window.
+13. P15 stage 1 (pets.py; offline in `test_pets.py`). `CLIENT_ITEM_IDS` (default `"en"`) says
+    which item ids the installed exe hard-codes: `"en"` for the cp-2 patched exe (the G-CP patch
+    set, installed on the live clients), `"kr"` for the stock exe. `SHOP_EXTRA_ITEMS` adds the
+    Pet Bell to the potion grocers (cp-3; a grocer row shows only once the hni lists it).
+    - `!pet give picky wear` on A: the pet follows A; B sees it (S2C 0xAB 21 B). `!pet seen`
+      lists which clients hold A's pet info. Unequip from the Equipment window: the pet goes
+      back to the bag on both clients.
+    - `!pet set awake 0|1`, `!pet set level 5`, `!pet set name Tweety` (the owner sees the new
+      name at once, the others at A's next appearance), `!pet bell 3`, `!pet food 20`.
+14. P15 stage 2 (pets.py; offline in `test_petlife.py`). The pet tick runs over the owner's
+    field time (config `PET_*`, all [I]: -1 % gauge and +1 EXP a minute awake, +1 % per 5
+    minutes asleep, asleep below 2 %); `!pet tick [n]` runs n steps now.
+    - `/Pet smile` plays on both clients (S2C 0xB2); `/Pet warning` needs pet level 5.
+    - `!pet food 20`, `!pet set gauge 11`, `!pet tick`: the bubble, the auto-feed (C2S 0x85),
+      the gauge back at 90 % and one Pet Food fewer (S2C 0xB1).
+    - Without food the pet falls asleep on both clients; `!pet bell 1`, then the bell below
+      10 %: "Pet has to have at least over 10% HP to wake up."; `!pet tick 10`, the bell again:
+      the bell is used up and the pet is back on both clients.
+    - `!pet gear 4290` (Red Hood; `!give 4290` too) and double-click it: the hood on Picky on
+      both clients. Ulie's gear (`!pet gear 4297`) on Picky: "This is not the equipment of
+      your pet.".
+15. P15 stage 3 (pets.py, mall.py; offline in `test_petextras.py`). The pet name ticket (4322,
+    `!pet ticket`) renames the worn, awake pet: C2S 0x4D -> S2C 0xC0 to the owner ("Pet name has
+    been changed.", one ticket used) and 0xB0 to the clients that show the pet; asleep, a wrong
+    pet or a bad name gets S2C 0x73 {0} (the box closes, nothing used). `MALL_PETS` (default
+    `true`) sells and gifts the pets and pet gear in the Spark Shop next to the food and the
+    tickets.
+    - Wear Picky, `!pet ticket`, use the ticket, type "Tweety": the wait box, then "Pet name has
+      been changed."; the name tag reads Tweety on both clients. Put the pet to sleep and try
+      again: the box closes with the name-in-use text and nothing crashes.
+    - `!cash 30000`, `!mall`, buy Picky, Red Hood, Pet Food 20 and a ticket, move them to the bag
+      (the pet asks "...it can't be moved to other characters."), leave: Picky is in the
+      equipment tab at level 1, ready to wear; it cannot be moved back to the box.
+16. P15 stage 4, guild-g6 (boards.py; offline in `test_guild_boards.py`). The Guild Plaza boards
+    on map 9702. On the cp-2 exe (`CLIENT_ITEM_IDS "en"`) Moiba's "Purchase advertisement" sells
+    the Guild Billboard (EN 4284, 1,000 gold; the dialog says 0 Gold because the EN hni lists the
+    premium board 4283 there - the server sells the 1-hour board and says so in a chat line).
+    The client sends this purchase with npc_id 0 (its dialog close zeroes the id first): the
+    server takes a board id bought on 9702 as Moiba's. A guild master uses it in
+    9702: board dialog, text, OK (C2S 0x88) -> the board appears for everyone on 9702 (S2C 0xBA)
+    and the billboard leaves the bag. Boards last `GUILD_BOARD_MINUTES` (60; the cash Premium
+    Guild Billboard 4283 `GUILD_PREMIUM_BOARD_MINUTES`, 1440), are kept in `GUILD_BOARDS_FILE`
+    (`guild_boards.json`) across restarts and come back to anyone entering 9702 (S2C 0xBB). On
+    the stock exe (`"kr"`) only `!guild board place` makes boards.
+    - A (master of a guild, `!guild gmtag off`), on 9702: Moiba -> Purchase advertisement -> 1:
+      "you've received Guild Billboard" and "Guild Billboard x1 bought for 1,000 gold.", gold
+      -1,000 (log: `[BUY] Guild Billboard item=4284 x1 from guild NPC 181 Moiba ... (wire npc_id
+      0: 0x474327)`). Double-click it, type "Join us", OK: the
+      board stands at A's spot on A and B; one billboard gone from A's bag.
+    - B (no guild) clicks the board -> the join dialog -> OK: "You have applied for this
+      guild." (C2S 0x89 u16); A's notification icon appears.
+    - `!guild board ttl <guild> 10`: after ~10 s the board disappears on both (S2C 0xB8).
+    - Place one, B portals out of 9702 and back: the board is there again (0xBB). Restart the
+      server, both return to 9702: still there.
+    - `!guild board place <guild> <text>` / `premium` / `list` / `expire <guild>|all`.
 
 ## 5. Offline tests
 
@@ -171,4 +226,10 @@ Run these with `CLIENT_BUILD "2009"` in `config.json` and the patched exe built.
 The login and world flows of the 2009 build are in `test_client2009.py` and
 `test_world2009.py`; the P8 carry-ins C1-C8 (pet records, the worn pet in every 0x6F, the
 KR -> EN item id shift, the rename hook, the 0x73 builder, the pet items through C2S 0x48, the
-origin-3 box grant, the 2009-only cash opcodes) in `test_carryins.py`.
+origin-3 box grant, the 2009-only cash opcodes) in `test_carryins.py`; the P15 pets (records'
+pet block, the per-client pet info mirror, wear / take off, sleep / wake, the id switch, the Pet
+Bell at the grocers) in `test_pets.py`; the pet tick, emotes, feeding, the Pet Bell, pet gear and
+the pet auto-loot in `test_petlife.py`; the pet rename, the owner-rename hook and the pet tabs of
+the Spark Shop in `test_petextras.py`; the Guild Plaza boards (Moiba's sale, placement, the
+0x15 echo, the 0xBB on entering 9702, expiry, disband, restart, the stock-exe ids) in
+`test_guild_boards.py`.

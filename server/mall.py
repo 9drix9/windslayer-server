@@ -73,9 +73,10 @@ The client moved the records itself (box window 0x1FC -> the bag, the bag -> the
 reports what differs from the 0x6A snapshot, and repeats the same serials if it closes again
 without a fresh 0x6A, so every move is idempotent (a serial already on its side is a no-op,
 an unknown one is logged). A box record comes onto the character only when it is a cash-bag
-item (cash.GRANT_TYPES, Type 5) with a free cash-tab slot (CASH_TAB_SLOTS) and the owned list
-has room (cash.OWNED_MAX); else it stays in the box (the exit replay's 0x6F puts the client
-back in step). Then S2C 0x6B (the wish list; it does NOT restore the world - live followup
+item (cash.GRANT_TYPES, Type 5) with a free cash-tab slot (CASH_TAB_SLOTS), or a 2009 pet / pet
+gear record with a free EQUIPMENT-tab slot ("Pets" below), and the owned list has room
+(cash.OWNED_MAX); else it stays in the box (the exit replay's 0x6F puts the client back in
+step). Then S2C 0x6B (the wish list; it does NOT restore the world - live followup
 premium_cash#18: the client stays on the black preview scene) and the full map-load replay
 to the remembered point (GameServer._map_transfer: 0x08, 0x03, 0x07, 0x28, 0x44, 0x6F, the
 monsters). The replay runs from a `finally`: a move that raises must not strand the client.
@@ -95,9 +96,9 @@ Three send sites share the grammar: single buy (0x1F8), cart (0x1F7, <= CART_MAX
 slot-extension picker (0x1FF). The price is the SERVER's (cash.CashDef.price = the client's
 own hii Cash_P, the value its dialogs compare the balance against). Refused as a whole with
 0x6C {0} ("You failed to buy the item.") when an item is not sold (hii Cash 1 with a price,
-or a slot extension), is not a cash-bag item (costumes Type 1 and 2009 pets Type 6 are not
-modelled yet: premium_cash Q14 / ROADMAP_2009_ADDENDUM C1 - a box record of one could never
-come onto the character), carries a 2009 paid option (spec_2009 0x43 `option` 1..4, +1000
+or a slot extension), is not a cash-bag item (cash costumes, Type 1, are not modelled yet:
+premium_cash Q14 - a box record of one could never come onto the character; the 2009 pets and
+pet gear are, since P15 pet-s7: "Pets" below), carries a 2009 paid option (spec_2009 0x43 `option` 1..4, +1000
 each; what it grants is not traced), would take a tab past its client cap, or the box past
 BOX_MAX; with 0x6C {0x0E} ("You are short of cash.") when the balance does not cover the
 total. Mileage pays when the box is ticked and mileage covers the total; a 2009 client that
@@ -176,16 +177,35 @@ other server-driven map load (GM `!warp` / `/go`, warp stones, revive) is refuse
 inside (GameServer._map_transfer): a 0x08 into the preview scene would put the client back
 in the world with the mall still open server-side, so he would reappear without an exit.
 
-Pets (2009; ROADMAP_2009_ADDENDUM C1, pet F13)
----------------------------------------------
-A pet (hii Type 6) is a pet record (cash.py, limit_type 3 with the pet fields), in the box as
-in the owned list: 0x6A / 0x6F carry it in the grammar's pet branch, 0x6C / 0x79 as the raw
-28 bytes (cash.record_bytes). A box pet is level 0 (unbound, asleep); the 0x42 box -> character
-move binds it (cash.bind_pet: level 1, awake, gauge 100) when the EQUIPMENT tab - where the
-client files a bagged pet - has a free slot; a bound pet never goes back to the box (the client
-itself refuses a Type-6 box record whose level != 0, pet 2.3 step 2). Selling / gifting pets is
-off by default (config MALL_PETS): until P15 answers C2S 0x82 PetEquip a bought pet could only
-sit in the bag. The model, the encoding and the moves are the same either way.
+Pets (2009; P15 pet-s7, pet.md 2.1 / 2.3 / F13; ROADMAP_2009_ADDENDUM C1)
+-------------------------------------------------------------------------
+The Spark Shop's pet tabs are the hii rows with Cash_Cls 17 (the four pets 4294 / 4299 / 4304 /
+4309, 4900 each; the Pet Bell 4285 is Cash 0: an NPC item, cp-3), 18 (the sixteen pet gear rows
+4290..4308, Type 1 Kind 15 / 16) and 19 (Pet Food 4286..4289, the name ticket 4322, Type 5) -
+EN ids in both exe variants: the mall window lists the hii rows itself and C2S 0x43 carries the
+row id, so no exe constant (cp-2, CLIENT_ITEM_IDS) is involved. The prices are the hii Cash_P.
+Food and tickets are ordinary counted cash-bag records (Type 5) and always sold; pets and pet
+gear are sold and gifted while config MALL_PETS is on (the default since pet-s7: a bought pet
+can be worn, C2S 0x82, and its gear put on, C2S 0x0F).
+  - A pet is a pet record (cash.py, limit_type 3 with the pet fields), in the box as in the
+    owned list: 0x6A / 0x6F carry it in the grammar's pet branch, 0x6C / 0x79 as the raw 28
+    bytes (cash.record_bytes). A BOX pet is level 0 (unbound, asleep, gauge 100): the client
+    moves a Type-6 box record to the bag only at level 0 ("You can't move your current pet to
+    the bag.", FUN_00465890 @0x466537), after its own "...it can't be moved to other
+    characters." confirm.
+  - The 0x42 box -> character move BINDS it (F13: cash.bind_pet - level 1, EXP 0, gauge 100,
+    awake, named after its species) when the EQUIPMENT tab, where the client files a bagged
+    pet (0x6F FUN_00464e00 case 6), has a free slot; the exit replay's 0x6F hands the client the
+    bound record.
+  - A bound pet never goes back to the box (F13 [I]: the box is account-wide, so a bound pet
+    there could reach another character, and the client would refuse to bag it again at level
+    >= 1): a pet serial in the 0x42 to-box list is left on the character and logged; the exit
+    replay's 0x6F re-files it in the bag. A worn record (a pet or its gear) never moves.
+  - Pet gear is a permanent (Cash_T 0, kind 0) record that the 0x6F also files in the
+    EQUIPMENT tab (case 1; inventory.pet_slots counts it): it moves box -> character with a
+    free slot there and, not worn, back like any record.
+With MALL_PETS off a pet / pet gear buy or gift is refused (0x6C {0} / 0x71 {0}); records
+already in a box still move.
 
 Event records (C7; events_bosses A5 G2 / E6)
 -------------------------------------------
@@ -198,8 +218,9 @@ list (2009 0x46B60C..; 2008 0x462273). An owner offline, at character select or 
 is not told: the next 0x6A lists the record. In the mall the 0x6A snapshot rule of the gift
 push holds (one or the other, never both: 0x6C appends with no duplicate check). Not for a
 slot extension (applied, never stored), an item that is no cash item, one the 0x42 move never
-takes out of the box (a cash costume or pet gear, a Cash 0 item: an event record nobody could
-use), or a full box. A counted quantity above STACK_MAX becomes several records, as grant().
+takes out of the box (a cash costume, a Cash 0 item: an event record nobody could use), or a
+full box. A pet is granted as a level-0 box pet and pet gear as a permanent record (both move
+into the equipment tab, "Pets"). A counted quantity above STACK_MAX becomes several records, as grant().
 
 The 2009-only cash opcodes (C8; ROADMAP_2009_ADDENDUM 1 item 4; the premium_cash group owns
 them). The cash-item-for-gold sale is not offered; each request gets a safe answer:
@@ -298,18 +319,26 @@ def cart_items(rec):
     return [(_int(r.get('item_code')), _int(r.get('option'))) for r in rows]
 
 
+def is_pet_item(d):
+    """A 2009 pet (hii Type 6) or pet gear row (Type 1 cash, Kind 15 / 16: inventory.is_pet_gear)
+    - the Cash_Cls 17 / 18 tabs behind config MALL_PETS (module docstring "Pets"). False for
+    every 2008 row."""
+    return d is not None and (d.is_pet or invmod.is_pet_gear(d.id))
+
+
 def sale_refusal(d, item_id, option=0, pets=False):
     """Why `item_id` cannot be bought or gifted in the mall, or None. A slot extension is
-    sold (its own picker), never gifted: the caller checks that. A pet only with `pets`
-    (config MALL_PETS; module docstring "Pets")."""
+    sold (its own picker), never gifted: the caller checks that. A pet or pet gear only with
+    `pets` (config MALL_PETS; module docstring "Pets")."""
     if d is None:
         return f'item {item_id} is not in the client item table'
     if not d.sold:
         return f'{d.name or d.id} ({d.id}) is not sold (hii Cash {d.cash}, price {d.price})'
-    if d.is_pet and not pets:
-        return (f'{d.name or d.id} ({d.id}) is a pet: pet sales are off (config MALL_PETS) until P15 '
-                f'answers C2S 0x82 PetEquip')
-    if d.id not in CASH.SLOT_EXT and d.type not in CASH.GRANT_TYPES and not d.is_pet:
+    pet_item = is_pet_item(d)
+    if pet_item and not pets:
+        return (f'{d.name or d.id} ({d.id}) is a {"pet" if d.is_pet else "pet gear item"}: pet sales are off '
+                f'(config MALL_PETS)')
+    if d.id not in CASH.SLOT_EXT and d.type not in CASH.GRANT_TYPES and not pet_item:
         return f'{d.name or d.id} ({d.id}) is a cash costume (Type {d.type}: premium_cash Q14), not modelled yet'
     if option:
         return f'paid option {option} on {d.id} (spec_2009 0x43 `option`: not modelled)'
@@ -371,11 +400,19 @@ def gift_pages(gifts, client_build=None):
 
 def enter_fields(acc, client_build=None):
     """S2C 0x6A fields for the account's balances and box (at most BOX_MAX rows). 2009 carries
-    a pet record in the grammar's pet branch (cash.wire_record); 2008 has no pets."""
+    a pet record in the grammar's pet branch (cash.wire_record); 2008 has no pets and no other
+    2009-only item either (cash.foreign_to_client: the pet gear)."""
     cash, mileage = CASH.balance(acc)
     box = CASH.ensure_account(acc)['cash_box'][:BOX_MAX]
     if str(client_build or '2008') != BUILD_2009:
         box = [r for r in box if not CASH.is_pet_record(r)]
+        # a store shared with a 2009 server: its Spark Shop puts pet gear (and any other
+        # 2009-only item) into the box, which a 2008 client has no hii row for
+        foreign = [CASH.foreign_to_client(r.get('item_id'), client_build) for r in box]
+        if any(foreign):
+            log.warning(f'[MALL] {sum(foreign)} box record(s) of item(s) the 2008 client lacks '
+                        f'{[r.get("item_id") for r, f in zip(box, foreign) if f]} left out of the 2008 0x6A')
+            box = [r for r, f in zip(box, foreign) if not f]
     rows = [CASH.wire_record(r) for r in box]
     if str(client_build or '2008') == BUILD_2009:
         return {'mode': CASH.MODE_SINGLE, 'box_count': len(rows), 'cash_balance': cash,
@@ -473,8 +510,8 @@ class Mall:
 
     @property
     def pets(self):
-        """config MALL_PETS: pets are sold / gifted (module docstring "Pets")."""
-        return bool(self.server.config.get('MALL_PETS', False))
+        """config MALL_PETS: pets and pet gear are sold / gifted (module docstring "Pets")."""
+        return bool(self.server.config.get('MALL_PETS', True))
 
     def _new_record(self, d, origin):
         """A new box record of `d` (a pet: an unbound box pet, cash.new_record)."""
@@ -677,7 +714,9 @@ class Mall:
                 if rec.get('equipped') or len(box) >= BOX_MAX or CASH.is_pet_record(rec):
                     # a worn record, a full box, or a pet: a pet on a character is bound and
                     # never goes back to the box (pet F13 [I]; the client refuses to bag a
-                    # Type-6 box record whose level != 0)
+                    # Type-6 box record whose level != 0); the exit replay's 0x6F re-bags it
+                    if CASH.is_pet_record(rec) and not rec.get('equipped'):
+                        out['bound'].append(serial)
                     out['kept'].append(serial)
                     continue
                 items.remove(rec)
@@ -693,15 +732,19 @@ class Mall:
                     out['same' if any(r['serial'] == serial for r in items) else 'unknown'].append(serial)
                     continue
                 d = CASH.cash_def(rec['item_id'])
-                if d is not None and d.is_pet and CASH.is_pet_record(rec):
-                    # pet F13: bound on the way (level 1, awake, gauge 100); it takes a slot of
-                    # the EQUIPMENT tab, where the client files a bagged pet
+                pet = d is not None and d.is_pet and CASH.is_pet_record(rec)
+                if pet or (d is not None and invmod.is_pet_gear(d.id) and not CASH.is_pet_record(rec)):
+                    # P15 pet-s7: a pet - bound on the way (F13: level 1, awake, gauge 100) - or
+                    # pet gear takes a slot of the EQUIPMENT tab, where the client files both
+                    # (0x6F FUN_00464e00 cases 6 / 1; inventory.pet_slots counts the record just
+                    # appended, so a second one in the same 0x42 sees the slot taken)
                     if owned >= CASH.OWNED_MAX or invmod.Inventory(char).free_slots('equip') < 1:
                         out['kept'].append(serial)
                         continue
                     box.remove(rec)
                     moved = {**rec, 'equipped': False}
-                    CASH.bind_pet(moved)
+                    if pet and CASH.bind_pet(moved):
+                        out['bound_now'].append(serial)
                     items.append(moved)
                     owned += 1
                     out['char'].append(serial)
@@ -723,7 +766,11 @@ class Mall:
         hx = lambda serials: [f'{s:#x}' for s in serials]  # noqa: E731
         log.info(f'[MALL] {session.get("char_name")!r} 0x42 moves: to the box {hx(out["box"])}, to the '
                  f'character {hx(out["char"])}, already there {hx(out["same"])}, left {hx(out["kept"])}, '
-                 f'unknown {hx(out["unknown"])} (deleted flag {deleted})')
+                 f'unknown {hx(out["unknown"])} (deleted flag {deleted})'
+                 + (f'; pets bound to the character (F13) {hx(out["bound_now"])}' if out['bound_now'] else ''))
+        if out['bound']:
+            log.info(f'[MALL] {session.get("char_name")!r}: bound pet(s) {hx(out["bound"])} stay on the character '
+                     f'(a bound pet never goes back to the box, pet F13); the exit 0x6F re-bags them')
         if out['kept'] or out['unknown']:
             log.warning(f'[MALL] {session.get("char_name")!r}: serials {hx(out["kept"] + out["unknown"])} '
                         f'not moved (no room, not a cash-bag item, worn, or unknown); the exit 0x6F resyncs')
@@ -981,8 +1028,8 @@ class Mall:
         entry = {'sender': sender, 'message': P.cut_text(message, CASH.GIFT_MESSAGE_MAX).decode('cp949', 'replace'),
                  'item_id': item_id}
         why = gift_display_refusal(entry)
-        if why is None and (not d.is_cash or (d.is_pet and not self.pets) or d.id in CASH.SLOT_EXT):
-            why = f'{d.name or d.id} ({d.id}) cannot be a box record' + (' (config MALL_PETS)' if d.is_pet else '')
+        if why is None and (not d.is_cash or (is_pet_item(d) and not self.pets) or d.id in CASH.SLOT_EXT):
+            why = f'{d.name or d.id} ({d.id}) cannot be a box record' + (' (config MALL_PETS)' if is_pet_item(d) else '')
         if why is not None:
             raise CASH.CashError(f'not a gift: {why}')
         with self.store.lock:
@@ -1067,7 +1114,7 @@ class Mall:
                     if not g.get('serial'):
                         # a P5 `!gift` entry: its box record comes with its notification
                         d = CASH.cash_def(g['item_id'])
-                        if not d.is_cash or (d.is_pet and not self.pets) or len(box) >= BOX_MAX:
+                        if not d.is_cash or (is_pet_item(d) and not self.pets) or len(box) >= BOX_MAX:
                             log.warning(f'[MALL] gift {d.name or d.id} for {session.get("username")!r} kept '
                                         f'pending: no box record possible (box {len(box)}/{BOX_MAX})')
                             continue
@@ -1133,10 +1180,11 @@ class Mall:
         one (the bag shows only the quantity's low byte), each told by its own 0x6C.
         Returns (the first record, told).
         Only what the 0x42 move can take out of the box (apply_moves) is granted: a cash-bag
-        item (CASH.GRANT_TYPES with Cash != 0) or a pet. Raises CASH.CashError for an unknown
-        account, an id the client has not got, no cash item, a slot extension, a cash costume
-        or pet gear (Type 1 / 7: apply_moves keeps it in the box for good, an event record
-        nobody could ever use), a Cash 0 item (kept the same way), or a full box."""
+        item (CASH.GRANT_TYPES with Cash != 0), a pet (a level-0 box pet) or pet gear (P15
+        pet-s7). Raises CASH.CashError for an unknown account, an id the client has not got, no
+        cash item, a slot extension, a cash costume (Type 1 / 7: apply_moves keeps it in the box
+        for good, an event record nobody could ever use), a Cash 0 item (kept the same way), or
+        a full box."""
         acc = self.store.account(username)
         if acc is None:
             raise CASH.CashError(f'no account {username!r}')
@@ -1147,10 +1195,10 @@ class Mall:
             raise CASH.CashError(f'{d.name or d.id} ({d.id}) is not a cash item (Type {d.type}, Cash {d.cash})')
         if d.id in CASH.SLOT_EXT:
             raise CASH.CashError(f'{d.name or d.id} ({d.id}) is a slot extension: the 0x6C applies it, it is never stored')
-        if not d.is_pet and d.type not in CASH.GRANT_TYPES:
-            raise CASH.CashError(f'{d.name or d.id} ({d.id}) is a cash costume / pet gear (Type {d.type}): the 0x42 '
+        if not is_pet_item(d) and d.type not in CASH.GRANT_TYPES:
+            raise CASH.CashError(f'{d.name or d.id} ({d.id}) is a cash costume (Type {d.type}): the 0x42 '
                                  f'move never takes it out of the box (not modelled yet), so nobody could use it')
-        if not d.is_pet and not d.cash:
+        if not is_pet_item(d) and not d.cash:
             raise CASH.CashError(f'{d.name or d.id} ({d.id}) is a Cash 0 item: the 0x42 move keeps it in the box '
                                  f'(CashInventory.grant refuses it too)')
         qty = d.quantity(count)

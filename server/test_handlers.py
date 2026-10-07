@@ -2389,10 +2389,11 @@ class AdminInjector(ServerTest):
         seen = []
         orig = self.server._send_encrypted
 
-        def spy(sock, session, opcode, payload=b'', use_by_array=False):
+        def spy(sock, session, opcode, payload=b'', use_by_array=False, **kw):
+            # **kw: the map load queues its 0x03 / 0x07 with flush=False (P14 receiver mirror)
             if session is self.world.session and opcode in (0x08, 0x07):
                 seen.append((opcode, session['in_world']))
-            return orig(sock, session, opcode, payload, use_by_array)
+            return orig(sock, session, opcode, payload, use_by_array, **kw)
         self.server._send_encrypted = spy
         self.world.send(0x7E, CAP_7E_101_TO_102)
         self.world.recv_until_quiet()

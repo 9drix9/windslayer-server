@@ -152,16 +152,46 @@ def bagged_pets(char):
                if isinstance(r, dict) and _int(r.get('kind')) == PET_RECORD_KIND and not r.get('equipped'))
 
 
+# P15 pet-s5: the 2009 pet gear - hii Type 1, Cash 1, Kind 15 (headgear) / 16 (apparel), the
+# 16 rows 4290..4308 around the four pets (pet.md 2.1). FUN_00427af0 writes these Kinds only
+# for a cash item (KIND_TO_CASH_SLOT_2009 15 -> 23, 16 -> 24; a non-cash 15 / 16 hits the case
+# with no write). Like every cash item it lives as a record of char['cash_items'] (the 0x6F
+# purges every cash item from every bag and re-files the records: Type 1 into the EQUIPMENT
+# tab, FUN_00464e00 case 1), never in `inventory`; worn, it is `equipped` and its grid slot.
+PET_GEAR_KINDS = (15, 16)
+
+
+def is_pet_gear(item_id, catalog=None):
+    """A 2009 pet gear item (Type 1, Cash, Kind 15 / 16) of the item table `catalog` (None =
+    the loaded one). False under any other table: the 2008 hii has no such row."""
+    catalog = catalog if catalog is not None else EC.items()
+    if getattr(catalog, 'client_build', None) != PET_BUILD:
+        return False
+    d = catalog.get(_int(item_id))
+    return (d is not None and d.type == 1 and bool(getattr(d, 'cash', 0))
+            and getattr(d, 'kind', -1) in PET_GEAR_KINDS)
+
+
+def bagged_pet_gear(char, catalog=None):
+    """Pet gear records (is_pet_gear) the character owns but does not wear: each one is an
+    equipment-tab slot of the 2009 client (the 0x6F files a Type 1 record there)."""
+    catalog = catalog if catalog is not None else EC.items()
+    return sum(1 for r in list((char or {}).get('cash_items') or [])
+               if isinstance(r, dict) and _int(r.get('kind')) != PET_RECORD_KIND and not r.get('equipped')
+               and is_pet_gear(r.get('item_id'), catalog))
+
+
 def pet_slots(char, catalog=None):
-    """Equipment-tab slots the character's bagged pets take in the client whose item table
-    `catalog` is (None = the loaded one): bagged_pets under the 2009 table, 0 under any other.
+    """Equipment-tab slots the character's bagged pets - and, since P15 pet-s5, its bagged pet
+    gear records - take in the client whose item table `catalog` is (None = the loaded one):
+    bagged_pets + bagged_pet_gear under the 2009 table, 0 under any other.
     Both builds can share one accounts.json (config CLIENT_BUILD), and the 2008 0x6F leaves a
     pet record out (cash.owned_list_packets), so the 2008 client's tab never holds one - a
     count there would be a phantom full slot refusing pickups and trades the client allows."""
     catalog = catalog if catalog is not None else EC.items()
     if getattr(catalog, 'client_build', None) != PET_BUILD:
         return 0
-    return bagged_pets(char)
+    return bagged_pets(char) + bagged_pet_gear(char, catalog)
 
 
 def kind_tables(catalog=None):

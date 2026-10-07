@@ -57,9 +57,15 @@ be added. The server fires them (MapTransfer and the connection's finally), in t
                                                  place). The old map's peers are told here
                                                  (0x06, world-presence); party HUD map change.
   on_enter_world          map_code, reason,      after the own 0x07 of EVERY map load (enter
-                          old_map, first         world, portal, warp, revive), the session is
+                          old_map, first, hop    world, portal, warp, revive), the session is
                                                  on map_code and in its peers() already.
                                                  first=True on the connection's first entry.
+                                                 hop: on that first entry, the continuity.Hop
+                                                 when this connection CONTINUES the character
+                                                 from another one (a 2009 channel change,
+                                                 arch09-session-continuity), else None: a
+                                                 once-per-login effect runs on first and not
+                                                 hop (or hop.logout_announced).
   on_leave_world          map_code, reason,      the session is on no map any more and not
                           superseded             coming back on this connection: disconnect,
                                                  kick, idle reap, character deleted. superseded
@@ -68,7 +74,15 @@ be added. The server fires them (MapTransfer and the connection's finally), in t
                                                  that uid on the peers' screens.
   on_disconnect           reason                 the connection is gone (after on_leave_world
                                                  when it was in the world): party removal,
-                                                 friend presence offline, trade cancel, save.
+                                                 trade cancel, save.
+  on_logout               reason, char_name      the character's login is over for good -
+                                                 fired once per world login by continuity.py:
+                                                 at once on a plain disconnect / kick / delete,
+                                                 or held back while a 2009 channel hop may
+                                                 continue it and never when it does. The
+                                                 once-per-logout LINES go here (friend 0x60
+                                                 offline + mentor, the P14 guild sub 21); the
+                                                 session may be long closed.
 
 Outbound path (F5 "Outbound path"; party-mp-registry `_send_to`, trade-mp-registry)
 -----------------------------------------------------------------------------------
@@ -112,6 +126,10 @@ ON_MAP_CHANGE = 'on_map_change'                     # left the old map (no map, 
 ON_ENTER_WORLD = 'on_enter_world'                   # after the session's own 0x07
 ON_LEAVE_WORLD = 'on_leave_world'                   # off every map for good (disconnect, delete)
 ON_DISCONNECT = 'on_disconnect'                     # the connection is gone
+# arch09-session-continuity (P12, continuity.py): the once-per-logout effects of a character -
+# friend presence offline, the P14 guild logout line - fired once per world login, at once on a
+# plain disconnect and held back for a possible 2009 channel hop (never fired when it is one).
+ON_LOGOUT = 'on_logout'
 # The rename hook (ROADMAP_2009_ADDENDUM C4, premium_cash-rename): a character changed its
 # name. Fired by cashuse.CashUse.rename after the store renamed the record (its stable `cid`
 # stays, store.py) and the renamed client got its 0x73 / 0x74; fn(server, session, old=, new=,
@@ -122,7 +140,8 @@ ON_DISCONNECT = 'on_disconnect'                     # the connection is gone
 # group locks (Group.lock -> store.lock order), session state, packets - belongs here: the
 # hook fires after db_lock is let go.
 ON_RENAME = 'on_rename'
-HOOK_NAMES = (BEFORE_SERVER_MAP_LOAD, ON_MAP_CHANGE, ON_ENTER_WORLD, ON_LEAVE_WORLD, ON_DISCONNECT, ON_RENAME)
+HOOK_NAMES = (BEFORE_SERVER_MAP_LOAD, ON_MAP_CHANGE, ON_ENTER_WORLD, ON_LEAVE_WORLD, ON_DISCONNECT, ON_RENAME,
+              ON_LOGOUT)
 
 # The client's own UDP P2P port (C2S 0x2B p2p_udp_port): 42907 = WindSlayer_patched.exe,
 # 42908 = WindSlayer_p2.exe (2008 project_multiclient; 2009 patch_2009.py --p2). The only

@@ -25,3 +25,14 @@ reports.jsonl
 # boss ledger (P13 stage 3, bosses.py): field-boss respawn times next to accounts.json (server data)
 boss_ledger.json
 boss_ledger.json.bad-*
+
+# guild store (P14 stage 3, guild.py): the 2009 guilds next to accounts.json (user data), its
+# one-time pre-migration backup and a malformed file moved aside
+guilds.json
+guilds.json.bak-*
+guilds.json.bad-*
+
+# Guild Plaza boards (P15 guild-g6, boards.py): the live boards next to accounts.json (server
+# data) and a malformed file moved aside
+guild_boards.json
+guild_boards.json.bad-*

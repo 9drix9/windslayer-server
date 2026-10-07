@@ -46,16 +46,21 @@ from cencmsg import CEncMsg
 
 import auth
 import bank_tabs as BT
+import blacklist as blmod
+import boards as boardmod
 import bosses as bossmod
 import buffs as buffmod
 import cards as cardsmod
 import cash as cashmod
 import cashuse as cashusemod
+import channels as chanmod
 import chat as chatmod
 import client_layout as CL
 import classchange as CC
+import clientview as cview
 import combat
 import config as cfgmod
+import continuity as contmod
 import crafting as craftmod
 import damage as dmgmod
 import debuffs as debuffmod
@@ -63,6 +68,7 @@ import en_content as EC
 import events as eventmod
 import gm
 import ground as groundmod
+import guild as guildmod
 import hitstun as HS
 import hpmp
 import ids
@@ -82,6 +88,7 @@ import quests as questmod
 import records as R
 import registry
 import reputation as repmod
+import resync as resyncmod
 import shop as SH
 import skills as SK
 import social
@@ -461,14 +468,23 @@ class VersionServer:
 
     CLIENT_BUILD '2009' (spec_2009 0x01, live-verified): version_code 14 and every channel
     entry is u8 no, u16 users, u32 ip (host order), u32 port - the 2009 client connects to
-    that port (ConnectToGameServer 0x440C70) instead of a hard-coded 7022, so it is GAME_PORT.
+    that port (ConnectToGameServer 0x440C70) instead of a hard-coded 7022: the channel's own
+    listener port (config CHANNELS "port", default GAME_PORT).
+
+    P12 ch-1 / ch-5 (channels.py): the table is `channels` (GameServer.channels in main(), so
+    an admin close and the listeners' state are seen here): slot_count = the highest
+    configured channel number, one entry per channel that is OPEN and whose listener is UP
+    (an omitted slot is "Channel - N (inspection)", blch B.1; R8: never a dead port), with
+    that channel's own user count x LOAD_SCALE (blch B.2 load label). Every accepted
+    connection is booked as a version fetch of its IP (the continuity hint, continuity.py).
     """
 
-    def __init__(self, host='0.0.0.0', port=7011, config=None, user_counts=None):
+    def __init__(self, host='0.0.0.0', port=7011, config=None, user_counts=None, channels=None):
         self.host = host
         self.port = port
         self.config = config if config is not None else cfgmod.defaults()
         self._user_counts = user_counts
+        self.channels = channels if channels is not None else chanmod.Channels(self.config)
 
     def start(self):
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -480,6 +496,9 @@ class VersionServer:
         while True:
             try:
                 client, addr = srv.accept()
+                # Booked before anything else (continuity hint): the Change Channel teardown
+                # connects here right before it closes its game socket (blch B.5 steps 2-3).
+                self.channels.note_version_fetch(addr[0])
                 log.info(f'[VERSION] Connection from {addr}')
                 threading.Thread(target=self._handle, args=(client, addr), daemon=True).start()
             except Exception as e:
@@ -515,27 +534,28 @@ class VersionServer:
         body.extend(struct.pack('<H', len(message)))
         body.extend(message)
 
-        # Channel data (parsed by 0x4404D0)
-        channels = cfg.channels()
-        num_channels = len(channels)
+        # Channel data (parsed by 0x4404D0; 2009 ParseChannelList 0x440A00). P12 ch-1 / ch-5:
+        # every configured channel has its slot, only the open channels whose listener is up
+        # have an entry (an omitted slot = "(inspection)", blch B.1 / R8).
+        entries = self.channels.advertised()
         body.append(0x01)                           # server count (<= 4)
         body.append(cfgmod.CHANNEL_STATUS_OPEN)     # server status: 3 lets START connect
-        body.append(num_channels)                   # channel slot count (<= 10)
-        body.append(num_channels)                   # channel entry count
+        body.append(self.channels.slot_count())     # channel slot count (<= 10, config-checked)
+        body.append(len(entries))                   # channel entry count
 
         # IP is passed through htonl() by Fireway Connect (VA 0x10001CA0).
         # So the stored ULONG must be in HOST byte order.
         # 127.0.0.1: a=127, b=0, c=0, d=1
         # In host order: 0x7F000001 -> little-endian bytes: 01 00 00 7F
-        for channel_no, _name, ip in channels:
-            body.append(channel_no)                  # channel number (config: strictly ascending)
-            # Live player count; the launcher paints the load bar as user_count/200.
-            body.extend(struct.pack('<H', min(int(counts.get(channel_no, 0)), 0xFFFF)))
-            body.extend(struct.pack('<I', cfgmod.ip_host_order(ip)))   # IP (host order; client htonl's it)
+        for ch in entries:
+            body.append(ch.no)                       # channel number (config: strictly ascending)
+            # The channel's own players x LOAD_SCALE; the label is user_count / 200 (B.2).
+            body.extend(struct.pack('<H', self.channels.displayed_users(counts.get(ch.no, 0))))
+            body.extend(struct.pack('<I', cfgmod.ip_host_order(ch.ip)))   # IP (host order; client htonl's it)
             if with_port:
                 # spec_2009 0x01 game_server_port (0x440B38): the port Connect uses; 0 or a
-                # wrong one breaks the game connection.
-                body.extend(struct.pack('<I', int(cfg.GAME_PORT)))
+                # wrong one breaks the game connection. The channel's own listener (ch-1).
+                body.extend(struct.pack('<I', int(ch.port)))
         return bytes(body)
 
     def _handle(self, sock, addr):
@@ -544,8 +564,9 @@ class VersionServer:
             pkt = make_raw_packet(body, seq=1)
             mode = ('MAINTENANCE (0xEA61)' if self.config.MAINTENANCE
                     else f'version {self.config.version_code()}, client build {self.config.CLIENT_BUILD}')
+            shown = [ch.no for ch in self.channels.advertised()]
             log.info(f'[VERSION] Sending version response ({len(pkt)} bytes, {mode}, '
-                     f'game IP {self.config.PUBLIC_IP}, {len(self.config.channels())} channel(s))')
+                     f'game IP {self.config.PUBLIC_IP}, channels {shown} of {self.channels.slot_count()} slot(s))')
             log.debug(f'[VERSION] Packet hex:\n{hexdump(pkt)}')
             sock.sendall(bytes(pkt))
             time.sleep(0.1)
@@ -568,15 +589,21 @@ def routes_2009(base):
       0x2C  u8 list_type: 1 arena / 4 play room / 5 dungeon list opened, 0 = any closed
             (replaces 2008 0x2C/0x2D/0x74/0x75) -> _handle_room_list
       0x2D  InstanceDungeonRoomKick (u8 0 + u32 uid) - no dungeon rooms exist
-      0x93/0x94  BlacklistAdd / BlacklistRemove (2008: room-host dead code)
+      0x93/0x94  BlacklistAdd / BlacklistRemove (2008: room-host dead code) -> S2C 0xBE / 0xBF
+                 (P12 bl-2, blacklist.py)
       0x95/0x97/0x99  InstanceDungeonStart / GuildBattleRosterAdd / GuildBattleRoomCreate
       0x08/0x09/0x0A  the renumbered room-host dead code (2008 0x93/0x94/0x95)
-    New in 2009: 0x4D/0x82/0x83/0x85/0x86 pets, 0x4E/0x80/0x81 cash item options and sales,
+    New in 2009: 0x4D/0x82/0x83/0x85/0x86 pets (P15 pet-s2: 0x82 PetEquip -> S2C 0xAB, 0x83
+    PetUnequip -> S2C 0xAC; pet-s4: 0x85 PetFeed -> S2C 0xB1 (+ 0xAD); pet-s3: 0x86 PetEmote ->
+    S2C 0xB2; pet-s6: 0x4D PetRename -> S2C 0xC0 + 0xB0; pets.py), 0x4E/0x80/0x81 cash item
+    options and sales,
     0x87..0x92 + 0x96..0x9D guild and guild battle, 0x8A GuildInfoRequest (sent by the
-    client itself after every S2C 0x03 -> 0xB3 sub 15), 0x9E X-Trap answer, 0xBC dead code.
+    client itself after every S2C 0x03 -> the guild reply, guild.py), 0x96 / 0x9C (Guild
+    Battle register / challenge accept: a waiting box -> 0xB3 sub 23 {0} / sub 34 {0}, P14
+    guild-g1), 0x9E X-Trap answer, 0xBC dead code.
     Gone: 0x74/0x75 (play room list open/close), 0x7C.
-    Owned by P8 (ROADMAP_2009_ADDENDUM C5 / C8): 0x4D PetRename -> the planned refusal S2C
-    0x73 {0} (pets.py, a waiting box), 0x4E -> S2C 0xC4 {0}, 0x80 -> S2C 0x71 {1, 0x17}
+    Owned by P8 (ROADMAP_2009_ADDENDUM C5 / C8): 0x4D PetRename's refusal S2C 0x73 {0} (a
+    waiting box; pets.py pet-s6 answers 0xC0 on success), 0x4E -> S2C 0xC4 {0}, 0x80 -> S2C 0x71 {1, 0x17}
     (a waiting box), 0x81 -> S2C 0x71 {1, 0x16} on the seller's Cancel, else nothing
     (mall.py "The 2009-only cash opcodes")."""
     routes = {op: r for op, r in base.items()
@@ -585,42 +612,65 @@ def routes_2009(base):
     def consumed(op, what, why='no model yet'):
         return Route(log=f'[0x{op:02X}] {what} - consumed ({why})')
 
-    no_pets = 'no pets: the server sends no pet packet'
-    no_guild = 'no guilds: every player is "not in a guild" (0xB3 sub 15)'
+    # P14 guild-g1 answers 0x8A (the guild reply) and the two Guild Battle waiting boxes;
+    # guild-g2..g5 / g4 (P14 stage 4, guild.py) create / disband, membership, chat and
+    # management; P15 guild-g6 (boards.py) the Guild Plaza boards; the rest of the family is
+    # guild-g7 (Guild Battle).
+    no_guild = 'no handler before its stage (guild-g7 Guild Battle, P17; guild.py)'
     routes.update({
         0x2C: Route('_handle_room_list', style=STYLE_REC),
         0x2D: consumed(0x2D, 'instance dungeon room kick', 'no dungeon rooms (pvp owns rooms)'),
         **{op: Route('_warn_dead_host_code') for op in (0x08, 0x09, 0x0A, 0xBC)},
-        0x4D: Route('_handle_pet_rename', style=STYLE_REC),                 # -> 0x73 {0} (C5)
+        0x4D: Route('_handle_pet_rename', style=STYLE_REC),                 # -> 0xC0 + 0xB0 | 0x73 {0} (pet-s6, C5)
         0x4E: Route('_handle_cash_add_option', style=STYLE_REC),            # -> 0xC4 {0} (C8)
         0x80: Route('_handle_cash_sale_offer', style=STYLE_REC),            # -> 0x71 {1, 0x17} (C8)
         0x81: Route('_handle_cash_sale_reply', style=STYLE_REC),            # 1 -> 0x71 {1, 0x16} (C8)
-        0x82: consumed(0x82, 'pet equip', no_pets),
-        0x83: consumed(0x83, 'pet unequip', no_pets),
-        # Sent by the client itself on S2C 0xAE (pet HP <= 10), which is never sent, or when
-        # an item the exe takes for pet food (KR ids 0x10BA..0x10BD = EN 4282..4285: Cruiser
-        # Sword, the guild billboards, the Pet Bell - ROADMAP_2009_ADDENDUM X7 / X8) is used
-        # from the bag. No waiting box; EN food reaches C2S 0x48 instead (pets.py, C6).
-        0x85: consumed(0x85, 'pet feed', no_pets),
-        0x86: consumed(0x86, 'pet emote', no_pets),
-        0x87: consumed(0x87, 'guild create', no_guild),
-        0x88: consumed(0x88, 'guild billboard place', no_guild),
-        0x89: consumed(0x89, 'guild join request', no_guild),
+        # P15 pet-s2 (pets.py F1 / F2): no lock on the client, so a refusal is no reply (the
+        # player-actionable ones get a 0x15 line in the client's own words).
+        0x82: Route('_handle_pet_equip', style=STYLE_REC),                 # -> 0xAB local + remote
+        0x83: Route('_handle_pet_unequip', style=STYLE_REC),               # -> 0xAC (+ pet_info holders)
+        # P15 pet-s4 (pets.py F5): sent by the client itself on an awake S2C 0xAE at <= 10 %
+        # (the auto-feed, from the 'pet-tick') and by bag use of pet food: the cp-2 exe
+        # (CLIENT_ITEM_IDS 'en') sends EN 4286..4289; the stock exe sends 0x48 for EN food and
+        # 0x85 only for its KR ids 0x10BA..0x10BD - EN non-food rows, dropped (pet F5 step 1;
+        # ADDENDUM X7 / X8). No waiting box: a refusal is no reply.
+        0x85: Route('_handle_pet_feed', style=STYLE_REC),                  # -> 0xB1 (+ 0xAD 1)
+        # P15 pet-s3 (F8): "/Pet smile|warning|trick" -> 0xB2 to the owner and the viewers.
+        0x86: Route('_handle_pet_emote', style=STYLE_REC),                 # -> 0xB2
+        # P14 guild-g2 / g3 (guild.py; systems_2009/guild.md F1-F6): every one answered with
+        # its 0xB3 sub-code (0x87 sub 1, 0x89 sub 2, 0x8B sub 5, 0x8E sub 18 / 6 / 8), 0x8C
+        # with nothing (none is traced).
+        0x87: Route('_handle_guild_create', style=STYLE_REC),           # -> sub 1 (+ sub 3 n=0, 0xB4)
+        # P15 guild-g6 (boards.py, F13): dialog 0x4B7's OK (the cp-2 exe, a board item used in
+        # 9702); no waiting box - the dialog closes before the Send.
+        0x88: Route('_handle_guild_board_place', style=STYLE_REC),      # -> 0xBA to 9702 + sub 185
+        0x89: Route('_handle_guild_apply', style=STYLE_REC),            # -> sub 2 (+ 0x10 to the master)
         # Sent by the client itself at the end of EVERY S2C 0x03 (0x453581) and after an
         # S2C 0xB3 sub 19 (0x48456D, never sent).
         0x8A: Route('_handle_guild_info'),
-        0x8B: consumed(0x8B, 'guild application accept', no_guild),
-        0x8C: consumed(0x8C, 'guild application reject', no_guild),
-        0x8D: consumed(0x8D, 'guild chat', no_guild),
-        0x8E: consumed(0x8E, 'guild member kick/leave/disband', no_guild),
-        0x8F: consumed(0x8F, 'guild notice change', no_guild),
-        0x90: consumed(0x90, 'guild max member increase', no_guild),
-        0x91: consumed(0x91, 'guild master change', no_guild),
-        0x92: consumed(0x92, 'guild member grade change', no_guild),
-        0x93: consumed(0x93, 'blacklist add', 'no blacklist model (social_friend)'),
-        0x94: consumed(0x94, 'blacklist remove', 'no blacklist model (social_friend)'),
+        0x8B: Route('_handle_guild_accept', style=STYLE_REC),           # -> sub 5 (+ 13 / 3 / 0xB4)
+        0x8C: Route('_handle_guild_reject', style=STYLE_REC),           # pops the first application
+        # guild-g5 (F11): relayed as S2C 0xB5 to the OTHER members only - the client echoed
+        # the line itself (registry BUILD_NEVER_REPLY 0x8D).
+        0x8D: Route('_handle_guild_chat', style=STYLE_REC),
+        0x8E: Route('_handle_guild_member_action', style=STYLE_REC),    # -> sub 18 / 6 / 8
+        # guild-g4 (F7-F10): sub 7 / 9 (+10) / 11 (+12) / 16 (+17).
+        0x8F: Route('_handle_guild_notice', style=STYLE_REC),
+        0x90: Route('_handle_guild_capacity', style=STYLE_REC),
+        0x91: Route('_handle_guild_master_change', style=STYLE_REC),
+        0x92: Route('_handle_guild_grade', style=STYLE_REC),
+        # P12 bl-2 (blacklist.py F-B2 / F-B3): dialogs 0x4C9 / 0x4CA close on the send and
+        # open no waiting box, but every request is answered so the Blacklist tab shows what
+        # the server stored (blch A.6).
+        0x93: Route('_handle_blacklist_add', style=STYLE_REC),              # -> 0xBE
+        0x94: Route('_handle_blacklist_remove', style=STYLE_REC),           # -> 0xBF
         0x95: consumed(0x95, 'instance dungeon start', 'no dungeon rooms (pvp owns rooms)'),
         **{op: consumed(op, 'guild battle request', no_guild) for op in range(0x96, 0x9E)},
+        # guild F14 soft-lock fallbacks (P14 guild-g1): both open "Waiting for the server to
+        # respond." (box 0x16), which only a 0xB3 sub 23 / 34 hides (registry BUILD_MUST_REPLY
+        # holds the same bytes as the backstop).
+        0x96: Route('_handle_guild_battle_register', style=STYLE_REC),       # -> 0xB3 sub 23 {0, 0}
+        0x9C: Route('_handle_guild_battle_accept', style=STYLE_REC),         # -> 0xB3 sub 34 {0}
         # Only an answer to S2C 0xC5, which the server never sends (packets.FORBIDDEN_S2C).
         0x9E: consumed(0x9E, 'X-Trap response', 'the server never sends S2C 0xC5'),
     })
@@ -650,6 +700,22 @@ class GameServer:
         # CLIENT_BUILD). packets.send() and the registry's decoder read it from here, so the
         # spec is per server, never a module global (tests run both builds in one process).
         self.client_build = self.config.CLIENT_BUILD
+        # P12 ch-1 / ch-5 (channels.py): the channel table - one listener per channel port,
+        # session['channel'] = the listener a connection arrived on, the S2C 0x01 entries
+        # (open and up only), capacity, LOAD_SCALE, the admin open / close. main() hands the
+        # same object to the VersionServer.
+        self.channels = chanmod.Channels(self.config)
+        # P12 ch-4 + arch09-session-continuity (continuity.py): channel-hop detection, the
+        # held-back logout (ON_LOGOUT) and the hop's suppressed once-per-login effects. Its
+        # departure hooks are registered right after the messenger's (below).
+        self.continuity = contmod.Continuity(self)
+        # ch-4 "save before accepting the relogin's 0x2B": the sessions whose disconnect path
+        # is running ({id: session}, under _closing_lock with self.sessions), which a login of
+        # the same account waits for before it answers 0x02 (_await_closing).
+        self._closing = {}
+        self._closing_lock = threading.Lock()
+        # The bound game listeners [(socket, port, [Channel])] (bind_listeners), None before.
+        self._listeners = None
         # client-2009-tooling: the memory layout of that build's exe, for the local-memory
         # combat driver (client_layout.py; 2009 from client_map_2009.json).
         self.client_layout = CL.layout(self.client_build)
@@ -728,6 +794,19 @@ class GameServer:
         # or closing announces it gone.
         self.messenger = msgrmod.Messenger(self)
         msgrmod.register(self.world.hooks, self.messenger)
+        # P12 arch09-session-continuity: the departure decision on on_leave_world /
+        # on_disconnect, registered right after the messenger's so an immediate ON_LOGOUT
+        # (friend 0x60 offline) keeps its place in the disconnect sequence.
+        contmod.register(self.world.hooks, self.continuity)
+        # P12 bl-1..bl-3 (blacklist.py; the 2008 client has no blacklist, so its hooks and
+        # packets are 2009 only): the per-character list (S2C 0xBD after every C2S 0x2F,
+        # C2S 0x93 / 0x94 -> S2C 0xBE / 0xBF) and the server-side filter (config
+        # BLACKLIST_FILTER) that refuses(), blacklist_drops() and the chat fan-outs consult.
+        # Hooks: a server map load clears the synced flag (its 0x03 frees the client's list),
+        # a rename re-sends the lists that hold the character (ON_RENAME, ADDENDUM C4).
+        self.blacklist = blmod.Blacklist(self)
+        if blmod.supported(self.client_build):
+            blmod.register(self.world.hooks, self.blacklist)
         # P6 stage 3 (party.md F1-F10, party.py): parties. Its hooks only flag a member's
         # map load for a vitals resync (the frames survive 0x08/0x03: live party#14, and the
         # 2009 0x08 closes the same windows) and take a member that leaves the world or
@@ -775,10 +854,17 @@ class GameServer:
         # show names through the world hook ON_RENAME (ROADMAP_2009_ADDENDUM C4; the messenger and
         # the party registered theirs above: friends' 0x0B, the mentor's 0x7B, party frames).
         self.cashuse = cashusemod.CashUse(self)
-        # ROADMAP_2009_ADDENDUM C5 / C6 (pets.py): the pet stub P15 replaces - the C2S 0x48
-        # gates / effects of EN pet food 4286..4289 and the name ticket 4322 (the unpatched exe
-        # sends them there) and the 2009 C2S 0x4D PetRename refusal (S2C 0x73 {0}).
-        self.pets = petsmod.PetStub(self).install(self.cashuse)
+        # P15 stage 1 (pets.py: pet-s1 / pet-s2; the P8 seams C5 / C6): the 2009 pets - C2S 0x82 /
+        # 0x83 wear / take off (S2C 0xAB / 0xAC, local and remote forms per receiver), the sleep /
+        # wake 0xAD, the records' pet block (records.pet_block) with each client's pet_info
+        # mirror (clientview pet_info_seen, kept by presence.py), its '!pet' command - plus the
+        # C2S 0x48 gates / effects of EN pet food 4286..4289 and the name ticket 4322 (the stock
+        # exe sends them there: CLIENT_ITEM_IDS 'kr'). P15 stage 3 (pet-s6): C2S 0x4D renames the
+        # worn, awake pet (S2C 0xC0 + 0xB0, else the 0x73 {0} refusal) and the pets subscribe to
+        # the C4 hook ON_RENAME for an owner's own rename (2009 only, like the blacklist's).
+        self.pets = petsmod.Pets(self).install(self.cashuse)
+        if self.pets.supported:
+            petsmod.register(self.world.hooks, self.pets)
         # P13 stage 1 (events.py: ev-e1..ev-e4, arch09-window-open): the event schedule
         # (config EVENTS_FILE), the multiplier stage of award_exp, the login gift and the
         # Event News popup. It registers one hook (before_server_map_load: no event packet
@@ -788,6 +874,29 @@ class GameServer:
         # tile), persisted next to accounts.json (BOSS_LEDGER_FILE), which the monster lifecycle
         # below consults for a boss's respawn; its '!boss' command.
         self.bosses = bossmod.Bosses(self)
+        # arch09-resync-bundle (P12, resync.py): the ONE ordered post-0x03 resync - the map
+        # load's 0x28 / 0x44, 0x6F and 0x6D, then the replies to the client's own C2S 0x2F,
+        # 0x63 and (2009) 0x8A - as registered steps in the live-verified order. Later groups
+        # (P14 guild replies: resyncmod.STAGE_GUILD) register steps instead of editing handlers.
+        self.resync = resyncmod.install_defaults(resyncmod.Resync(self))
+        # P14 stage 3 (guild.py: guild-g0, guild-g1; arch09-receiver-mirror in clientview.py,
+        # arch09-roster-record in records.py): the 2009 guild store (GUILDS_FILE next to
+        # accounts.json; nothing is opened on a 2008 server), the 0x8A reply in the resync
+        # bundle ('guild' replaced, 'guild_apps' before 'gm_tag'), the records' guild tag, the
+        # 0x21 guild-points tail and the 0x96 / 0x9C fallbacks; its '!guild' command.
+        # P14 stage 4 (guild-g2..g5, g4): the create / membership / chat / management handlers
+        # below and, from install(), the 2009 world hooks - login line (sub 20, not on a channel
+        # hop), the guild points held by cid across a hop and credited at ON_LOGOUT (sub 21),
+        # the rename (sub 22) - registered after the messenger's and continuity's.
+        self.guilds = guildmod.Guilds(self)
+        guildmod.install(self.resync, self.guilds)
+        # P15 guild-g6 (boards.py; systems_2009/guild.md F13): the Guild Plaza boards - their
+        # store (GUILD_BOARDS_FILE next to accounts.json, keyed (channel, map, guild); nothing is
+        # opened on a 2008 server), resync step 'guild_boards' (0xBB to a client entering 9702,
+        # after the 0x8A reply's sub 3 / 4 and before sub 37), C2S 0x88 placement and the expiry
+        # tick ('guild-boards'). After Guilds: a load drops the boards of vanished guilds.
+        self.boards = boardmod.Boards(self)
+        boardmod.install(self.resync, self.boards)
 
     @property
     def routes(self):
@@ -818,18 +927,97 @@ class GameServer:
                           f'the store retries')
 
     def channel_user_counts(self):
-        """{channel_no: logged-in accounts} for the S2C 0x01 channel table
-        (lc-version-config). One channel today, so every online account is on it; the
-        per-channel split lands with the channel model."""
-        online = len(self.world.by_uid)
-        return {no: online for no, _name, _ip in self.config.channels()}
+        """{channel_no: logged-in accounts ON that channel} for the S2C 0x01 channel table
+        (lc-version-config; P12 ch-1: each channel its own count, by the listener its
+        session arrived on - _channel_no)."""
+        return self.channels.counts(self.world.online(), self._channel_no)
+
+    # P12 review (R8 on Windows): SO_REUSEADDR there lets a second socket bind a port another
+    # process is LISTENING on without an error, so a dev server started beside the live one
+    # would advertise a port both accept on, non-deterministically. SO_EXCLUSIVEADDRUSE would make
+    # that bind fail, but it also refuses the restart of a server whose closed connections are
+    # still in TIME_WAIT ("Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE", MSDN) - the live restart
+    # would lose its ports for minutes. So the bind keeps SO_REUSEADDR and asks first: a port on
+    # which a loopback connect is accepted has a live listener (the kernel completes the
+    # handshake whatever that process does). POSIX refuses such a bind by itself.
+    PORT_PROBE = os.name == 'nt'
+    PORT_PROBE_SECS = 0.25
+
+    def _port_in_use(self, port):
+        """True when another socket already LISTENS on `port` (PORT_PROBE: Windows only)."""
+        if not self.PORT_PROBE:
+            return False
+        host = self.host if self.host not in ('', '0.0.0.0') else '127.0.0.1'
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            probe.settimeout(self.PORT_PROBE_SECS)
+            return probe.connect_ex((host, port)) == 0
+        except OSError:
+            return False
+        finally:
+            probe.close()
+
+    def bind_listeners(self):
+        """P12 ch-1: one listening socket per distinct channel port (channels.listeners(): a
+        2009 channel per port, every 2008 channel on GAME_PORT). A port that cannot be bound
+        - or that another process already listens on (_port_in_use: Windows lets SO_REUSEADDR
+        bind it anyway) - is logged and its channels are marked down - never advertised (blch
+        R8: a dead port leaves the client on an undismissable "Waiting..." box); no port at all
+        raises. main() calls it before the version server answers anyone; start() otherwise."""
+        if self._listeners is not None:
+            return self._listeners
+        bound = []
+        for port, chans in self.channels.listeners():
+            nos = [ch.no for ch in chans]
+            if self._port_in_use(port):
+                self.channels.mark_up(nos, False)
+                log.error(f'[GAME] {self.host}:{port} already has a listener (another server process?) - '
+                          f'channel(s) {nos} are left out of the version list ("(inspection)", blch R8)')
+                continue
+            srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                srv.bind((self.host, port))
+                srv.listen(10)
+            except OSError as e:
+                srv.close()
+                self.channels.mark_up(nos, False)
+                log.error(f'[GAME] cannot listen on {self.host}:{port} for channel(s) {nos}: {e} - '
+                          f'they are left out of the version list ("(inspection)", blch R8)')
+                continue
+            self.channels.mark_up(nos, True)
+            bound.append((srv, port, chans))
+            log.info(f'[GAME] Listening on {self.host}:{port} - ' + ', '.join(
+                f'channel {ch.no} "{ch.name}" ({ch.ip})' for ch in chans))
+        if not bound:
+            raise OSError(f'no game listener could be bound on {self.host} '
+                          f'(ports {[port for port, _ in self.channels.listeners()]})')
+        self._listeners = bound
+        return bound
+
+    def _accepted_channel(self, client, port):
+        """The channel of a connection accepted on `port` (blch R1: the listener is the only
+        channel identity): the channel of that port whose ip is the connection's local
+        address (2008 channels share GAME_PORT and differ by IP), else the port's first."""
+        try:
+            local_ip = client.getsockname()[0]
+        except OSError:
+            local_ip = None
+        no = self.channels.resolve(port, local_ip)
+        return no if no is not None else self.channels.world_channel()
+
+    def _accept_loop(self, srv, port):
+        while True:
+            try:
+                client, addr = srv.accept()
+                channel = self._accepted_channel(client, port)
+                log.info(f'[GAME] Connection from {addr} on port {port} (channel {channel})')
+                threading.Thread(target=self._handle, args=(client, addr, channel), daemon=True).start()
+            except Exception as e:
+                log.error(f'[GAME] Accept error on port {port}: {e}')
 
     def start(self):
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        srv.bind((self.host, self.port))
-        srv.listen(10)
-        log.info(f'[GAME] Listening on {self.host}:{self.port}')
+        listeners = self.bind_listeners()
         self.store.attach(self.ticks, autosave=True)
         # world-persistence: mirror live map/position/HP into the records periodically, so a
         # hard kill loses at most WORLD_SAVE_SECS of world state (F8 "save debounce / 60 s").
@@ -861,6 +1049,14 @@ class GameServer:
         # P13 (events.py): the every-N-minutes [Announcement] lines and events that start
         # while players are in the world.
         self.ticks.call_every(eventmod.TICK_SECS, self.events.tick, name='events')
+        # P15 pet-s3 (pets.py, pet.md F4): the worn pets' hunger / EXP / sleep regen over their
+        # owners' field time (S2C 0xAE / 0xAF / 0xAD) - the 2009 client's own code is host-only.
+        if self.pets.supported:
+            self.ticks.call_every(petsmod.SCAN_SECS, self.pets.tick, name='pet-tick')
+        # P15 guild-g6 (boards.py, guild F13 step 6): a Guild Plaza board past its time -> S2C
+        # 0xB8 {guild} to everyone on 9702 (the client never expires one itself).
+        if self.boards.supported:
+            self.ticks.call_every(boardmod.SCAN_SECS, self.boards.tick, name='guild-boards')
         self.ticks.start()
         if self.memory_driver_enabled():
             threading.Thread(target=self._combat_driver, daemon=True).start()
@@ -868,13 +1064,13 @@ class GameServer:
             log.info('[COMBAT] DEV_MEMORY_COMBAT off: no memory combat driver')
         threading.Thread(target=self._admin_listener, daemon=True).start()
 
-        while True:
-            try:
-                client, addr = srv.accept()
-                log.info(f'[GAME] Connection from {addr}')
-                threading.Thread(target=self._handle, args=(client, addr), daemon=True).start()
-            except Exception as e:
-                log.error(f'[GAME] Accept error: {e}')
+        # ch-1: every listener but the first accepts on its own thread; the first keeps the
+        # caller's thread (the single-channel default runs exactly as before).
+        for srv, port, _chans in listeners[1:]:
+            threading.Thread(target=self._accept_loop, args=(srv, port), daemon=True,
+                             name=f'listen-{port}').start()
+        srv, port, _chans = listeners[0]
+        self._accept_loop(srv, port)
 
     def memory_driver_enabled(self):
         """DEV_MEMORY_COMBAT, for either build (client-2009-tooling). The driver reads the
@@ -916,8 +1112,13 @@ class GameServer:
         {"kick": <target as above>, "reason": N}  kicks that session: S2C 0x5D, save, socket
         closed after 1 s (_admin_kick; quest_cards_misc-admin-kick-maintenance).
         {"shutdown": 1}  the 3-minute maintenance shutdown (/stop's path); {"maintenance": 0}
-        lifts the login lock (and cancels a countdown), {"maintenance": 1} locks logins only."""
+        lifts the login lock (and cancels a countdown), {"maintenance": 1} locks logins only.
+        {"channel_open": [n, 0|1]}  closes / opens channel n (P12 ch-5, blch C CH-5: a closed
+        channel is "(inspection)" on the next version fetch and refuses new logins);
+        {"channels": 1} lists them (_admin_channels; `wsdev` / GM `!channel` the same)."""
         cmd = json.loads(line)
+        if 'channel_open' in cmd or 'channels' in cmd:
+            return self._admin_channels(cmd)
         if 'gm' in cmd:
             return self._admin_gm(cmd)
         if 'dev' in cmd:
@@ -1028,6 +1229,20 @@ class GameServer:
         gm.audit(self.gm_audit_path, 'admin', 'kick', f'{target!r}: {", ".join(done)}')
         return f'ok kick {", ".join(done)}; closing in {gm.ADMIN_KICK_CLOSE_SECS:g} s'
 
+    def _admin_channels(self, cmd):
+        """{"channel_open": [n, 0|1]} / {"channels": 1} from the admin port (_admin_command)."""
+        if 'channel_open' in cmd:
+            arg = cmd['channel_open']
+            if not isinstance(arg, (list, tuple)) or len(arg) != 2:
+                return 'error: channel_open needs [channel, 0|1]'
+            try:
+                no, flag = int(arg[0]), bool(int(arg[1]))
+                self.channels.set_open(no, flag)
+            except (KeyError, TypeError, ValueError) as e:
+                return f'error: {e}'
+            gm.audit(self.gm_audit_path, 'admin', 'channel', f'{no} {"open" if flag else "close"}')
+        return 'ok channels: ' + ' | '.join(self.channels.describe(self.channel_user_counts()))
+
     def _admin_maintenance(self, cmd):
         """{"shutdown": 1} / {"maintenance": 0|1} from the admin port (see _admin_command)."""
         if cmd.get('shutdown'):
@@ -1120,14 +1335,15 @@ class GameServer:
                 except OSError:
                     pass
 
-    def _handle(self, sock, addr):
+    def _handle(self, sock, addr, channel=None):
         """
         Determine if this is HTTP or Fireway by checking first byte quickly.
         HTTP clients send first. Fireway clients wait for server.
         We send Fireway key exchange immediately - HTTP would error here.
+        `channel`: the channel of the listener that accepted it (P12 ch-1).
         """
         try:
-            self._handle_fireway(sock, addr)
+            self._handle_fireway(sock, addr, channel)
         except Exception as e:
             log.error(f'[GAME] Error for {addr}: {e}')
             traceback.print_exc()
@@ -1142,8 +1358,11 @@ class GameServer:
     RECV_TIMEOUT_SECS = 120.0
     IDLE_TIMEOUT_SECS = 300.0
 
-    def _handle_fireway(self, sock, addr):
-        """Handle a Fireway game connection."""
+    def _handle_fireway(self, sock, addr, channel=None):
+        """Handle a Fireway game connection. `channel` (P12 ch-1): the channel of the listener
+        that accepted it, kept as session['channel'] - the 0x03 channel_id, 0x99 sub 8 and the
+        version list's per-channel count read it (_channel_no). None (the offline rigs' default)
+        leaves it unset: the first configured channel."""
         close_reason = 'connection closed'      # why the finally below ends the session
         try:
             # Step 1: Send key exchange (opcode 0x5A, seq=1) using EncodebyArray
@@ -1206,7 +1425,12 @@ class GameServer:
                 # that changes the client (presence.py "What each client has spawned").
                 'presence_lock': threading.RLock(),
                 'spawned_players': {},
+                # P12 ch-4: set once this session's disconnect path has run to its end (save
+                # included) - a login of the same account waits for it (_await_closing).
+                'closed_event': threading.Event(),
             }
+            if channel is not None:
+                session['channel'] = int(channel)
             self.sessions[addr] = session
 
             # Step 3: Read encrypted client packets - also log any raw bytes received
@@ -1297,11 +1521,22 @@ class GameServer:
             traceback.print_exc()
             close_reason = f'error: {e}'
         finally:
-            gone = self.sessions.pop(addr, None)
+            # Moved to _closing in the same step, so a login of the account always finds it
+            # (in self.sessions or in _closing) until its save is done (_await_closing).
+            with self._closing_lock:
+                gone = self.sessions.pop(addr, None)
+                if gone is not None:
+                    self._closing[id(gone)] = gone
             try:
                 if gone is not None:
                     self._session_closed(gone, gone.get('kicked') or close_reason)
             finally:
+                if gone is not None:
+                    with self._closing_lock:
+                        self._closing.pop(id(gone), None)
+                    done = gone.get('closed_event')
+                    if done is not None:
+                        done.set()
                 sock.close()                    # even when a disconnect step raised
 
     def _session_closed(self, session, reason):
@@ -1319,6 +1554,9 @@ class GameServer:
         if session.get('closed'):
             return
         user = session.get('username')
+        # P12 continuity: this leave-world is the connection going away (a hop may follow),
+        # not a character deleted in the world (continuity.Continuity._may_defer).
+        session['closing'] = reason
 
         def save():
             # world-persistence: the live map, position and HP/MP go into the record
@@ -1385,9 +1623,15 @@ class GameServer:
         build = getattr(self, 'client_build', None)     # a bare GameServer.__new__ in tests: 2008
         why = P.forbidden_reason(opcode, build)
         if why:
-            # packets.FORBIDDEN_S2C (spec_2009 0xC5): also refused for raw sends, so the admin
-            # injector cannot drop a 2009 client either.
+            # packets.FORBIDDEN_S2C (spec_2009 0xC5, 0xB9): also refused for raw sends, so the
+            # admin injector cannot drop a 2009 client either.
             raise P.PacketError(f'S2C 0x{opcode:02X} must never be sent to a {build} client: {why}')
+        why = P.forbidden_reply(registry.request_opcode(session), opcode, payload, build)
+        if why:
+            # packets.FORBIDDEN_REPLIES (P14 guild-g0): never 0xB3 sub 19 as the reply to C2S
+            # 0x8A - whatever builds it, while that request is dispatched on this thread.
+            raise P.PacketError(f'S2C 0x{opcode:02X} must never answer C2S 0x{registry.request_opcode(session):02X} '
+                                f'on a {build} client: {why}')
         if HEADER_SIZE + 1 + len(payload) > MAX_PKT:
             # The header's size field is 11 bits (PROTOCOL.md framing): make_raw_packet would
             # mask a longer length and the client would read a corrupt stream from here on.
@@ -1425,6 +1669,15 @@ class GameServer:
                 outbox.flush()
             else:
                 outbox.kick()
+
+    def _flush_outbox(self, session):
+        """Write what a flush=False send queued for `session` when this is its own connection
+        thread (a reply is on the wire before its handler returns, as _send_encrypted does);
+        any other thread leaves it to the writer thread its kick() woke. The clientview
+        senders queue under the view lock and call this after letting it go (P14)."""
+        outbox = session.get('outbox')
+        if outbox is not None and self._is_connection_thread(session):
+            outbox.flush()
 
     @staticmethod
     def _is_connection_thread(session):
@@ -1743,11 +1996,23 @@ class GameServer:
         2009 (client-2009-world): the same pair. S2C 0x8A is handled by the 2009 SubHandler5
         FUN_0045fb80 with the 2008 bytes (spec_2009 0x8A, added in this stage: the port's
         switch-table triage missed that if/else handler) and 0x59 reads progress for slots
-        1..5 (spec_2009 0x59 slot < 6); the quest model's three slots all fit."""
+        1..5 (spec_2009 0x59 slot < 6); the quest model's three slots all fit.
+
+        The reply is resync.STAGE_CARDS (arch09-resync-bundle, P12): this pair
+        (_send_card_deck), then 0x99 sub 8 "In channel N." (_send_channel_notice) and the
+        events tail (ev-e1 / ev-e3 / ev-e4, events.after_resync: an active event's
+        once-per-login announcement, login gift and Event News popup; nothing without an
+        event, nothing again on a portal)."""
+        self.resync.run(resyncmod.STAGE_CARDS, sock, session)
+
+    def _send_card_deck(self, sock, session):
+        """resync.STAGE_CARDS step 'cards': S2C 0x8A, then one S2C 0x59 per non-empty quest
+        slot (_handle_card_deck_list). Without a character only the empty 0x8A goes out and
+        the stage ends there (resync.STOP: no channel notice, no event effects)."""
         char = self._session_char(session)
         if char is None:
             P.send(self, sock, session, '0x8A', {'deck_count': 0})
-            return
+            return resyncmod.STOP
         deck = questmod.deck_fields(char)
         P.send(self, sock, session, '0x8A', deck)
         rows = questmod.progress_rows(char)
@@ -1755,11 +2020,7 @@ class GameServer:
             P.send(self, sock, session, '0x59', {'slot': slot, 'progress': progress})
         log.info(f'[CARD] 0x63 -> 0x8A {deck["deck_count"]} card(s), '
                  f'0x59 re-arm for {len(rows)} quest slot(s): {rows}')
-        self._send_channel_notice(sock, session)
-        # ev-e1 / ev-e3 / ev-e4 (events.py): an active event's once-per-login announcement,
-        # login gift and Event News popup are the tail of this reply (the arch09-resync-bundle
-        # slot after 0x99 sub 8); nothing without an event, nothing again on a portal.
-        self.events.after_resync(sock, session)
+        return None
 
     def _handle_card_register(self, sock, session, rec, no_enc=False):
         """C2S 0x64 CardDeckRegisterRequest {u16 card_item_id} -> exactly one S2C 0x8B
@@ -1796,8 +2057,10 @@ class GameServer:
 
     # ---- system notices (quest_cards_misc-system-notice-0x99, quest doc F16) ----
     def _channel_no(self, session):
-        """The channel this connection is on: session['channel'] once a channel model sets
-        it, else the first CHANNELS entry (one game server = one channel today)."""
+        """The channel this connection is on (blch R1/R6): session['channel'], the listener
+        that accepted it (P12 ch-1), else the first CHANNELS entry (the offline rigs, which
+        connect without a listener). The 0x03 channel_id, the 0x99 sub 8 "In channel N.",
+        the friend rows and the per-channel user count all read this one value."""
         channels = self.config.channels()
         no = session.get('channel') or (channels[0][0] if channels else 1)
         return max(1, min(0xFF, int(no)))
@@ -2143,6 +2406,18 @@ class GameServer:
         if not self.world.enter(session, char_name_str):
             log.info(f'[ENTER_WORLD] {username!r} no longer owns uid {session.get("uid")}; ignored')
             return
+        # P12 ch-4 / arch09-session-continuity: does this entry continue a channel hop
+        # (session['channel_hop'], read by the once-per-login hooks of this map load)?
+        first_entry = not session.get('entered_once')
+        replied = session.pop('login_reply_t', None) if first_entry else None
+        self.continuity.entering(session, char_name_str)
+        if (replied is not None and self.client_build == cfgmod.BUILD_2009
+                and not session.get('login_relogin') and time.monotonic() - replied < contmod.STALE_408_SECS):
+            # blch E-B5: the client sent its 0x2B right after a FRESH login's 0x02 - it skipped
+            # character select, i.e. it still carries gs+0x408 from an earlier channel change
+            # (and did not read this 0x02's key: the key was adopted, _login_session_key).
+            log.info(f'[LOGIN] {username!r}: 0x2B {(time.monotonic() - replied) * 1000:.0f} ms after a fresh '
+                     f'login\'s 0x02 - no character select: a stale gs+0x408 (blch E-B5)')
 
         # The 0x03 below destroys every client entity; monsters of an earlier map (a second
         # entry on this connection) and their despawn/respawn timers go first, so no stale
@@ -2242,6 +2517,13 @@ class GameServer:
         x, y = session['pos']
         self._map_transfer(sock, session, current_map, x, y, lead=None, reason='enter_world',
                            no_enc=no_enc)
+        if replied is not None and session.get('login_relogin'):
+            # blch R5: the relogin path armed timer 2 (5.5 s) when our 0x02 arrived; past it
+            # the client shows "No response from the server." whatever comes next.
+            took = time.monotonic() - replied
+            (log.warning if took > contmod.RELOGIN_REPLY_SECS else log.info)(
+                f'[ENTER_WORLD] relogin of {username!r}: 0x03 {took:.2f} s after the 0x02 '
+                f'(the client waits {contmod.RELOGIN_REPLY_SECS:g} s, blch R5)')
 
         # Never send UDP to a field client (roadmap F11): the old UDP 0x11 "map server"
         # experiment makes the client overwrite its own p2p_ip (scene+0x224), and the
@@ -2277,8 +2559,10 @@ class GameServer:
         each. The sender needs it too: the client has no local echo (spec 0x44790E/0x03 "the
         line appears only when the server broadcasts S2C 0x16", both builds) and an echoed
         emote plays on the sender's own character (C34). A receiver whose client holds the
-        sender's entity also shows the bubble / emote on it (spec 0x16: by name). 2009
-        receivers drop a blacklisted sender themselves (FUN_00484190), so the server does not.
+        sender's entity also shows the bubble / emote on it (spec 0x16: by name). A 2009
+        receiver drops a speaker it blacklisted itself (FUN_00484190 at 0x456889: no line, no
+        bubble); unless BLACKLIST_FILTER is 'client' the server skips that receiver too
+        (P12 bl-3, blch F-B4: the same view for him, one packet less).
         No privacy flag gates map chat: 'talk' is the messenger chat room (privacy.py)."""
         text = P.cut_text(rec.get('message', b''), CHAT_TEXT_MAX)
         name = session.get('char_name')
@@ -2308,10 +2592,15 @@ class GameServer:
             return
         fields = {'sender_name': name, 'text': text}
         P.send(self, sock, session, '0x16', fields)
-        peers = self.world.peers(session)
+        peers, hidden = [], 0
+        for peer in self.world.peers(session):
+            if self.blacklist.hides(peer, session):
+                hidden += 1
+            else:
+                peers.append(peer)
         heard = sum(1 for peer in peers if self._push(peer, '0x16', fields, 'CHAT'))
         log.info(f'[CHAT] {name}: {_log_text(text, CHAT_TEXT_MAX)!r} (map {session.get("current_map")}, '
-                 f'{heard} other player(s))')
+                 f'{heard} other player(s)' + (f', {hidden} blacklisted the speaker' if hidden else '') + ')')
 
     # chat_mail_gm F1 step 2.2: at most 5 broadcast lines per session in any 3 s window.
     CHAT_RATE_LINES = 5
@@ -2378,14 +2667,19 @@ class GameServer:
         "Server :" 0x16 lines of _send_chat_line (S2-05, B2)."""
         P.send(self, sock, session, '0x15', self.notice_fields(text, kind))
 
-    def _hook_welcome(self, server, session, map_code=None, reason=None, **_):
+    def _hook_welcome(self, server, session, map_code=None, reason=None, hop=None, **_):
         """`on_enter_world` hook (F5): one S2C 0x15 [Announce] line on the FIRST map load of
         a connection (chat_mail_gm-system-notices, D17, S3-02). It used to be a fake 0x0A
         whisper from "Server", which added "Server" to the whisper list and repeated on
-        every portal; the 0x0A handler only writes the chat log, so nothing needs it."""
+        every portal; the 0x0A handler only writes the chat log, so nothing needs it.
+        Once per LOGIN: a 2009 channel hop (hop, continuity.py; arch09-session-continuity)
+        continues the login and gets none - so the 2009 hop entry is 0x03 0x07 0x65 ..."""
         if session.get('welcomed') or session.get('sock') is None:
             return
         session['welcomed'] = True
+        if hop is not None:
+            log.info(f'[ENTER_WORLD] no 0x15 welcome: channel hop {hop.from_channel} -> {hop.to_channel}')
+            return
         self._notice(session['sock'], session, WELCOME_TEXT, 'announce')
         log.info(f'[ENTER_WORLD] 0x15 welcome notice (first entry, {reason})')
 
@@ -2448,6 +2742,9 @@ class GameServer:
                                    + 0x09 {0x65, target, text} to the sender ("<To: B> text")
           offline / unknown / at   0x09 {0x66, name} "<name>can not be found." (a GM in
           select / GM in shadow    shadow is invisible to a non-GM, presence.visible_to)
+          target blacklisted the   BLACKLIST_FILTER 'silent' (P12 bl-3, the default): only the
+          sender (or the sender    0x09 {0x65} echo - the target's client would drop the 0x0A
+          the target, F-B5)        unread (FUN_00484190 at 0x456070); 'refuse': the 0x67 below
           target refuses whispers  0x09 {0x67, target} "<target>is rejecting whispers." - the
                                    privacy flag (privacy.refuses 'whisper'); a GM is exempt
           target is the sender     0x15 [Warning] (a case variant of the own name; the client
@@ -2479,6 +2776,13 @@ class GameServer:
         if target is not None and (target is session or target.get('uid') == session.get('uid')):
             self._notice(sock, session, chatmod.SELF_WHISPER_TEXT, 'warn')
             log.info(f'[WHISPER] {name!r} -> {wanted!r}: that is the sender')
+            return
+        if target is not None and self.blacklist_drops(target, session):
+            to_name = target.get('char_name')
+            text = chatmod.whisper_text(name, to_name, text)
+            P.send(self, sock, session, '0x09', chatmod.whisper_echo(to_name, text))
+            log.info(f'[WHISPER] {name!r} -> {to_name!r}: blacklisted - not delivered, 0x09 echo only '
+                     f'(BLACKLIST_FILTER silent)')
             return
         if target is not None and self.refuses(target, 'whisper', actor=session):
             P.send(self, sock, session, '0x09',
@@ -2557,6 +2861,11 @@ class GameServer:
             if to_name.lower() not in friends:
                 skipped.append(f'{to_name!r} is no stored friend')
                 continue
+            if self.blacklist.hides(target, session):
+                # P12 bl-3 (blch A.5 / F-B4): the client does NOT filter S2C 0x91, so the
+                # server drops the line to a friend who blacklisted the sender.
+                skipped.append(f'{to_name!r} blacklisted the sender')
+                continue
             if self._green(target, line):
                 heard.append(to_name)
         log.info(f'[FRIEND] {_log_text(line, chatmod.FRIEND_LINE_MAX)!r} -> {heard or "nobody"}'
@@ -2586,8 +2895,9 @@ class GameServer:
 
     # ---- the messenger (P6 stage 2: social_friend F1-F12; messenger.py owns the logic) ----
     def _handle_friend_list(self, sock, session, payload, no_enc=False):
-        """C2S 0x2F -> S2C 0x0B (+0x7E, +0x78): the resync after every S2C 0x03 (F1)."""
-        self.messenger.friend_list(sock, session)
+        """C2S 0x2F -> S2C 0x0B (+0x7E, +0x78): the resync after every S2C 0x03 (F1), then on
+        2009 the blacklist S2C 0xBD (P12 bl-1, blacklist.py F-B1) - resync.STAGE_FRIENDS."""
+        self.resync.run(resyncmod.STAGE_FRIENDS, sock, session)
 
     def _handle_friend_add(self, sock, session, rec, no_enc=False):
         """C2S 0x30 {target_uid, target_name} -> S2C 0x0D to the target / 0x0C refusal (F2)."""
@@ -2632,6 +2942,15 @@ class GameServer:
     def _handle_memo_delete(self, sock, session, payload, no_enc=False):
         """C2S 0x44 -> the memos shown since the last 0x03 are deleted (F9, chat F6.5)."""
         self.messenger.memo_delete(session)
+
+    # ---- the blacklist (P12 bl-1..bl-3, 2009 only; blacklist.py owns the logic) ----
+    def _handle_blacklist_add(self, sock, session, rec, no_enc=False):
+        """C2S 0x93 {name} (dialog 0x4C9) -> S2C 0xBE {1, uid, name} or {0} (F-B2)."""
+        self.blacklist.add(sock, session, rec)
+
+    def _handle_blacklist_remove(self, sock, session, rec, no_enc=False):
+        """C2S 0x94 {char_id, name} (dialog 0x4CA) -> S2C 0xBF {1, name} or {0} (F-B3)."""
+        self.blacklist.remove(sock, session, rec)
 
     def _handle_friend_slot_expand(self, sock, session, payload, no_enc=False):
         """C2S 0x73 -> S2C 0x9D {1, capacity, gold} / {0} (F12)."""
@@ -2743,7 +3062,8 @@ class GameServer:
             P.send(self, sock, session, '0x53', {'char_name': chatmod.name_bytes(wanted)})
             log.info(f'[INFO] {session.get("char_name")!r}: Char. Info of {wanted!r} -> 0x53 not in server')
             return
-        fields = R.player_info(target, char, self._session_account(target), self.client_build)
+        fields = R.player_info(target, char, self._session_account(target), self.client_build,
+                               guild=self._guild_tag(char))
         P.send(self, sock, session, '0x52', fields)
         worn = sum(1 for e in fields['repeat[equip_count]'] if e['item_id'])
         log.info(f'[INFO] {session.get("char_name")!r}: Char. Info of {char.get("name")!r} -> 0x52 '
@@ -3026,6 +3346,8 @@ class GameServer:
                 log.exception(f'[GM] maintenance save of {s.get("char_name")!r} failed')
         self.store.tick_flush()                             # a tick callback: never the ~3 s backoff
         self.bosses.tick_flush()                            # P13: the boss ledger too, same rule
+        self.guilds.tick_flush()                            # P14: guilds.json, same rule
+        self.boards.tick_flush()                            # P15 guild-g6: guild_boards.json
         log.warning(f'[GM] MAINTENANCE: {saved} world state(s) saved, store flushed')
         return saved
 
@@ -3241,7 +3563,8 @@ class GameServer:
         'mail': gm.DevCommand('_dev_mail', '!mail <name> <text>',
                               'store a memo for a character (delivered now if online)'),
         'msgr': gm.DevCommand('_dev_msgr', '!msgr [name]',
-                              "the server's messenger view: friends, mentor, memos, status, room",
+                              "the server's messenger view: friends, mentor, memos, status, room, "
+                              'blacklist (2009)',
                               owner='social_friend (P6 stage 2)'),
         'party': gm.DevCommand('_dev_party', '!party [invite|accept <name> | say <text> | leave]',
                                "the server's party view; invite / accept / say / leave run the "
@@ -3519,7 +3842,7 @@ class GameServer:
             if target is None:
                 raise gm.DevCommandError(f'{args.strip()!r} is not online')
         self._gm_reply(session, f'{self.messenger.name_of(target)} (uid {P.session_uid(target)}):')
-        for line in self.messenger.describe(target):
+        for line in self.messenger.describe(target) + [self.blacklist.describe(target)]:
             self._gm_reply(session, line)
 
     def _dev_party(self, session, args):
@@ -4034,6 +4357,38 @@ class GameServer:
         """`!expmult [x|off]` (registered by events.py): Events.dev_expmult."""
         self.events.dev_expmult(session, args)
 
+    def _dev_channel(self, session, args):
+        """`!channel [list] | open <n> | close <n> | scale <x>` (registered by channels.py):
+        P12 ch-1 / ch-5 - the channel table and the held-back logouts (continuity.py), the
+        admin open / close, LOAD_SCALE until a restart."""
+        words = str(args or '').split()
+        sub = words[0].lower() if words else 'list'
+        if sub in ('open', 'close'):
+            if len(words) < 2:
+                raise gm.DevCommandError('needs a channel number')
+            no = gm.parse_int(words[1], 'channel', 1, cfgmod.MAX_CHANNELS)
+            try:
+                self.channels.set_open(no, sub == 'open')
+            except KeyError as e:
+                raise gm.DevCommandError(str(e).strip("'")) from None
+        elif sub == 'scale':
+            if len(words) < 2:
+                raise gm.DevCommandError('needs a scale (displayed users = online x scale)')
+            try:
+                scale = float(words[1])
+            except ValueError:
+                raise gm.DevCommandError(f'{words[1]!r} is not a number') from None
+            if not 0 <= scale <= 10000:
+                raise gm.DevCommandError('the scale must be 0..10000')
+            self.config['LOAD_SCALE'] = scale
+        elif sub not in ('list', 'ls'):
+            raise gm.DevCommandError(f'unknown sub-command {sub!r}')
+        mine = self._channel_no(session)
+        for line in self.channels.describe(self.channel_user_counts()):
+            self._gm_reply(session, line + ('  <- you' if line.startswith(f'ch{mine} ') else ''))
+        for line in self.continuity.describe():
+            self._gm_reply(session, line)
+
     def _dev_boss(self, session, args):
         """`!boss [list] | respawn [all|<map>|<name>]` (registered by bosses.py): Bosses.dev_boss."""
         self.bosses.dev_boss(session, args)
@@ -4071,6 +4426,12 @@ class GameServer:
                 raise gm.DevCommandError(f'{EC.item_name(item)} ({item}) not applied: {res.why}')
             self._gm_reply(session, f'Applied {EC.item_name(item)} ({item}): '
                                     f'{CC.class_name(res.cls, res.tier)}.')
+            return
+        if invmod.is_pet_gear(item):
+            # P15 pet-s5: 2009 pet gear is a cash record (the 0x6F purges every cash item from
+            # the client's bags, so an 0x18 into the bag would vanish at the next map load).
+            recs = self.pets.give_gear(session, item, count, what='!give')
+            self._gm_reply(session, f'Gave {len(recs)} x {EC.item_name(item)} ({item}) (pet gear: cash records).')
             return
         bag = self._bag(session)
         if bag is None:
@@ -4579,8 +4940,12 @@ class GameServer:
         value; the server re-derives each answer from the same data, in the same order:
           1. npc_id is a merchant (hni `UI: 13`) and the item is the id one of its rows shows
              (shop.offered: a skill master's row sells only the NEXT level of a family the
-             player knows). A 2009 guild NPC (UI 0x4BB, send site 0x474327) is refused: the
-             server has no guilds.
+             player knows) - its hni stock plus config SHOP_EXTRA_ITEMS (P15 cp-3, the Pet
+             Bell at the potion grocers: _shop_extras, minus ids the hni row already lists - the
+             cp-3d hni lists the bell itself). A 2009 guild NPC (UI 0x4BB, send site
+             0x474327) is _buy_guild_board (P15 guild-g6): the Guild Billboard on the cp-2
+             exe (CLIENT_ITEM_IDS 'en'), refused on the stock one (ROADMAP_2009_ADDENDUM X8).
+             That send site's npc_id is always 0 on the wire: _board_sale_npc names Moiba.
           2. hii record exists and is not a Cash item (def+0x1F0: never sold by an NPC).
           3. quantity 1..999 (Type 0) / 1..99 (Type 2); every other Type buys exactly one.
           4. gold AND Victy, both with the client's discount (shop.discount / shop.cost, u64:
@@ -4602,12 +4967,21 @@ class GameServer:
         if char is None or wallet is None or not session.get('in_world'):
             return refuse('no character in world')
         npc = EC.npcs().get(npc_id)
+        inferred = False
+        if npc is None and npc_id == 0:
+            # Send site 0x474327 (Moiba's "Purchase advertisement") ALWAYS sends 0: the OK control
+            # (hui window 16 control 2, Event 1) closes dialog 0x10 first, and FUN_00497e00 zeroes
+            # its +0x11C (0x497EA5) before FUN_00472f40 reads it (0x474315). The merchant site
+            # 0x4745A4 never sends 0 (it reads the shop window 0xD, still open behind the dialog).
+            npc = self._board_sale_npc(session, item)
+            inferred = npc is not None
         if npc is not None and npc.ui == EC.UI_GUILD_NPC_2009:
-            return refuse(f'guild NPC {npc_id} {npc.name} (2009 guild menu 0x4BB): no guild system',
-                          'Guilds are not available.')
+            # P15 guild-g6: Moiba's "Purchase advertisement" (send site 0x474327)
+            return self._buy_guild_board(sock, session, item, qty, npc, wallet, refuse, inferred)
         stock = EC.shop_list(npc_id)
         if stock is None:
             return refuse(f'npc {npc_id} ({EC.npc_name(npc_id)}) is not a merchant (hni UI != 13)')
+        stock = stock + self._shop_extras(npc_id)
         if not self._grantable_item(item, 'buy'):
             return refuse('not an EN client item')
         base = SH.offered(stock, item, SK.learned(char))
@@ -4662,6 +5036,108 @@ class GameServer:
                  f'{EC.npc_name(npc_id)} cost={gold_cost} gold + {victy_cost} Victy (x{d:g}) '
                  f'-> gold={gold} victy={victy}')
         P.send(self, sock, session, '0x18', invmod.currency_fields(wallet, item, qty))
+
+    def _board_sale_npc(self, session, item):
+        """The guild NPC a C2S 0x0B with npc_id 0 is for (p15 live triage 1), or None.
+
+        The real client sends Moiba's billboard purchase (send site 0x474327) with npc_id 0,
+        always: dialog 0x10's OK control (hui window 16 control 2) has Event 1, so FUN_00448730
+        closes the dialog (FUN_00497e00 mode 1 zeroes +0x120 / +0x11C, 0x497E9F / 0x497EA5)
+        BEFORE it dispatches the control to FUN_00472f40, whose purpose-5 branch then reads the
+        zeroed +0x11C (0x474315). Purpose 5 is set only at 0x482351 (Moiba's control 5), and the
+        merchant site 0x4745A4 cannot send 0 (FUN_00409ef0(0) is NULL), so a 0 here is this sale.
+
+        Moiba (en_content.guild_npc_2009: the hni template with UI 0x4BB) when all hold:
+          - the 2009 build (the 2008 client has no guild NPC);
+          - the buyer is on the Guild Plaza 9702: Moiba stands only there - the same gate as the
+            guild create (guild.py Guilds._create_refusal); merchants get no distance check either;
+          - `item` is a board id: this exe's (guild.board_items under CLIENT_ITEM_IDS: en 4284 /
+            4283, kr 4280 / 4279), the EN rows' (boards.EN_ITEM) or Moiba's hni `item:` row (what
+            the dialog asks for: 4283 on the stock data, 4284 after the cp-5 hni patch).
+        Anything else stays None, so the caller's merchant path refuses it ("That item is not
+        for sale."). The stock exe ('kr') reaches _buy_guild_board and its TEXT_UNAVAILABLE."""
+        if self.client_build != cfgmod.BUILD_2009:
+            return None
+        try:
+            on_map = int(session.get('current_map') or 0)
+        except (TypeError, ValueError):
+            on_map = 0
+        if on_map != guildmod.GUILD_PLAZA_MAP:
+            return None
+        moiba = EC.guild_npc_2009()
+        if moiba is None:
+            return None
+        ids = self.config.get('CLIENT_ITEM_IDS', cfgmod.DEFAULTS['CLIENT_ITEM_IDS'])
+        boards = set(guildmod.board_items(ids)) | set(boardmod.EN_ITEM.values()) | set(moiba.shop_items)
+        return moiba if int(item) in boards else None
+
+    def _buy_guild_board(self, sock, session, item, qty, npc, wallet, refuse, inferred=False):
+        """C2S 0x0B from the 2009 guild NPC menu 0x4BB control 5 "Purchase advertisement"
+        (Moiba, hni 181; send site 0x474327: quantity dialog 0x10 for the template's first
+        `item:` id, no client-side cap but != 0) - P15 guild-g6 (guild F13, ADDENDUM X8).
+        The wire's npc_id is 0 (`inferred`: _board_sale_npc named the NPC); an explicit 181 is
+        still accepted for a client that does send it.
+
+        Sold: the Guild Billboard EN 4284 (Type 0, hii Buy 1000, a consume-tab item) at its hii
+        Buy with the client's discount (shop.discount / cost, as any 0x0B) -> ONE 0x18 {gold,
+        victy, 4284, qty}, which the client files in its consume tab (FUN_00441070 case 0).
+        The cp-2 exe then opens board dialog 0x4B7 when it is used in 9702 (0x44FCB8) and its
+        OK sends C2S 0x88 (boards.Boards.place). The EN hni lists 4283 in Moiba's `item:` column
+        (the PREMIUM board: Type 5 cash, Buy 0), so the client asks for 4283 and its own dialog
+        prices it at 0 gold (itemdef+0x1E0, 0x4822A2; FUN_00471450 skips a 0 price): the server
+        sells 4284 instead, DELIBERATELY [I] - KR's Moiba (NPC 181) sells KR 4280, the normal
+        1-hour board = EN 4284 (guild.md 1.6, the +4 shift), an 0x18 cannot grant a Type-5 cash
+        record (FUN_00441070 has no case for it) and a free 24-hour board per click would be a
+        Spark Shop item for nothing. The premium board stays a mall / GM cash item (its 0x88 is
+        consumed with a 0x72). While the dialog names another row than the one sold (the stock
+        hni's 4283 at "(0Gold)"), a 0x15 line after the 0x18 tells the item and the real price.
+        With the cp-5 hni patch (Moiba's row = 4284) the dialog names and prices 4284 itself:
+        the client's own gold check (FUN_00471450, the same discount as shop.discount: it is
+        called with param_7 = 1 at 0x4742EB) then agrees with this charge and no line is sent.
+        The stock exe ('kr') reaches no board with either EN id (4283 is its pet-food case, 4284
+        a plain use): refused there - boards are GM-seeded."""
+        char = self._session_char(session)
+        if not self.boards.placement_open():
+            return refuse(f'guild NPC {npc.idx} {npc.name}: CLIENT_ITEM_IDS {self.config.get("CLIENT_ITEM_IDS")!r} - '
+                          f'the stock exe uses no EN billboard (ADDENDUM X8); boards are GM-seeded',
+                          boardmod.TEXT_UNAVAILABLE)
+        sold = boardmod.EN_ITEM[boardmod.KIND_BOARD]
+        if item not in set(npc.shop_items) | set(boardmod.EN_ITEM.values()):
+            return refuse(f'item {item} is neither on {npc.name}\'s list {npc.shop_items} nor a board id')
+        info = en_item(sold)
+        if info is None or info.is_cash:
+            return refuse(f'the loaded hii has no NPC-sold Guild Billboard {sold}', "That item can't be bought here.")
+        limit = SH.qty_limit(info.type)
+        if not 1 <= qty <= limit:
+            return refuse(f'qty {qty} outside 1..{limit} for Type {info.type}', 'That amount cannot be bought.')
+        d = SH.discount(self.client_build, info.type, self.store.manner(session.get('username')),
+                        char.get('equipped'))
+        gold_cost, victy_cost = SH.cost(info.buy, qty, d), SH.cost(info.pmoney, qty, d)
+        why = self.trade.gold_refusal(session, gold_cost)
+        if why is not None:
+            return refuse(why, trademod.GOLD_IN_TRADE_TEXT)
+        with self._combat_lock(session):
+            if not wallet.pay(gold_cost, victy_cost):
+                short = 'Victy' if wallet.victy < victy_cost else 'gold'
+                return refuse(f'cost {gold_cost} gold + {victy_cost} Victy > wallet {wallet.gold}/{wallet.victy}',
+                              f'Not enough {short}.')
+            if self._inv_add(session, sold, qty, 'buy') is None:
+                wallet.earn(gold_cost, victy_cost)
+                return refuse('bag tab full', "There isn't empty space in the inventory.")
+            gold, victy = self._wallet_commit(session, wallet, 'buy')
+        log.info(f'[BUY] {EC.item_name(sold)} item={sold} x{qty} from guild NPC {npc.idx} {npc.name} (asked for '
+                 f'{item}: the hni row; guild-g6 sells the 1-hour board) cost={gold_cost} gold (x{d:g}) '
+                 f'-> gold={gold} victy={victy}' + (' (wire npc_id 0: 0x474327)' if inferred else ''))
+        P.send(self, sock, session, '0x18', invmod.currency_fields(wallet, sold, qty))
+        if item != sold:
+            # the dialog named and priced another row (the stock hni's 4283 at "(0Gold)")
+            self._notice(sock, session, self.board_sale_text(sold, qty, gold_cost, victy_cost))
+
+    @staticmethod
+    def board_sale_text(item, qty, gold_cost, victy_cost=0):
+        """The 0x15 line after a billboard sale whose dialog showed another row's price."""
+        cost = f'{gold_cost:,} gold' + (f' + {victy_cost:,} Victy' if victy_cost else '')
+        return f'{EC.item_name(item)} x{qty} bought for {cost}.'
 
     # Client stack limits for a sold quantity (shop_storage.md F2 step 1: u16 stacks 999,
     # u8 stacks 99, equipment 1).
@@ -4754,6 +5230,28 @@ class GameServer:
         gold, victy = self._wallet(session)
         return [('0x18', invmod.currency_fields((gold, victy)), None),
                 ('0x15', self.notice_fields(text, 'warn'), None)]
+
+    def _shop_extras(self, npc_id):
+        """P15 cp-3 (pet.md B4): the ids config SHOP_EXTRA_ITEMS adds to merchant `npc_id`'s hni
+        stock - only ids the loaded client item table has and that are no cash item (an NPC never
+        sells one: rule 2 of _handle_buy_item), so the 2009 Pet Bell 4285 drops out on a 2008
+        server. The client shows such a row only when its own hni lists it (FUN_00465a80, 2009
+        FUN_0046F6E0: the shop window is client data), so this is what makes a patched grocer
+        row sell.
+
+        An id the NPC's hni row already lists is skipped: with the cp-3d data patch installed
+        (CLIENT_PATCH_SET_RE_2026-10-06.md 9) the server reads the same hni as the client, whose
+        grocer rows then end with 4285 themselves - the extra would list the bell twice. With the
+        stock hni the extra is the only source, so either hni sells it exactly once."""
+        extra = (self.config.get('SHOP_EXTRA_ITEMS') or {}).get(str(int(npc_id))) or []
+        stocked = set(EC.shop_list(npc_id) or ())
+        out = []
+        for item in extra:
+            item = int(item)
+            info = en_item(item) if en_item_exists(item) else None
+            if info is not None and not info.is_cash and item not in stocked and item not in out:
+                out.append(item)
+        return out
 
     def _send_shop_refusal(self, sock, session, text):
         """The same two packets _shop_refusal_replies lists, sent from a handler: the
@@ -4893,6 +5391,16 @@ class GameServer:
         info = en_item(item)
         if info is None:
             log.info(f'[USE] item={item} is not an EN client item - ignoring')
+            return
+        if self.boards.supported and self.boards.echo(sock, session, item):
+            # P15 guild-g6: the C2S 0x15 {board} the client sends on 0xB3 sub 185 {1, board}
+            # (0x47E846) - the 0x88 took the billboard already; 0x25 is the client's own consume.
+            return
+        if item == cashmod.PET_BELL and self.pets.supported:
+            # P15 pet-s4 (pet.md F7): the Pet Bell wakes the worn pet - asleep, gauge >= 10 -
+            # and is used up only then (0x25 + 0xAD); every other use is refused with no 0x25
+            # (pets.Pets.use_bell). A 2008 hii has no item 4285 (refused above).
+            self.pets.use_bell(sock, session, item)
             return
         if info.type != EC.TYPE_CONSUMABLE:
             # Not a consumable; nothing to apply (equip = 0x0F, etc = 2, skill = the branch
@@ -5227,18 +5735,44 @@ class GameServer:
         the copy kept for ever - C4). Returns the number sent."""
         return presence.to_holders(self, session, key, fields, 'SKILL')
 
-    def refuses(self, target, kind, actor=None):
+    def refuses(self, target, kind, actor=None, by_uid=False):
         """chat_mail_gm-privacy-flags consumer API (D13): does `target` refuse `kind`
         ('whisper' / 'exchange' / 'party' / 'talk' / 'friend') from `actor`? target is a
         session, or a character name - the online session's live flags, else the stored
-        record's (privacy.py lists the reply each consumer sends)."""
+        record's (privacy.py lists the reply each consumer sends).
+
+        P12 bl-3 (blacklist.py F-B4): with BLACKLIST_FILTER 'refuse' a target that blacklisted
+        the actor refuses it like a privacy flag, so each consumer sends its own refusal
+        (whisper 0x09 0x67, trade 0x47 4, party 0x15, friend 0x0C 4, chat invite 0x0F 4). The
+        default 'silent' mode is blacklist_drops(), which every consumer asks first. by_uid:
+        the request's S2C is matched by the target's client by id OR name (0x0D / 0x10), so a
+        listed sibling of the actor counts too (blacklist.Blacklist.gate)."""
+        target = self._refuse_target(target)
+        if privacy.refuses(target, kind, actor):
+            return True
+        return actor is not None and self.blacklist.gate(target, actor, by_uid=by_uid) == blmod.MODE_REFUSE
+
+    def blacklist_drops(self, target, actor, by_uid=False):
+        """P12 bl-3, BLACKLIST_FILTER 'silent' (the default; blacklist.py F-B4 / F-B5): True when
+        `actor`'s request to `target` must be dropped the way a client that filters it would:
+        nothing to the target and NO pending state (no trade prompt answering others "busy"
+        for 30 s, blch A.6), and the requester gets what a dropping receiver gives it - a
+        whisper its 0x09 echo, any other request nothing. Also True when the actor blacklisted
+        the target (only a forged client sends that). Always False on 2008 (no blacklist) and
+        in 'client' mode. by_uid: as refuses() - the friend request / chat invite paths, whose
+        S2C the target's client drops by account uid too (a listed character's sibling)."""
+        return self.blacklist.gate(self._refuse_target(target), actor, by_uid=by_uid) == blmod.MODE_SILENT
+
+    def _refuse_target(self, target):
+        """A refuses() / blacklist_drops() target: a session or a stored record as given, a
+        character name as its online session, else its stored record (None: unknown)."""
         if isinstance(target, str):
             found = self.world.by_char_name(target)
             if found is None:
                 stored = self.store.character_by_name(target)
                 found = stored[2] if stored else None
             target = found
-        return privacy.refuses(target, kind, actor)
+        return target
 
     def _send_buff_removal(self, sock, session, item_id, uid=None, observers=True):
         """End one of this session's own slots: S2C 0x43 {id, uid} when the slot changes
@@ -7563,7 +8097,10 @@ class GameServer:
         trades_before = trademod.commits(session)
         grants_before = eventmod.grants(session)
         body_03 = self._build_opcode_03(session, char, current_map=map_code, clock=clock)
-        body_07 = self._build_player_spawn(session, char, pos=(x, y))
+        # arch09-receiver-mirror: the own record's gm_or_guild_id is what this client's local
+        # entity+0x12 holds once it is out (the 0x21 tail gate, guild.md 3).
+        rec_07 = self._player_record(session, char, pos=(x, y))
+        body_07 = self._build_player_spawn(session, char, pos=(x, y), rec=rec_07)
 
         # --- leave the old map (F5 before_server_map_load: trade cancel, stall close 0x84
         #     before the lead, 0x06 to the old map's peers) -----------------------------
@@ -7636,10 +8173,21 @@ class GameServer:
         if body_lead is not None:
             self._send_encrypted(sock, session, P.opcode(lead_key, client_build=self.client_build), body_lead,
                                  use_by_array=no_enc)
-        self._send_encrypted(sock, session, 0x03, body_03, use_by_array=no_enc)
-        # The 0x03 just (re)set the client's scene clock to `clock` (_client_clock anchors here).
-        session['clock_t'] = time.monotonic()
-        self._send_encrypted(sock, session, 0x07, body_07, use_by_array=no_enc)
+        # arch09-receiver-mirror (clientview.py): the 0x03 resets what the client holds (the
+        # guild window, its applications, every entity and pet_info) and the own 0x07 sets its
+        # entity+0x12 - both queued under the view lock, so a 0x21 another thread builds can
+        # never carry a tail decided from the old map's value (P14 guild-g1). flush=False: no
+        # socket write under that lock (a sender waiting for it may hold its own combat and
+        # monster locks); the queue keeps the order and _flush_outbox writes it right after.
+        with cview.lock(session):
+            self._send_encrypted(sock, session, 0x03, body_03, use_by_array=no_enc, flush=False)
+            cview.on_map_load(session)
+            # The 0x03 just (re)set the client's scene clock to `clock` (_client_clock anchors here).
+            session['clock_t'] = time.monotonic()
+            self._send_encrypted(sock, session, 0x07, body_07, use_by_array=no_enc, flush=False)
+            cview.on_own_record(session, R.tag_value(rec_07) if 'gm_or_guild_id' in rec_07
+                                else rec_07.get('gm_level', 0))
+        self._flush_outbox(session)
         # Desync fix M1: the 0x07 re-created his entity, +0x949 = the record's direction byte
         # (0x453B80: the local record's idle block, 2 = left) - a fresh action tracker facing
         # that way, so a hit before his first turn knocks the way his copy does, not the way
@@ -7659,21 +8207,25 @@ class GameServer:
         # would - and never refills anything by itself.
         with self._combat_lock(session):
             hpmp.regen_reset(session, time.monotonic(), self.config.REGEN_SECS)
+        # hop (P12 arch09-session-continuity): on the connection's first entry, the
+        # continuity.Hop when it continues a 2009 channel change - the once-per-login hooks
+        # (welcome, friend login lines, P14 guild sub 20) skip it.
         self.world.hooks.fire(worldmod.ON_ENTER_WORLD, self, session,
-                              map_code=map_code, reason=reason, old_map=old_map, first=first)
-        # CURRENT hp/mp: sending the maxima here healed the player on every portal (F6 step
-        # 5) and left the client showing more HP than the record kept.
-        self._send_hp(sock, session, cur_hp, no_enc=no_enc)
-        self._send_mp(sock, session, cur_mp, no_enc=no_enc)
-        # premium_cash-owned-list-sync (F1 step 3): the 0x03 above memset the cash bag tab, so
-        # the owned cash list comes back here - after the own 0x07 (its tail needs the local
-        # player, 0x441D85) and the 0x28 / 0x44, before the monsters.
-        self._send_owned_cash(sock, session, reason=reason, no_enc=no_enc)
-        # chat_mail_gm-gift-inbox (P8 stage 2, mall.py): undelivered gifts go to the client's
-        # append-only 0x6D queue once per connection (their popups open at the next 0x6A); a
-        # map load that finds the queue still holding some relights the HUD gift button with
-        # a count-0 0x6D (C20). Nothing at all for an account without pending gifts.
-        self.mall.send_gift_queue(sock, session, reason=reason, relight=True)
+                              map_code=map_code, reason=reason, old_map=old_map, first=first,
+                              hop=session.get('channel_hop') if first else None)
+        # arch09-resync-bundle, resync.STAGE_SPAWN (after the own 0x07 and the on_enter_world
+        # lines, before the monsters), in this order:
+        # - CURRENT hp/mp 0x28 / 0x44: sending the maxima here healed the player on every
+        #   portal (F6 step 5) and left the client showing more HP than the record kept;
+        # - premium_cash-owned-list-sync (F1 step 3): the 0x03 above memset the cash bag tab,
+        #   so the owned cash list 0x6F comes back here (its tail needs the local player,
+        #   0x441D85), the worn pet record included (ADDENDUM C2);
+        # - chat_mail_gm-gift-inbox (P8 stage 2, mall.py): undelivered gifts go to the
+        #   client's append-only 0x6D queue once per connection (their popups open at the next
+        #   0x6A); a map load that finds the queue still holding some relights the HUD gift
+        #   button with a count-0 0x6D (C20). Nothing at all without pending gifts.
+        self.resync.run(resyncmod.STAGE_SPAWN, sock, session, hp=cur_hp, mp=cur_mp, reason=reason,
+                        no_enc=no_enc)
         self._spawn_map_monsters(sock, session, map_code, no_enc=no_enc)
         # The 0x03 above emptied the client's ground list (spec correction C19): the items
         # still lying on this map come back as S2C 0x11 state 0 (item_inventory.md F6 step 5).
@@ -7792,9 +8344,31 @@ class GameServer:
         0x73 {0} (premium_cash-rename, F9; ROADMAP_2009_ADDENDUM C4)."""
         self.cashuse.rename(sock, session, rec)
 
+    def _handle_pet_equip(self, sock, session, rec, no_enc=False):
+        """2009 C2S 0x82 PetEquip {u16 pet_item_id} -> S2C 0xAB: the 6-byte local form to the owner,
+        the remote form to the viewers (P15 pet-s2, pets.Pets.equip; pet.md F1)."""
+        self.pets.equip(session, int(rec.get('pet_item_id', 0)))
+
+    def _handle_pet_unequip(self, sock, session, rec, no_enc=False):
+        """2009 C2S 0x83 PetUnequip {u16 pet_item_id} -> S2C 0xAC to the owner and the viewers
+        holding its pet_info (P15 pet-s2, pets.Pets.unequip; pet.md F2, H1)."""
+        self.pets.unequip(session, int(rec.get('pet_item_id', 0)))
+
+    def _handle_pet_feed(self, sock, session, rec, no_enc=False):
+        """2009 C2S 0x85 PetFeed {u16 food_item_id} -> S2C 0xB1 {gauge, food serial} to the owner
+        (+ the wake's 0xAD); the id is an exe constant (CLIENT_ITEM_IDS). No client lock, so a
+        refusal is no reply (P15 pet-s4, pets.Pets.feed; pet.md F5)."""
+        self.pets.feed(session, int(rec.get('food_item_id', 0)))
+
+    def _handle_pet_emote(self, sock, session, rec, no_enc=False):
+        """2009 C2S 0x86 PetEmote {u8 action} -> S2C 0xB2 {uid, action} to the owner and the
+        clients holding him (P15 pet-s3, pets.Pets.emote; pet.md F8)."""
+        self.pets.emote(session, int(rec.get('action', 0)))
+
     def _handle_pet_rename(self, sock, session, rec, no_enc=False):
-        """2009 C2S 0x4D PetRename (window 0x4CB, a waiting box) -> S2C 0x73 {0}, the planned
-        refusal through the one 0x73 builder (ROADMAP_2009_ADDENDUM C5; pets.py, P15 pet-s6)."""
+        """2009 C2S 0x4D PetRename (window 0x4CC, a waiting box) -> S2C 0xC0 to the owner + 0xB0
+        to the viewers holding its pet_info, or the refusal S2C 0x73 {0} through the one 0x73
+        builder (P15 pet-s6, pets.Pets.rename; pet.md F9, H2; ROADMAP_2009_ADDENDUM C5)."""
         self.pets.rename(sock, session, rec)
 
     def _handle_cash_add_option(self, sock, session, rec, no_enc=False):
@@ -8390,6 +8964,11 @@ class GameServer:
         if info.type != EC.TYPE_EQUIPMENT:
             log.info(f'[EQUIP] item={item} not equippable (EN Type {info.type} != 1) - ignoring')
             return
+        if invmod.is_pet_gear(item):
+            # P15 pet-s5 (pet.md F10): 2009 pet gear is a cash RECORD (never in the bag model)
+            # worn on the pet - its own gates (an awake pet of its species) and record move.
+            self.pets.equip_gear(sock, session, item, stones, extra)
+            return
         char = self._session_char(session)
         if char is None:
             return
@@ -8478,6 +9057,10 @@ class GameServer:
         if info.type != EC.TYPE_EQUIPMENT:
             # The client's own gate 6 and the 0x1E handler's first check (def+0x154 == 1).
             log.info(f'[UNEQUIP] item={item} is EN Type {info.type} != 1 - ignoring')
+            return
+        if invmod.is_pet_gear(item):
+            # P15 pet-s5: pet gear goes back to the bag as its cash record (pets.unequip_gear).
+            self.pets.unequip_gear(sock, session, item, stones, extra)
             return
         char = self._session_char(session)
         if char is None:
@@ -8665,7 +9248,17 @@ class GameServer:
         0x03, because the client marks the item picked even when its own bag add fails and
         the item would be lost - and refuses in silence: the client keeps showing the item.
         The bag gets exactly what the client adds from its ground record: `quantity` of a
-        stack, or one equipment instance with the record's 6 option words."""
+        stack, or one equipment instance with the record's 6 option words.
+
+        2009 pet auto-loot (P15 T14, pet.md 2.8 / F12): the pet's 0x1F (0x42EA76) is this same
+        request, repeated every 30 ms tick until the 0x13. The client sent it only for an item
+        within ~25 px (624 squared) of the PET, owned by nobody or by itself with drop_time != 0
+        (ground.client_drop_time floors it at 1), whose tab has room, and - for equipment -
+        with the pet at level >= 5 (phase 2). The server never sees the pet's position (it
+        follows the owner client-side, up to 600 px away before it warps back) and cannot tell
+        the pet's request from the W key's (which takes equipment at any level), so it adds no
+        range or pet-level gate: the loot protection and the bag room below (the equipment tab
+        counting the bagged pets / pet gear, inventory.pet_slots) are its checks."""
         gid = int(rec.get('ground_item_uid', 0))
         if not session.get('in_world'):
             log.info(f'[GROUND] pickup {gid} outside the world - ignored')
@@ -9081,15 +9674,25 @@ class GameServer:
 
     def _receiver_guild_id(self, session):
         """The guild id the receiving client holds at local entity+0x12 (spec_2009 0x07
-        gm_or_guild_id, 0xB3 sub 3). No guild model exists, so 0: "not in a guild"."""
-        return 0
+        gm_or_guild_id, 0xB3 sub 3 / 15 / 37, 0xB4 / 0xB6 / 0xB7 on itself): the
+        arch09-receiver-mirror (clientview.py), not the guild store - the 0x21 tail must match
+        what THIS client holds (P14 guild-g1). 1 = the GM tag (no tail)."""
+        return cview.guild_id(session)
+
+    def _guild_tag(self, char):
+        """records.GuildTag of a character's guild for its records (arch09-roster-record), None
+        when it has none, on a 2008 server, or on a bare GameServer in a unit test."""
+        guilds = getattr(self, 'guilds', None)
+        return guilds.tag_of(char) if guilds is not None else None
 
     def _handle_guild_info(self, sock, session, payload, no_enc=False):
         """C2S 0x8A GuildInfoRequest (spec_2009 0x453581/0x8A, 0 B): the 2009 client sends it
         by itself at the end of every S2C 0x03 (right after 0x2F and 0x63), i.e. after every
         map load. Reply: S2C 0xB3 sub 3 (full guild info) for a guild member, else sub 15 with
         result != 1 - the client then sets its entity+0x12 guild id to 0 and shows nothing.
-        Nobody is in a guild yet, so it is always sub 15 result 0.
+        P14 guild-g1 (guild.Guilds.reply_info / reply_applications): a member gets sub 3 with
+        the whole member list (once per 0x03), a master also sub 4 with the pending
+        applications, a visible GM sub 37 last; anyone else sub 15 result 0.
 
         Never sub 19: it makes the client re-send 0x8A (0x48456D/0x8A), an endless loop
         (spec_2009 0xB3 gates_and_hazards). The sub handler needs the guild object the 0x03
@@ -9097,18 +9700,97 @@ class GameServer:
         if not session.get('in_world'):
             log.info('[GUILD] 0x8A outside the world - no reply')
             return
-        guild = self._receiver_guild_id(session)
-        fields = {'sub': self.GUILD_SUB_INFO_FAILED, 's15_result': self.GUILD_NOT_IN_GUILD}
-        assert fields['sub'] != self.GUILD_SUB_REREQUEST
-        P.send(self, sock, session, '0xB3', fields)
-        log.info(f'[GUILD] 0x8A guild info (guild id {guild}) -> 0xB3 sub 15 result 0 (not in a guild)')
-        # Sub 15 sets the local entity+0x12 to 0, and +0x12 == 1 is also what draws "Game
-        # Master" on the nameplate (FUN_0043c300): the 0x07 said 1, the answer wiped it (live
-        # 2009: the tag vanished after the first map change). Sub 37 {uid} puts the 1 back.
-        if session.get('gm') == 1 and not session.get('gm_hidden'):
-            P.send(self, sock, session, '0xB3', {'sub': self.GUILD_SUB_FLAG_GM,
-                                                 's37_uid': P.session_uid(session) or 0})
-            log.info('[GUILD] GM nameplate restored: 0xB3 sub 37 after the sub 15')
+        # arch09-resync-bundle: resync.STAGE_GUILD - 'guild' (_send_guild_info; P14 guild-g1
+        # replaces it and adds sub 4 / 0xBB before 'gm_tag'), then 'gm_tag' (sub 37).
+        self.resync.run(resyncmod.STAGE_GUILD, sock, session)
+
+    def _send_guild_info(self, sock, session):
+        """The guild reply to C2S 0x8A (guild F0, P14 guild-g1): guild.Guilds.reply_info - 0xB3
+        sub 3 for a member, sub 15 {0} otherwise, through the guarded sender (after the own
+        0x07, never a second sub 3 per 0x03, never sub 19). resync.STAGE_GUILD runs it as the
+        step 'guild' (guild.install replaced the pre-P14 one with the same call)."""
+        return self.guilds.reply_info(sock, session)
+
+    def _send_gm_guild_tag(self, sock, session):
+        """resync.STAGE_GUILD step 'gm_tag', the last one: sub 15 / sub 3 set the local
+        entity+0x12 to 0 / the guild id, and +0x12 == 1 is also what draws "Game Master" on the
+        nameplate (FUN_0043c300): the 0x07 said 1, the answer wiped it (live 2009: the tag
+        vanished after the first map change). Sub 37 {uid} puts the 1 back, for a visible GM
+        only (records.gm_tag_visible: not in shadow, the tag not switched off), through
+        guild.Guilds.send_gm_tag so the receiver mirror follows."""
+        self.guilds.send_gm_tag(sock, session)
+
+    def _handle_guild_battle_register(self, sock, session, rec, no_enc=False):
+        """C2S 0x96 GuildBattleRegister (spec_2009 0x485D93, 0 B): the client opened "Waiting for
+        the server to respond." and only a 0xB3 sub 23 / 34 hides it (guild F14). Guild Battle
+        is guild-g7 (P17): sub 23 {0, 0} ("registration failed") closes it at once."""
+        self.guilds.battle_register(sock, session, rec)
+
+    def _handle_guild_battle_accept(self, sock, session, rec, no_enc=False):
+        """C2S 0x9C GuildBattleChallengeAccept {room_id} (spec_2009 0x485FF4): the same waiting
+        box; sub 34 {0} is its silent close (guild F14, gate G-GB default)."""
+        self.guilds.battle_accept(sock, session, rec)
+
+    def _dev_guild(self, session, args):
+        """`!guild ...` (registered by guild.py): Guilds.dev_guild."""
+        self.guilds.dev_guild(session, args)
+
+    def _dev_pet(self, session, args):
+        """`!pet ...` (registered by pets.py, P15 pet-s1): Pets.command."""
+        self.pets.command(session, args)
+
+    def _dev_blacklist(self, session, args):
+        """`!blacklist [filter [client|silent|refuse]]` (registered by blacklist.py; P12+P14 live
+        triage BL): Blacklist.dev_blacklist - the rows and BLACKLIST_FILTER, switched at run
+        time like `!channel scale` sets LOAD_SCALE (until a restart)."""
+        self.blacklist.dev_blacklist(session, args)
+
+    # ---- P14 stage 4: guild-g2..g5, g4 (guild.py owns the logic; 2009 routes only) ----
+    def _handle_guild_create(self, sock, session, rec, no_enc=False):
+        """C2S 0x87 GuildCreate (Moiba, 9702) -> 0xB3 sub 1 (+ sub 3 n=0 + 0xB4): guild F1."""
+        self.guilds.create(sock, session, rec)
+
+    def _handle_guild_apply(self, sock, session, rec, no_enc=False):
+        """C2S 0x89 GuildJoinRequest (u32 menu / u16 board) -> 0xB3 sub 2: guild F2."""
+        self.guilds.apply(sock, session, rec)
+
+    def _handle_guild_board_place(self, sock, session, rec, no_enc=False):
+        """C2S 0x88 GuildAdBoardPlace (87 B) -> S2C 0xBA to everyone on 9702 + 0xB3 sub 185 to
+        the master (P15 guild-g6, guild F13; boards.Boards.place); refusals: a 0x15 line in the
+        client's own words, sub 185 {0} for a non-master."""
+        self.boards.place(sock, session, rec)
+
+    def _handle_guild_accept(self, sock, session, rec, no_enc=False):
+        """C2S 0x8B GuildApplicationAccept -> 0xB3 sub 5 (+ 13 / 3 / 0xB4): guild F3."""
+        self.guilds.accept(sock, session, rec)
+
+    def _handle_guild_reject(self, sock, session, rec, no_enc=False):
+        """C2S 0x8C GuildApplicationReject (empty) -> no reply: guild F3 step 3."""
+        self.guilds.reject(sock, session, rec)
+
+    def _handle_guild_chat(self, sock, session, rec, no_enc=False):
+        """C2S 0x8D GuildChat -> S2C 0xB5 to the other members: guild F11."""
+        self.guilds.chat(sock, session, rec)
+
+    def _handle_guild_member_action(self, sock, session, rec, no_enc=False):
+        """C2S 0x8E kick / leave / disband -> 0xB3 sub 18 / 6 / 8: guild F4-F6."""
+        self.guilds.member_action(sock, session, rec)
+
+    def _handle_guild_notice(self, sock, session, rec, no_enc=False):
+        """C2S 0x8F GuildNoticeChange -> 0xB3 sub 7: guild F9."""
+        self.guilds.change_notice(sock, session, rec)
+
+    def _handle_guild_capacity(self, sock, session, rec, no_enc=False):
+        """C2S 0x90 GuildMaxMemberIncrease -> 0xB3 sub 9 (+ sub 10): guild F10."""
+        self.guilds.increase_capacity(sock, session, rec)
+
+    def _handle_guild_master_change(self, sock, session, rec, no_enc=False):
+        """C2S 0x91 GuildMasterChange -> 0xB3 sub 11 (+ sub 12, sub 4): guild F8."""
+        self.guilds.change_master(sock, session, rec)
+
+    def _handle_guild_grade(self, sock, session, rec, no_enc=False):
+        """C2S 0x92 GuildMemberGradeChange -> 0xB3 sub 16 (+ sub 17): guild F7."""
+        self.guilds.change_grade(sock, session, rec)
 
     # S2C 0x1A per-record size (spec 0x1A length): 82 B + 6 per effect entry + 4 when
     # server_controlled carries cmd_hold_ms. One packet holds at most MAX_PKT - header -
@@ -10544,11 +11226,13 @@ class GameServer:
           4. S2C 0x21 (0x7F with menti_id) through grant_exp, which persists and levels.
         Nothing else raises earned exp: a P8 cash grant, a mall purchase or a mileage credit
         carries none, and every writer of an earned 0x21 comes through here.
-        P14 guild tail hook: the 2009 0x21 carries a u32 guild_points exactly when the
-        RECEIVER's client-side guild id is >= 2 (_exp_delta_packet reads _receiver_guild_id,
-        0 until P14, so the tail is never sent yet). Guild points come from the PRE-multiplier
-        exp by default (X9): that amount travels to the builder as `guild_base` for P14 to
-        credit; 0x7F never has the tail. GM !exp / !level and the death penalty are not earned
+        P14 guild tail: the 2009 0x21 carries a u32 guild_points exactly when the RECEIVER's
+        client-side guild id is >= 2 and the delta > 0 (_exp_delta_packet reads
+        _receiver_guild_id, the clientview mirror of what that client holds: its own 0x07,
+        the 0x8A sub 3 / 15, sub 37 ...). Guild points come from the PRE-multiplier exp by
+        default (X9): that amount travels to the builder as `guild_base`, GUILD_POINTS_PCT of
+        it goes into the tail and accrues for the logout credit (guild-g5, sub 21); 0x7F never
+        has the tail. GM !exp / !level and the death penalty are not earned
         grants: they call grant_exp directly and are never scaled (nor is the 1891 Waive EXP
         Penalty item a stage: it only skips the death penalty). Returns the exp applied."""
         scaled = int(amount)
@@ -10558,7 +11242,10 @@ class GameServer:
         events = getattr(self, 'events', None)
         if events is not None:
             scaled = events.scale_exp(scaled, source)
-        return self.grant_exp(session, scaled, menti_id=menti_id, guild_base=int(amount))
+        # P14 guild-g5 (X9): the guild points are GUILD_POINTS_PCT of the grant before the cash
+        # item and the event multiplier ('pre', the default) or of the exp the 0x21 carries.
+        base = scaled if self.config.get('GUILD_POINTS_BASE', 'pre') == 'post' else int(amount)
+        return self.grant_exp(session, scaled, menti_id=menti_id, guild_base=base)
 
     def grant_exp(self, session, exp_delta, *, menti_id=None, guild_base=None):
         """Credit (or take) exp and let the client level itself (lc-exp-persist, F6).
@@ -10627,7 +11314,16 @@ class GameServer:
             if menti_id is not None and delta > 0:
                 P.send(self, sock, session, '0x7F', {'exp_delta': delta, 'menti_id': int(menti_id) & 0xFFFFFFFF})
             else:
-                P.send(self, sock, session, '0x21', *self._exp_delta_packet(session, delta, guild_base))
+                # arch09-receiver-mirror (P14 guild-g1): the 2009 tail is decided from what this
+                # client holds at entity+0x12 and sent under the same view lock the map load and
+                # the guild sends hold, so no 0x03 / 0x07 / 0xB3 can slip in between. A map load
+                # that started meanwhile (in_world False) drops it, as before (scene+0x988 == 0).
+                with cview.lock(session):
+                    if session.get('in_world'):
+                        fields, assume = self._exp_delta_packet(session, delta, guild_base)
+                        P.send(self, sock, session, '0x21', fields, assume, flush=False)
+                        guildmod.Guilds.accrue(session, int(fields.get('guild_points') or 0))
+                self._flush_outbox(session)
         if new_lv < old_lv:
             # No 0x22 for a level-down (docstring): every holder's copy is replaced with a
             # record that carries the lower level (livetest bug 8), and a record in flight is
@@ -10650,20 +11346,21 @@ class GameServer:
 
     def _exp_delta_packet(self, session, delta, guild_base=None):
         """(fields, assume) of S2C 0x21 for this receiver. 2009 (spec_2009 0x21): a positive
-        delta carries a trailing u32 guild_points only when the receiver's OWN entity+0x12
-        guild id is >= 2 (the client prints "(+%u) guild points are gained." and stores
-        nothing). No guild model exists (_receiver_guild_id 0), so the tail is never sent -
-        but the gate is the receiver's guild, never a constant, so a guild model only has
-        to answer _receiver_guild_id and fill guild_points. `guild_base` (award_exp): the
-        pre-multiplier exp of an earned grant, which P14 turns into guild_points (X9); None
-        for a GM or penalty grant."""
+        delta carries a trailing u32 guild_points exactly when the receiver's OWN entity+0x12
+        is > 1 (0x4591F6..0x459236; the client prints "(+%u) guild points are gained." and
+        stores nothing) - _receiver_guild_id, the clientview mirror of what that client holds
+        (GM = 1: no tail; 0xFFFF would need one). P14 guild-g1: the value is
+        guild.Guilds.points_for(guild_base) - GUILD_POINTS_PCT of `guild_base`, award_exp's
+        pre-multiplier exp of an earned grant (X9) - and 0 for a GM or penalty grant (None):
+        the tail is there all the same, or the stream is 4 bytes short."""
         fields = {'exp_delta': int(delta)}
         if self.client_build != cfgmod.BUILD_2009:
             return fields, None
         guild = self._receiver_guild_id(session)
         in_guild = guild >= 2
         if in_guild and delta > 0:
-            fields['guild_points'] = 0          # the guild model credits these
+            guilds = getattr(self, 'guilds', None)       # a bare GameServer in unit tests
+            fields['guild_points'] = guilds.points_for(guild_base) if guilds is not None else 0
         return fields, {'local_player_guild_id > 1': in_guild}
 
     def _send_drop(self, sock, session, item=0, count=0, gold_gain=0, winnie_gain=0, no_enc=False):
@@ -10754,14 +11451,17 @@ class GameServer:
         The wire layout is the 0x07 grammar, so the record stays the live-proven 368 B."""
         account = self._session_account(session)
         return R.player_record(session, char, account, remote=remote, pos=pos,
-                               client_build=self.client_build)
+                               client_build=self.client_build, guild=self._guild_tag(char))
 
-    def _build_player_spawn(self, session, char, pos=None):
+    def _build_player_spawn(self, session, char, pos=None, rec=None):
         """The S2C 0x07 payload with this session's own record: the packet that registers
         the local player (gate 0x4221A2 needs uid == scene+0x220). Built, not sent: it is
         one of the packets MapTransfer prepares before it commits anything, so a record that
-        will not encode cannot leave the client half-way through a map load."""
-        return P.build('0x07', R.player_list(self._player_record(session, char, pos=pos)),
+        will not encode cannot leave the client half-way through a map load. `rec`: the
+        record already built (the map load keeps it for the receiver mirror)."""
+        if rec is None:
+            rec = self._player_record(session, char, pos=pos)
+        return P.build('0x07', R.player_list(rec),
                        client_build=self.client_build, receiver_uid=P.session_uid(session))
 
     # S2C 0x1C CreateCharacterResult codes, with the client message each one shows
@@ -11322,6 +12022,23 @@ class GameServer:
             return None
         return parts[0], parts[1].strip(), int(rec.get('session_key', 0)) & 0xFFFFFFFF
 
+    def _login_session_key(self, uid, key):
+        """The 2009 S2C 0x02 session_key of a FRESH login (not a relogin) presenting `key`.
+        Key 0 (the launcher's first login) gets a new key. A non-zero key is ADOPTED as the
+        account's live key (blch E-B5): after a channel change the client keeps gs+0x408 set
+        for the rest of its run, so every later 0x02 success takes the auto-0x2B path and its
+        key is never read (0x452028) - a rotated key would make the client's next channel
+        change a duplicate login (0x02 result 4) instead of a relogin. The key is no secret
+        (every login, relogin too, checks the password); it only tells a reconnect of this
+        client from a second client. An account online elsewhere never gets here (result 4)."""
+        if not key:
+            return self._new_session_key(uid)
+        if self.session_keys.get(uid) != key:
+            log.info(f'[LOGIN] uid {uid}: session key 0x{key:08X} adopted as the live key '
+                     f'(the client may hold a stale gs+0x408 and not read a new one, blch E-B5)')
+        self.session_keys[uid] = key
+        return key
+
     def _new_session_key(self, uid):
         """A fresh non-zero u32 for the 2009 S2C 0x02 session_key (spec_2009 0x02, scene+0x154):
         the client echoes it in its next C2S 0x01, which is how a relogin is recognised.
@@ -11364,7 +12081,16 @@ class GameServer:
         account is closed and REPLACED (no result 4) and the key stays the same, because on
         that path the client keeps scene+0x154 from the previous 0x02. The full list is sent
         anyway: gs+0x408 ignores it, the back-to-select path (gs+0x404) needs it. Any other
-        key (0, stale, another account's) is a fresh login and gets a new key.
+        key is a fresh login: key 0 (the launcher's first login) gets a new key, a non-zero
+        one is ADOPTED as the live key (blch E-B5, _login_session_key) - a client with a stale
+        gs+0x408 never reads the new 0x02's key.
+
+        P12 (channels.py / continuity.py): the listener's channel must be open (else 0x0E,
+        the maintenance text: a closed channel is "(inspection)") and below its max_users
+        (else 6 "server full", ch-5). 0x02 goes out only after every closing session of the
+        account finished its disconnect path, save included (_await_closing: ch-4 "save
+        before accepting the relogin's 0x2B"), and continuity.relogged() then decides
+        whether the first 0x2B may continue a channel hop.
         """
         # If we're already logged in, this is a spurious mid-flow re-login —
         # likely triggered by the binary patch at 0x43ED30[0] falling through
@@ -11384,6 +12110,14 @@ class GameServer:
 
         if self.config.MAINTENANCE:
             log.info(f'[LOGIN] "{username}" refused: MAINTENANCE (0x02 result 0x0E)')
+            P.send(self, sock, session, '0x02', {'result': 0x0E})
+            return
+        channel = self._channel_no(session)
+        if not self.channels.is_open(channel):
+            # P12 ch-5: an admin closed this channel ("(inspection)" in every version list
+            # fetched since); a client holding an older list still lands here. The players
+            # already on it stay.
+            log.info(f'[LOGIN] "{username}" refused: channel {channel} is closed (0x02 result 0x0E)')
             P.send(self, sock, session, '0x02', {'result': 0x0E})
             return
 
@@ -11428,6 +12162,15 @@ class GameServer:
                      f'{self.config.MAX_ONLINE} (0x02 result 6)')
             P.send(self, sock, session, '0x02', {'result': 6})
             return
+        # P12 ch-5: the channel's own capacity (CHANNELS max_users). The account's own old
+        # session does not count (a relogin / channel hop replaces it).
+        on_channel = sum(1 for s in self.world.online()
+                         if s.get('uid') != uid and self._channel_no(s) == channel)
+        if self.channels.is_full(channel, on_channel):
+            log.info(f'[LOGIN] "{username}" refused: channel {channel} is full ({on_channel} >= '
+                     f'{self.channels.get(channel).max_users}, 0x02 result 6)')
+            P.send(self, sock, session, '0x02', {'result': 6})
+            return
 
         # lc-uid-online (F3; login_character.md F2 step 2f/2g). The uid is the account's
         # persistent store uid: the registration gate at 0x4221A2 requires every own spawn
@@ -11444,7 +12187,7 @@ class GameServer:
                        and self.session_keys.get(uid) == key)
             old = self.world.claim(session, uid, username, replace=relogin)
             if self.client_build == cfgmod.BUILD_2009 and (old is None or relogin):
-                session['session_key'] = key if relogin else self._new_session_key(uid)
+                session['session_key'] = key if relogin else self._login_session_key(uid, key)
         if old is not None and relogin:
             self._kick(old, f'2009 relogin of {username!r} (uid {uid}) with its live session key '
                             f'from {session.get("addr")}')
@@ -11456,13 +12199,45 @@ class GameServer:
             return
         if relogin:
             log.info(f'[LOGIN] "{username}" uid={uid} relogin with the live session key '
-                     f'0x{key:08X}' + (f' (old session {old.get("addr")} replaced)' if old else ''))
+                     f'0x{key:08X} on channel {channel}'
+                     + (f' (old session {old.get("addr")} replaced)' if old else ''))
         elif key and self.client_build == cfgmod.BUILD_2009:
             log.info(f'[LOGIN] "{username}" sent session key 0x{key:08X}, not the live one: fresh login')
 
-        log.info(f'[LOGIN] SUCCESS for "{username}" uid={uid}')
+        # ch-4 (blch R5): the client's relogin 0x2B follows our 0x02 at once and loads the
+        # STORED map / position / HP, so every closing session of this account must have saved
+        # first; the 5.5 s timer 2 starts only at the 0x02.
+        self._await_closing(uid, session)
+        self.continuity.relogged(session, uid, relogin, replaced=old if relogin else None)
+
+        log.info(f'[LOGIN] SUCCESS for "{username}" uid={uid} channel {channel}')
         resp = self._build_login_success(session, account)
+        session['login_relogin'] = bool(relogin)
+        session['login_reply_t'] = time.monotonic()
         self._send_encrypted(sock, session, 0x02, resp, use_by_array=no_enc)
+
+    def _await_closing(self, uid, session, timeout=contmod.CLOSE_WAIT_SECS):
+        """Wait (at most `timeout` s in all) until every OTHER session of account `uid` that
+        is closing - a relogin's replaced one (being kicked), one whose client just closed -
+        has run its disconnect path to the end, the world-state save included (P12 ch-4,
+        blch R5: "save before accepting the relogin's 0x2B"). The login thread holds no lock
+        here. Returns the sessions still running when the time ran out (logged)."""
+        with self._closing_lock:
+            pending = [s for s in list(self.sessions.values()) + list(self._closing.values())
+                       if s is not session and s.get('uid') == uid and s.get('closed_event') is not None
+                       and not s['closed_event'].is_set()]
+        deadline = time.monotonic() + timeout
+        late = []
+        for s in pending:
+            if not s['closed_event'].wait(max(0.0, deadline - time.monotonic())):
+                late.append(s)
+        if pending:
+            log.info(f'[LOGIN] uid {uid}: waited for {len(pending)} closing session(s) of the account '
+                     f'({len(pending) - len(late)} saved)')
+        for s in late:
+            log.warning(f'[LOGIN] uid {uid}: session {s.get("addr")} still closing after {timeout:g} s - '
+                        f'the 0x2B may load a stale saved position')
+        return late
 
     def _kick(self, session, reason):
         """Close a session's connection from another thread (duplicate login). It leaves the
@@ -11500,7 +12275,12 @@ class GameServer:
                 continue
             before = list(char.get('look') or [])
             gender = R.record_gender(char, account, self.client_build)
-            if invmod.Inventory(char).compose_all(gender):
+            composed = invmod.Inventory(char).compose_all(gender)
+            # P15 pet-s1: appearance word 14 = the worn pet's Spr_Num (pets.sync_look; the pet is a
+            # cash record, not a grid entry compose_all replays) - a 2009 look only.
+            if self.client_build == cfgmod.BUILD_2009 and petsmod.sync_look(char):
+                composed = True
+            if composed:
                 changed.append(char.get('name'))
                 log.info(f'[LOOK] {char.get("name")!r}: stored look {before} -> {char["look"]}'
                          f'{" + " + str(char["look_ext"]) if char.get("look_ext") else ""} '
@@ -11589,7 +12369,11 @@ def main():
     log.info(f'  Version Server: {cfg.BIND_HOST}:{cfg.VERSION_PORT} (game IP {cfg.PUBLIC_IP})')
     log.info(f'  Game Server:    {cfg.BIND_HOST}:{cfg.GAME_PORT} (Fireway) '
              + ('[client connects to 7022]' if cfg.CLIENT_BUILD == cfgmod.BUILD_2008
-                else '[2009 client connects to the channel entry port = GAME_PORT]'))
+                else '[2009 client connects to its channel entry port]'))
+    for ch in chanmod.Channels(cfg).all():
+        log.info(f'  Channel {ch.no}:      {ch.name!r} {ch.ip}:{ch.port}'
+                 + ('' if ch.configured_open else ' (closed: "(inspection)")')
+                 + f', max {ch.max_users} users')
     log.info(f'  Admin port:     127.0.0.1:{cfg.ADMIN_PORT}')
     log.info(f'  Accounts:       {cfg.accounts_path}')
     log.info('=' * 60)
@@ -11602,9 +12386,12 @@ def main():
     # Port 7022 is HARDCODED in the English client's ConnectToGameServer function
     # at VA 0x44080E (push 0x1B6E = 7022). The version response carries only the IP.
     # The game server is built first so the channel table can report its live user count
-    # (lc-version-config); it binds nothing until gs.start() below.
+    # (lc-version-config). P12 ch-1: its listeners are bound BEFORE the version server
+    # answers anyone, so the first version list already leaves out a channel whose port
+    # failed (blch R8); the version server shares its channel table (admin close, counts).
+    gs.bind_listeners()
     vs = VersionServer(host=cfg.BIND_HOST, port=cfg.VERSION_PORT, config=cfg,
-                       user_counts=gs.channel_user_counts)
+                       user_counts=gs.channel_user_counts, channels=gs.channels)
     threading.Thread(target=vs.start, daemon=True).start()
 
     try:
@@ -11612,6 +12399,8 @@ def main():
     except KeyboardInterrupt:
         gs.store.flush()
         gs.bosses.flush()
+        gs.guilds.flush()
+        gs.boards.flush()
         log.info('Server stopped.')
 
 if __name__ == '__main__':

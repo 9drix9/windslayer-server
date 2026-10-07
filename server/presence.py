@@ -47,7 +47,8 @@ Records (world-player-record, records.player_record(remote=True))
 -----------------------------------------------------------------
 Real cur_hp/cur_mp (0 renders a corpse), idle motion defaults (C12: remote records need
 them), appearance + equipment (clothed), name tag, GM tag (2008 gm_level / 2009
-gm_or_guild_id = 1 draws "Game Master"; no guilds exist yet), level from exp. The position
+gm_or_guild_id = 1 draws "Game Master") or the guild tag (2009 gm_or_guild_id = the guild id
++ its name and emblem: records.guild_block, P14 arch09-roster-record), level from exp. The position
 is the server's estimate with y put ON the floor line under it: a remote spawn record's y is
 used verbatim and a remote entity does not fall until it runs a queued command (C2,
 world_movement_npc#12 - the design's "spawn slightly above the floor so gravity settles it"
@@ -55,6 +56,13 @@ holds only for the LOCAL player). The records keep shop_open 0: a player selling
 (market.py, P7 stage 2) is followed by its S2C 0x85 sign right after the record, under the
 same receiver lock (sign_after_record; shop_storage-stall-presence, F14.2) - the 0x85 path is
 the one live-verified to draw the signboard (C48, trade#16).
+
+2009 pet_info (P15 pet-s1; pet.md F3, 7 H1): a remote record carries the subject's pet block
+(records.pet_block: has_pet = worn and awake). Every record push sets the receiver's clientview
+pet_info_seen for that uid to its has_pet, and every 0x06 drops it (the despawn frees the
+remote pet_info, FUN_004241c0) - in the same presence-lock section that decides and queues the
+packet, so the mirror changes in the order the bytes reach the client. The pet packets about a
+subject (pets.py) go out through holders_apply, under the same lock.
 
 Observer broadcasts (P5 stage 4: item_inventory-observer-broadcast, lc-level-broadcast)
 ---------------------------------------------------------------------------------------
@@ -188,6 +196,7 @@ import struct
 import threading
 import time
 
+import clientview as cview
 import en_maps
 import hitstun as HS
 import packets as P
@@ -600,8 +609,12 @@ def record_of(server, subject):
     char = server._session_char(subject)
     if char is None:
         return None
+    # arch09-roster-record (P14): the 2009 GM-or-guild block carries the subject's guild tag
+    # (guild.Guilds.tag_of is lock-free; a bare server in a unit test has no guilds).
+    guilds = getattr(server, 'guilds', None)
     return R.player_record(subject, char, server._session_account(subject), remote=True,
-                           pos=floor_point(subject), client_build=server.client_build)
+                           pos=floor_point(subject), client_build=server.client_build,
+                           guild=guilds.tag_of(char) if guilds is not None else None)
 
 
 def needs_list_form(rec):
@@ -653,9 +666,11 @@ def spawn(server, subject, receiver, rec=None, rev=None):
                 # first, or the receiver would hold two entities with one uid.
                 server._push(receiver, '0x06', {'uid': uid}, 'PRESENCE')
                 del held[uid]
+                cview.forget_pet_info(receiver, uid)
             if not server._push(receiver, key, fields, 'PRESENCE'):
                 return False
             held[uid] = subject
+            note_pet_info(receiver, rec)
             sign_after_record(server, subject, receiver)
         log.info(f'[PRESENCE] {_who(subject)} appears on {_who(receiver)} ({key} at '
                  f'{rec["pos_x"]:.0f},{rec["pos_y"]:.0f})')
@@ -672,6 +687,7 @@ def despawn(server, subject, receiver):
         if uid is None or held.get(uid) is not subject:
             return False
         del held[uid]
+        cview.forget_pet_info(receiver, uid)          # the 0x06 frees its pet_info (H1)
         if not worldmod.reachable(receiver):
             return False                  # its own map load clears the client anyway
         sent = server._push(receiver, '0x06', {'uid': uid}, 'PRESENCE')
@@ -705,13 +721,15 @@ def show_peers_to(server, session):
                 continue
             if held.pop(peer.get('uid'), None) is not None:
                 server._push(session, '0x06', {'uid': peer.get('uid')}, 'PRESENCE')
+                cview.forget_pet_info(session, peer.get('uid'))
             todo.append((peer, rec))
         for batch in _batches(server, session, todo):
             if not server._push(session, '0x04', R.player_list([rec for _, rec in batch]), 'PRESENCE'):
                 break
-            for peer, _ in batch:
+            for peer, rec in batch:
                 held[peer.get('uid')] = peer
                 shown += 1
+                note_pet_info(session, rec)
                 sign_after_record(server, peer, session)
     for peer in stale:
         shown += bool(spawn(server, peer, session))       # rebuilt, as its own 0x05
@@ -739,6 +757,14 @@ def _batches(server, receiver, pairs):
     if cur:
         out.append(cur)
     return out
+
+
+def note_pet_info(receiver, rec):
+    """A remote record of rec['uid'] was just queued to `receiver` (caller holds the receiver's
+    presence lock): its client now holds that owner's pet_info exactly when the record carried
+    the pet block (a 2009 row; 2008 rows have no has_pet and leave the mirror alone)."""
+    if 'has_pet' in rec:
+        cview.set_pet_info(receiver, rec.get('uid'), bool(rec.get('has_pet')))
 
 
 def sign_after_record(server, subject, receiver):
@@ -801,6 +827,26 @@ def to_holders(server, subject, key, fields, tag='PRESENCE'):
     caller's. Returns how many peers got it."""
     touch(subject)
     return _to_holders_only(server, subject, key, fields, tag)
+
+
+def holders_apply(server, subject, fn, touch_first=True):
+    """touch(subject) (unless touch_first is False), then fn(peer) for every peer whose client
+    holds the subject, called UNDER that peer's presence lock - the to_holders book for packets
+    whose shape or audience depends on what each receiver holds (the 2009 pet packets, pets.py:
+    0xAB remote form, 0xAC only to a holder of the owner's pet_info). fn decides, queues its
+    packets (server._push) and updates the receiver's mirror in that one section; it returns
+    how many packets it queued. Never the subject. Returns the total."""
+    if touch_first:
+        touch(subject)
+    uid = subject.get('uid')
+    if uid is None:
+        return 0
+    total = 0
+    for peer in server.world.peers(subject):
+        with _lock(peer):
+            if _held(peer).get(uid) is subject and worldmod.reachable(peer):
+                total += int(fn(peer) or 0)
+    return total
 
 
 def reshow_to_holders(server, subject):

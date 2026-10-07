@@ -214,7 +214,10 @@ def launch_client():
     if V._pids():
         return 'already running'
     if not os.path.exists(EXE):
+        # patch_2009.py applies the G-CP cp-2 item-id shift by default; --no-id-shift builds the
+        # stock-id exe (the server's board ids must match: CLIENT_PATCH_SET_RE_2026-10-06.md 8.5)
         hint = (' - build it: python ' + os.path.join(CLIENT_DIR, 'patch_2009.py')
+                + ' (cp-2 item-id shift on by default; add --no-id-shift for the stock-id exe)'
                 if BUILD == CL.BUILD_2009 else '')
         return f'FAILED: {EXE} not found{hint}'
     try:

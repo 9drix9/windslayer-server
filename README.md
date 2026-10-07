@@ -39,7 +39,7 @@ The server runs the **English Outspark client v1.04, Build 14 (Jan 2009)**, the 
 - **Exchange:** player trading, personal shops (stalls), Praise/Report.
 - **Spark Shop (cash shop):**
   - Wind Cash/Mileage wallet: there is no top-up yet, so a GM credits it with `!cash <n>`.
-  - Buying and gifting cash-bag items (costumes and pets are not sold yet), the cash box, the gift popup.
+  - Buying and gifting cash-bag items, pets, pet gear and pet food (costumes are not sold yet), the cash box, the gift popup.
   - Hair dye, rename, megaphone, stat reset, region/friend warp stones, period EXP items with expiry.
   - Bag slot extensions, memo notes.
   - Players inside the mall are hidden from the map.
@@ -50,13 +50,24 @@ The server runs the **English Outspark client v1.04, Build 14 (Jan 2009)**, the 
 - **Field bosses:**
   - 11 field-boss spawns (Rynx, Monkey King, two Wasablanca, Leo Wolf, Drill Mole, Wook, King Frog, Waterfrog, Firefrog, Blue Shark), with respawn timers that survive restarts.
   - Per-entry drop rolls, killer-owned trophies, boss attacks A/B and dash, boss quests.
+- **Blacklist** (Community → Blacklist, 10 names): whispers, chat, trade, party, friend and chat invites from listed players are dropped silently, or refused (`"BLACKLIST_FILTER": "refuse"` in `config.json`, or `!blacklist filter refuse` until a restart).
+- **Channels:** several channels in one server process (`CHANNELS` in `config.json`, one by default), load labels, closed channels shown as "(inspection)", in-game Change Channel and Change Avatar (a channel hop sends friends at most one "logged in" line, never a logout/login pair). On the 2009 client each channel needs its own `port` (see `server/config_channels_dev.json`).
+- **Guilds:**
+  - Creating a guild at Moiba on the Guild Plaza (9702) needs Lv 30, a 2nd class and 50,000 gold.
+  - Tags and emblems, the Guild tab, the welcome line and guild points on kills.
+  - Apply / accept / leave / kick, login and logout lines, `/g` guild chat across channels.
+  - Grades, notice, capacity, master change, disband.
+  - Guild Plaza billboards that players click to apply (masters buy them from Moiba; with `--no-id-shift` only a GM can place them, `!guild board place`).
+  - "Apply to Guild" in the player menu needs the client data patch (cp-4).
+- **Pets** (needs the client data patch, cp-1):
+  - A pet follows you and others see it.
+  - Hunger and auto-feed, sleep, the Pet Bell (sold by potion grocers with cp-3d), emotes, pet gear, auto-loot, rename, pets in the mall.
 
 ### In progress (being built; not in this repo yet)
-- Blacklist and channels 1-4, with Change Channel.
-- Guilds: tags, guild points, create/apply/kick, guild chat, grades.
+- PvP: arena and play-room lists, create/join, team select, battlefield queue and records.
 
 ### Researched, coming next
-Pets (need a client data patch), instance dungeons, PvP (Arena / Battlefield / Play & Chat / Guild Battle). Specs are in [`docs/systems_2009/`](docs/systems_2009/) and the plan is in [`docs/ROADMAP_2009_ADDENDUM.md`](docs/ROADMAP_2009_ADDENDUM.md).
+Instance dungeons, Guild Battle, per-channel world isolation. Specs are in [`docs/systems_2009/`](docs/systems_2009/) and the plan is in [`docs/ROADMAP_2009_ADDENDUM.md`](docs/ROADMAP_2009_ADDENDUM.md).
 
 ---
 
@@ -86,7 +97,25 @@ This writes `WindSlayer_patched.exe` and leaves the original exe unchanged. Befo
 - adds the combo/grade HUD. Skip it with `--no-combo-hud`.
 - fixes a client bug where about 2.5 % of your own knockbacks were never reported to the server, leaving other players' view of you 30 px off. Skip it with `--no-knock-fix`; details in `docs/CATCHUP_KNOCK_FIX_RE_2026-10-05.md`.
 
+- fixes the item numbers the exe checks for the Pet Bell, pet foods, the pet name ticket and the guild billboards (Outspark's EN data is shifted +4 from the Korean ids the exe was built with). Skip it with `--no-id-shift`, and set `"CLIENT_ITEM_IDS": "kr"` in the server config to match.
+
 The script header lists every patched address.
+
+**Optional client data patches** (`patch_data_2009.py`). These change files in your game's `hs\` folder, so read the script first:
+- **cp-1:** gives the pets their sprites;
+- **cp-4:** adds "Apply to Guild" to the player menu;
+- **cp-3d:** puts the Pet Bell in the potion grocers' shops;
+- **cp-5:** makes Moiba's "Purchase advertisement" dialog show the 1,000-gold Guild Billboard. Without it the dialog says 0 Gold; the server still sells the 1,000-gold board and says so in chat.
+
+Before installing, the script checks every file against its known original hash. It backs each one up as `<file>.orig-pre-gcp`, and `--uninstall` restores them:
+
+```
+python patch_data_2009.py --status  --game C:/path/to/WindSlayer2009
+python patch_data_2009.py --install --game C:/path/to/WindSlayer2009 [--only cp-1 ...]
+python patch_data_2009.py --uninstall --game C:/path/to/WindSlayer2009
+```
+
+Optional dry run: `--src <pristine install> --out <folder>` builds the patched copies outside the game folder and `--verify <folder>` checks them. Details are in `docs/CLIENT_PATCH_SET_RE_2026-10-06.md`.
 
 ### 2. Configure and start the server
 In `server/config.json`, set:
@@ -108,7 +137,7 @@ The server uses ports **7011** (version), **7022** (game) and **7099** (admin, b
 - **More accounts:** stop the server and add `"name": {"password": "pw"}` to `accounts.json`. It is hashed on the next start. Or set `"AUTO_REGISTER": true`.
 - **Players on other machines:**
   - set `"PUBLIC_IP"` in `config.json` to the server's IPv4 address (host names are not accepted);
-  - open TCP 7011 and 7022; 7099 stays local;
+  - open TCP 7011 and 7022 (plus each extra channel's `port`); 7099 stays local;
   - change or remove the test accounts first.
 
 ### 3. Play
@@ -131,10 +160,10 @@ For a second player on the same PC:
 | Path | What |
 |---|---|
 | `server/` | The server. `windslayer_server.py` is the main file. Most systems have their own module: `packets.py` (spec-driven codec for both clients), `store.py` (accounts, migrations), `combat.py`, `damage.py`, `mobai.py`, `quests.py`, `inventory.py`, `trade.py`, `stall.py`, `social.py`, `gm.py`, etc. |
-| `server/test_*.py` | 54 offline test suites with fake clients for both builds. Run one with `python test_combat.py`. They never touch your real `accounts.json`.<br><br>Most suites read game data from a client install: the 2008 client at `CLIENT_DIR` and the 2009 client at `CLIENT_DIR_2009`. Without one, they skip or fail. Keep the shipped `config.json` on `"2008"` when you run `test_store.py`; it compares the file with the defaults. |
+| `server/test_*.py` | 62 offline test suites with fake clients for both builds. Run one with `python test_combat.py`. They never touch your real `accounts.json`.<br><br>Most suites read game data from a client install: the 2008 client at `CLIENT_DIR` and the 2009 client at `CLIENT_DIR_2009`. Without one, they skip or fail. Keep the shipped `config.json` on `"2008"` when you run `test_store.py`; it compares the file with the defaults. |
 | `server/protocol_spec*.json` | Machine-readable packet grammars for the 2008 and 2009 clients, used by the codec. |
 | `server/wsdev.py`, `wsview.py`, `wsre.py` | Dev harness:<br>• `wsdev`: start the server and client and run `!` dev commands;<br>• `wsview`: screenshots, live entity state from client memory, and input;<br>• `wsre`: the reverse-engineering toolkit. |
-| `client_2009/` | Client patcher (`patch_2009.py`), the combo HUD patch and the launcher `.bat`. |
+| `client_2009/` | Client patchers: `patch_2009.py` (exe) and `patch_data_2009.py` (optional `hs\` data patches), the combo HUD patch and the launcher `.bat`. |
 | `docs/` | Reverse-engineering docs:<br>• `PROTOCOL.md`: the full protocol reference;<br>• `IMPLEMENTATION_ROADMAP.md` and `ROADMAP_2009_ADDENDUM.md`: the phase plan;<br>• `systems/` and `systems_2009/`: per-system specs;<br>• combat, damage-formula, aggro and equipment RE notes;<br>• a survey of retail gameplay videos. |
 | `docs/legacy/` | The April–June 2026 notes from the first 2008-client attempt. |
 | `tools/` | Older standalone RE helpers. |
@@ -151,7 +180,7 @@ GM chat commands:
 - `/kick <slot>` (slot numbers come from `!who`)
 - `/manner <name> <n>`
 
-For a GM, a chat line starting with `!` is a dev command. For anyone else it is ordinary chat, except `!mall` (and `!mall status`), which every player can type to enter the Spark Shop. You can also send one from the command line: `python wsdev.py --build 2009 dev <character> "!cmd"`. Examples: `!warp <map> [x y]`, `!level <n>`, `!give <item> [n]`, `!gold <n>`, `!hp <n>`, `!learn <skill> [force]`, `!who`, `!mobs`, `!where`.
+For a GM, a chat line starting with `!` is a dev command. For anyone else it is ordinary chat, except `!mall` (and `!mall status`), which every player can type to enter the Spark Shop. You can also send one from the command line: `python wsdev.py --build 2009 dev <character> "!cmd"`. Examples: `!warp <map> [x y]`, `!level <n>`, `!give <item> [n]`, `!gold <n>`, `!hp <n>`, `!learn <skill> [force]`, `!who`, `!mobs`, `!where`, `!cash <n>`, `!pet give picky wear`, `!guild seed <name> <master> [members]`, `!blacklist filter refuse`.
 
 ---
 

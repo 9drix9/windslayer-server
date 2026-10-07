@@ -57,20 +57,47 @@ EN 2009 build (client-2009-login, protocol_spec_2009.json)
 `client_build='2009'` gives the 2009 field sets:
 - 0x02: header + u8 account_flag_152 (0) + u32 session_key; 82-byte records with the
   character's own `gender` bool and 17 appearance words (`look` + `look_ext`); no str[33].
-- 0x07 (own record at enter world): gm_or_guild_id instead of gm_level (no guilds yet, so
-  0 or the GM value 1), 17 appearance words, 15 equip slots, 10 cash slots of (id, attr0),
+- 0x07 (own record at enter world): gm_or_guild_id instead of gm_level (the GM-or-guild block,
+  arch09-roster-record below), 17 appearance words, 15 equip slots, 10 cash slots of (id, attr0),
   the motion block under its 2009 names (same values; spec_2009 0x07 order puts pos_x/pos_y
-  after the skill list) and the per-receiver pet block (has_pet 0 on a remote row - no
-  viewer is sent a pet_info yet, the arch09-receiver-mirror of P15 pet-s1 - and absent on
-  the receiver's own row: packets.DEFAULT_ASSUME_2009).
+  after the skill list) and the per-receiver pet block (pet_block: has_pet = a pet worn AND
+  awake, + its level and name - P15 pet-s1; absent on the receiver's own row:
+  packets.DEFAULT_ASSUME_2009; presence.py records in the receiver's clientview mirror which
+  owners' pet_info each client got).
 - client-2009-world: the equip grid keeps its 25 positions; 2009 sends slots 0..14 with
   their option blocks and slots 15..24 as (id, attr0) rows, slot 15 being the pet slot:
   the worn pet record's item (pet_slot_2009, ROADMAP_2009_ADDENDUM C2), the same record every
   0x6F carries first. 0x04 = player_list of 2009 rows built per receiver (the pet block
   exists only on rows that are not the receiver's own); 0x05 = to_0x05(rec, '2009') with
   the pet block always present.
+
+arch09-roster-record (P14; guild.md 1.2 + 8, ROADMAP_2009_ADDENDUM X10)
+----------------------------------------------------------------------
+ONE rule for the 2009 GM-or-guild block of every player record, `guild_block`, in three forms:
+  FORM_FIELD   0x04 / 0x05 / 0x07  u16 gm_or_guild_id; == 1: bool gm_hidden; > 1: str[17] name,
+                                   u16 emblem fg, u16 emblem bg (0x4536A5..0x45371A [V])
+  FORM_ROSTER  0x2B / 0x2C / 0x2E  u16 guild_id; > 1: the same 21 bytes - NO gm_hidden [V spec]
+                                   (no builder yet: the P9 room model calls it)
+  FORM_INFO    0x52                u16 guild_id; > 1: str[17] name (label 4, else "N/A") [V]
+The value is the receiver's entity+0x12 for this player, whose renderer FUN_0043c300 draws
+"Game Master" for 1 and the guild name + emblem for > 1 - ONE value, so a GM in a guild shows
+one tag (guild.md 8.1 [I]: the visible GM tag wins; `gm_tag_visible`). In order:
+  1. a visible GM (gm on, not in shadow, the tag not switched off: `!guild gmtag off`, the P14
+     test aid that lets a GM create / apply / show his guild - a visible GM's client refuses
+     both, "Wind master can't register as guild.", guild.md 1.2)  -> 1, gm_hidden 0;
+  2. a GM in shadow (gm_hidden; tag not off), guild or not        -> 1, gm_hidden 1 (FORM_FIELD
+     only: the roster / 0x52 forms have no gm_hidden and fall through to 3 / 4);
+  3. a guild member                                               -> the guild id + block;
+  4. anyone else                                                  -> 0.
+Rule 2 before 3 (P14 review): the GM clients that hold a shadowed GM (presence.visible_to:
+non-GMs get no record at all) render him by gm_hidden - dimmed, silent; a shadowed GM in a
+guild must not come back as a plain member there. His own 0x07 carries it too; his 0x8A sub 3
+then sets his own entity+0x12 to the guild (the window), as for any member, and no sub 37.
+The guild comes from the caller as a GuildTag (guild.Guilds.tag_of(char)); None = no guild,
+which keeps every record byte-identical to the pre-P14 one. 2008 records keep gm_level.
 """
 import time
+from collections import namedtuple
 
 import buffs as B
 import cash as cashmod
@@ -98,7 +125,7 @@ MAX_CHARACTERS = storemod.MAX_CHARACTERS
 INFO_EQUIP_ENTRIES = 25
 INFO_OPTION_WORDS = 5
 # spec_2009 0x52 guild_id: 0/1 = no guild, label 4 "N/A" (2008 hard-codes " Not in the
-# Guild"); >= 2 would carry a guild name. No guild model exists.
+# Guild"); >= 2 carries the guild name (guild_block FORM_INFO).
 INFO_NO_GUILD = 0
 # S2C 0x04 payload limit: 2038 B / 368 B per record (world_movement_npc.md F1 step 5).
 MAX_RECORDS_PER_PACKET = 5
@@ -198,6 +225,56 @@ def _int(value, default=0):
         return default
 
 
+# ------------------------------------------- the GM-or-guild block (arch09-roster-record) ---
+# A player's guild as the records carry it (guild.Guilds.tag_of): id >= 2 (0 none, 1 = the GM
+# marker, 0xFFFF = load failure - never a guild, guild.md 1.1), name <= 16 bytes, the two
+# emblem frames (sprite 0x148 drawn on top = fg, 0x149 first = bg).
+GuildTag = namedtuple('GuildTag', 'id name emblem_fg emblem_bg')
+GM_TAG = 1
+NO_TAG = 0
+FORM_FIELD, FORM_ROSTER, FORM_INFO = 'field', 'roster', 'info'
+
+
+def gm_tag_visible(gm, gm_hidden=False, tag_off=False):
+    """True for a GM whose nameplate says "Game Master" (entity+0x12 == 1): the flag on, not in
+    shadow (gm_hidden) and the tag not switched off for the session (session['gm_tag_off'],
+    `!guild gmtag off`). The one rule of the records and the 0x8A reply's sub 37."""
+    return bool(gm) and not gm_hidden and not tag_off
+
+
+def _guild_ok(guild):
+    return guild is not None and 2 <= _int(getattr(guild, 'id', 0)) <= 0xFFFE
+
+
+def guild_block(char, guild=None, session=None, form=FORM_FIELD):
+    """The 2009 GM-or-guild fields of `char`'s record in `form` (module docstring "arch09-
+    roster-record"). FORM_FIELD -> {'gm_or_guild_id', ['gm_hidden' | 'guild_name',
+    'guild_emblem_fg', 'guild_emblem_bg']}; FORM_ROSTER -> {'guild_id', [the three guild
+    fields]}; FORM_INFO -> {'guild_id', ['guild_name']}."""
+    char, session = char or {}, session or {}
+    gm, hidden, off = char.get('gm'), char.get('gm_hidden'), session.get('gm_tag_off')
+    in_guild = _guild_ok(guild)
+    if form == FORM_INFO:
+        if in_guild:
+            return {'guild_id': _int(guild.id), 'guild_name': guild.name}
+        return {'guild_id': INFO_NO_GUILD}
+    if gm_tag_visible(gm, hidden, off):
+        return {'gm_or_guild_id': GM_TAG, 'gm_hidden': 0} if form == FORM_FIELD else {'guild_id': GM_TAG}
+    if form == FORM_FIELD and gm and hidden and not off:
+        return {'gm_or_guild_id': GM_TAG, 'gm_hidden': 1}          # the shadow wins over the guild
+    if in_guild:
+        out = {'gm_or_guild_id' if form == FORM_FIELD else 'guild_id': _int(guild.id),
+               'guild_name': guild.name, 'guild_emblem_fg': _int(guild.emblem_fg) & 0xFFFF,
+               'guild_emblem_bg': _int(guild.emblem_bg) & 0xFFFF}
+        return out
+    return {'gm_or_guild_id' if form == FORM_FIELD else 'guild_id': NO_TAG}
+
+
+def tag_value(block):
+    """The entity+0x12 value a guild_block (any form) gives its player on the receiver."""
+    return _int(block.get('gm_or_guild_id', block.get('guild_id', NO_TAG)))
+
+
 def level_of(char):
     """The level the client itself shows for this character (exp is the only truth)."""
     return progression.level_for_exp(_int((char or {}).get('exp', 0)))
@@ -294,12 +371,17 @@ def cash_equip(session, char):
     the 16 regular ones at +0x13C): the worn costume of each slot, else the legacy
     `cash_equip` list. The receiving client composes this player's later 0x1D / 0x1E from
     ITS copy of these ids (the costume beats the regular item), so a costume the model
-    holds must be here - the same ids cash_rows_2009 sends to a 2009 client."""
+    holds must be here - the same ids cash_rows_2009 sends to a 2009 client. An id the 2008
+    client has no hii row for (cashmod.foreign_to_client: a character that wore 2009 pet gear
+    in grid 23 / 24 on a 2009 server sharing this store) goes out as 0."""
     legacy = _legacy_cash_ids(session, char)
     rows = []
     for i, slot in enumerate(range(EQUIP_SLOTS, EQUIP_SLOTS + CASH_EQUIP_SLOTS)):
         item_id, _words = _grid_entry(session, char, slot)
-        rows.append({'cash_equip_item_id': item_id or legacy[i]})
+        item_id = item_id or legacy[i]
+        if item_id and cashmod.foreign_to_client(item_id, '2008'):
+            item_id = 0
+        rows.append({'cash_equip_item_id': item_id})
     return rows
 
 
@@ -356,7 +438,7 @@ def vitals(session, char):
 
 
 def player_record(session, char, account=None, *, remote=False, pos=None, uid=None,
-                  client_build=None):
+                  client_build=None, guild=None):
     """One player row in S2C 0x07 / 0x04 field names (use `to_0x05` for 0x05).
 
     session: the record owner's session (uid, live hp/mp, equip grid, buffs).
@@ -364,6 +446,7 @@ def player_record(session, char, account=None, *, remote=False, pos=None, uid=No
     account: the owner's store account (uid, gender, manner). Defaults to the session.
     remote:  build it for another client: the motion block comes from session['motion'] when
              a caller set one, else the idle block (world-presence sends idle, C12).
+    guild:   the player's GuildTag (2009 only: the GM-or-guild block, guild_block), None = none.
     """
     session = session or {}
     char = char or {}
@@ -417,7 +500,7 @@ def player_record(session, char, account=None, *, remote=False, pos=None, uid=No
     if gm_level == 1:
         rec['gm_hidden'] = 1 if char.get('gm_hidden') else 0
     if client_build == BUILD_2009:
-        return _record_2009(rec, session, char, account)
+        return _record_2009(rec, session, char, account, guild)
     return rec
 
 
@@ -431,6 +514,30 @@ def _grid_entry(session, char, slot):
         words = [_int(w) & 0xFFFF for w in (entry.get('w') or [])][:EQUIP_OPTION_WORDS]
         return _int(entry.get('id')) & 0xFFFF, words + [0] * (EQUIP_OPTION_WORDS - len(words))
     return _int(entry) & 0xFFFF, [0] * EQUIP_OPTION_WORDS
+
+
+def grid_item(session, char, slot):
+    """The item id of one equip grid slot (the persisted block wins over the live map, as in
+    equip_grid). The 2009 pet gear slots 23 (Kind 15 headgear) / 24 (Kind 16 apparel) are read
+    through here by the pet equip gate (pets.py, FUN_0044fe20 / FUN_00477000)."""
+    return _grid_entry(session, char, slot)[0]
+
+
+def pet_block(char):
+    """The 2009 pet block of a REMOTE player row (0x04 / 0x07 when uid != the receiver, 0x05
+    always; asm 0x453D80..0x453E58, pet.md 3 "Pet block", F3): has_pet = the character wears a
+    pet AND it is awake (also stored as the receiver's pet_info+0xA = awake), then u8 level and
+    str[13] name (NUL-terminated inside 13 bytes, H4: packets cuts every str[N] at N-1). A
+    sleeping pet goes out as has_pet 0: its grid slot 15 and look[14] are in the row anyway,
+    and the receiver allocates the pet_info on its 0xAD(1) (F6). Its level is at least 1 (a
+    worn pet is bound, F13)."""
+    pet = cashmod.equipped_pet(char) if isinstance(char, dict) else None
+    if pet is None:
+        return {'has_pet': 0}
+    fields = cashmod.normalize_pet(pet.get('pet'))
+    if not fields['awake']:
+        return {'has_pet': 0}
+    return {'has_pet': 1, 'pet_level': max(1, fields['level']), 'pet_name': fields['name']}
 
 
 def pet_slot_2009(char):
@@ -463,30 +570,30 @@ def cash_rows_2009(session, char):
     return rows
 
 
-def _record_2009(rec, session, char, account):
+def _record_2009(rec, session, char, account, guild=None):
     """The 2009 0x07 / 0x04 row from the 2008 one (client-2009-login/-world; spec_2009 0x07).
 
-    - gm_or_guild_id: no guilds exist yet, so it carries only the GM value (1 = GM, then
-      gm_hidden); a value > 1 would be a guild id with name + emblem words.
+    - the GM-or-guild block (arch09-roster-record, guild_block FORM_FIELD): 1 + gm_hidden for
+      a GM, else the guild id + name + emblem words for a member, else 0.
     - 17 appearance words (`look` + `look_ext`) and the character's own gender.
     - 15 regular equip slots 0..14 with their option blocks: the grid positions are the same
       in both builds (FUN_00427af0 writes entity+0x150 + 2*slot for the 2009 Kinds, 2008
       FUN_00426680 entity+0x13C); the 2008 slot 15 left the regular half and is the pet slot.
     - 10 (id, attr0) rows for slots 15..24 (cash_rows_2009).
     - the motion block under its 2009 names (MOTION_NAMES_2009; same idle values).
-    - has_pet 0: read only when uid != the receiver's uid (packets.DEFAULT_ASSUME_2009)."""
+    - the pet block (pet_block): read only when uid != the receiver's uid (packets.
+      DEFAULT_ASSUME_2009), so the owner's own 0x07 carries the fields but not the bytes."""
     out = {MOTION_NAMES_2009.get(k, k): v for k, v in rec.items()
-           if k not in ('gm_level', f'repeat[{LOOK_SLOTS}]', f'repeat[{EQUIP_SLOTS}]',
+           if k not in ('gm_level', 'gm_hidden', f'repeat[{LOOK_SLOTS}]', f'repeat[{EQUIP_SLOTS}]',
                         f'repeat[{CASH_EQUIP_SLOTS}]')}
-    out['gm_or_guild_id'] = rec['gm_level']
+    out.update(guild_block(char, guild, session, FORM_FIELD))
     out['gender'] = gender = record_gender(char, account, BUILD_2009)
     out[f'repeat[{LOOK_SLOTS_2009}]'] = [{'appearance_part': v} for v in appearance_2009(char, gender)]
     out[f'repeat[{EQUIP_SLOTS_2009}]'] = rec[f'repeat[{EQUIP_SLOTS}]'][:EQUIP_SLOTS_2009]
     out[f'repeat[{CASH_EQUIP_SLOTS_2009}]'] = cash_rows_2009(session, char)
-    # TODO(P15 pet-s1): has_pet = worn && awake (+ level, name) per receiver, recorded in the
-    # receiver's pet_info_seen mirror (pet F3, H1) - until then no viewer gets a pet_info, so no
-    # later 0xAC / 0xAD(0) may ever be sent to one.
-    out['has_pet'] = 0
+    # P15 pet-s1 (pet F3): the same block for every receiver; which receivers then hold the
+    # owner's pet_info is presence.py's book (clientview pet_info_seen, H1).
+    out.update(pet_block(char))
     return out
 
 
@@ -511,6 +618,9 @@ def to_0x05(rec, client_build=None):
         out['repeat[buff_count]'] = [{'buff_skill_id': b['buff_skill_id'], 'buff_duration': b['buff_duration']}
                                      for b in rec['repeat[buff_count]']]
         out['has_pet'] = _int(rec.get('has_pet'))
+        if not out['has_pet']:
+            out.pop('pet_level', None)
+            out.pop('pet_name', None)
         return out
     out = {}
     for key, value in rec.items():
@@ -574,15 +684,15 @@ def info_entry(item_id, words):
             'option_last': words[INFO_OPTION_WORDS]}
 
 
-def player_info(session, char, account=None, client_build=None):
+def player_info(session, char, account=None, client_build=None, guild=None):
     """S2C 0x52 PlayerInfoView fields (window 0x72 "Player Info.") for a character: the
     record the other clients draw, from the same sources as player_record so Char. Info
     shows the same whether the client fills the window itself (target on its map) or from
     this reply (C2S 0x2A, target elsewhere): manner = the account's i32 (karma), level from
     exp, fame rank, class / tier, STR/DEX/INT/SPR, the 25 grid entries.
 
-    2009 (spec_2009 0x52 diff_vs_2008): a u16 guild_id between level and rank, 0 = "N/A"
-    (no guild model; a value > 1 would need a guild_name)."""
+    2009 (spec_2009 0x52 diff_vs_2008): a u16 guild_id between level and rank, 0 = "N/A",
+    > 1 followed by the guild name (`guild`: the target's GuildTag; guild_block FORM_INFO)."""
     session, char, account = session or {}, char or {}, account or {}
     entries = [info_entry(item_id, words) for item_id, words in info_equipment(session, char, client_build)]
     fields = {
@@ -600,7 +710,7 @@ def player_info(session, char, account=None, client_build=None):
         'repeat[equip_count]': entries,
     }
     if client_build == BUILD_2009:
-        fields['guild_id'] = INFO_NO_GUILD
+        fields.update(guild_block(char, guild, session, FORM_INFO))
     return fields
 
 

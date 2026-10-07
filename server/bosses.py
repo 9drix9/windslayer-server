@@ -660,10 +660,15 @@ class Bosses:
 
     def channel_of(self, mons):
         """arch09-channel-key: the channel of a map instance - its own once the channel model
-        keys maps by channel (P12 ch-2), else this server's one channel (CHANNELS[0])."""
+        keys maps by channel (P18 ch-2), else the channel every channel's players share the
+        map instances of today (channels.Channels.world_channel: CHANNELS[0]) - never the
+        killer's listener, or one shared boss would be booked once per channel."""
         channel = getattr(mons, 'channel', None)
         if channel:
             return int(channel)
+        chans = getattr(self.server, 'channels', None)
+        if chans is not None:
+            return int(chans.world_channel())
         channels = self.server.config.channels()
         return int(channels[0][0]) if channels else 1
 

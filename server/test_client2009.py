@@ -315,11 +315,13 @@ class Server2009Test(unittest.TestCase):
         self.assertEqual(rec['result'], result, f'S2C 0x1C for {name!r}')
         return rec
 
-    def enter_world(self, c, name='TestHero', key=ENTER):
+    def enter_world(self, c, name='TestHero', key=ENTER, hop=False):
         """0x2B up to the first world packets: 0x03 then the own 0x07, both exact under the
-        2009 grammar (map 101 has no monsters, so 0x15 welcome + 0x28/0x44 end the burst)."""
+        2009 grammar (map 101 has no monsters, so 0x15 welcome + 0x28/0x44 end the burst).
+        hop: the entry continues a channel hop (P12 arch09-session-continuity) - no welcome."""
         c.send_c2s(key, {'p2p_ip': '127.0.0.1', 'p2p_udp_port': 42907, 'char_name': name})
-        pkts = c.expect(0x03, 0x07, 0x15, 0x65, 0x28, 0x44)      # 0x65: the 2009 bank block
+        ops = (0x03, 0x07) + (() if hop else (0x15,)) + (0x65, 0x28, 0x44)   # 0x65: the 2009 bank block
+        pkts = c.expect(*ops)
         state = self.s2c(c, pkts[0])
         spawn = self.s2c(c, pkts[1])
         for pkt in pkts[2:]:
@@ -384,10 +386,12 @@ class Login2009(Server2009Test):
         with self.assertNoLogs('WS', logging.ERROR):
             for key in ('0x45353B/0x2F', '0x453557/0x63', '0x453581/0x8A'):
                 c.send_c2s(key)
-            # + 0x99 sub 8 "In channel 1." on the connection's first 0x63 (P4 stage 4)
-            friends, deck, channel, guild = c.expect(0x0B, 0x8A, 0x99, 0xB3)
+            # + 0x99 sub 8 "In channel 1." on the connection's first 0x63 (P4 stage 4), and the
+            # empty blacklist 0xBD after the friend list (P12 bl-1: after every 0x2F)
+            friends, blist, deck, channel, guild = c.expect(0x0B, 0xBD, 0x8A, 0x99, 0xB3)
             self.assertEqual(self.s2c(c, friends, 2), {'friend_capacity': 20, 'friend_count': 0,
                                                        'repeat[friend_count]': []})
+            self.assertEqual(self.s2c(c, blist, 1), {'count': 0, 'repeat[count]': []})
             self.assertEqual(self.s2c(c, deck, 1)['deck_count'], 0)
             self.assertEqual(self.s2c(c, channel, 2), {'sub_type': 8, 'channel_no': 1})
             self.assertEqual(self.s2c(c, guild, 2), {'sub': 15, 's15_result': 0})
@@ -483,8 +487,10 @@ class Relogin2009(Server2009Test):
         self.assertIs(self.server.world.session(1), second.session)
         self.assertTrue(_wait(lambda: old['addr'] not in self.server.sessions))
         self.assertTrue(old.get('kicked'))
-        # gs+0x408: the client read only the result and now sends the automatic 0x2B
-        state, spawn, _ = self.enter_world(second, key=ENTER_RELOGIN)
+        # gs+0x408: the client read only the result and now sends the automatic 0x2B; the
+        # same character on the new connection is a channel hop (P12 session continuity):
+        # no second welcome line
+        state, spawn, _ = self.enter_world(second, key=ENTER_RELOGIN, hop=True)
         self.assertEqual(spawn['repeat[player_count]'][0]['uid'], 1)
         self.assertIs(self.server.world.by_char_name('TestHero'), second.session)
 

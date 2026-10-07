@@ -309,8 +309,9 @@ class WorldUnit(unittest.TestCase):
 
     def test_hook_names(self):
         # on_rename: the rename hook (ROADMAP_2009_ADDENDUM C4; test_carryins.C4RenameHook2009)
+        # on_logout: the end of a login (P12 arch09-session-continuity, continuity.py)
         self.assertEqual(ALL_HOOKS, ('before_server_map_load', 'on_map_change', 'on_enter_world',
-                                     'on_leave_world', 'on_disconnect', 'on_rename'))
+                                     'on_leave_world', 'on_disconnect', 'on_rename', 'on_logout'))
         with self.assertRaises(KeyError):
             self.w.hooks.register('on_teleport', print)
         fn = self.w.hooks.register(WM.ON_LEAVE_WORLD, lambda *a, **k: None)
@@ -494,7 +495,10 @@ class _TwoPlayers:
         a_session = self.a.session
         self.a.close()
         self.assertTrue(_wait(lambda: a_session.get('closed')))
+        # P12: a plain close (no version fetch before it) logs out at once - ON_LOGOUT fires
+        # inside the continuity on_leave_world hook, so before this test's later recorder
         self.assertEqual(self.hooks_of('TestHero'), [
+            ('on_logout', {'reason': 'client closed'}),
             ('on_leave_world', {'map_code': 101, 'reason': 'client closed', 'superseded': False}),
             ('on_disconnect', {'reason': 'client closed'})])
         w = self.server.world
@@ -504,7 +508,7 @@ class _TwoPlayers:
         self.assertTrue(a_session['outbox'].closed)
         # a second close path (a kick racing the finally) changes nothing
         self.server._session_closed(a_session, 'again')
-        self.assertEqual(len(self.hooks_of('TestHero')), 2)
+        self.assertEqual(len(self.hooks_of('TestHero')), 3)
         self.assertEqual(self.hooks_of('Watcher'), [])
 
     def test_a_duplicate_login_kick_leaves_the_world_once(self):
@@ -513,7 +517,8 @@ class _TwoPlayers:
         c = self.extra_client()
         self.assertEqual(c.login('test', 'test')['result'], 4)
         self.assertTrue(_wait(lambda: old.get('closed')))
-        (leave, kw_leave), (disc, kw_disc) = self.hooks_of('TestHero')
+        (logout, _), (leave, kw_leave), (disc, kw_disc) = self.hooks_of('TestHero')
+        self.assertEqual(logout, 'on_logout')                   # a server kick: no hop, at once
         self.assertEqual((leave, kw_leave['map_code'], kw_leave['superseded']), ('on_leave_world', 101, False))
         self.assertIn('duplicate login', kw_leave['reason'])
         self.assertEqual(disc, 'on_disconnect')
@@ -680,7 +685,7 @@ class _TwoPlayers:
         self.assertEqual(a_session.get('closed'), 'client closed')
         self.assertIsNone(self.server.world.session(1))
         self.assertEqual(self.server.world.map_sessions(101), [self.b.session])
-        self.assertEqual([h for h, _ in self.hooks_of('TestHero')], ['on_leave_world', 'on_disconnect'])
+        self.assertEqual([h for h, _ in self.hooks_of('TestHero')], ['on_logout', 'on_leave_world', 'on_disconnect'])
         self.assertTrue(_wait(lambda: server_sock.fileno() == -1))
 
     def test_the_socket_closes_even_when_the_disconnect_path_raises(self):

@@ -516,7 +516,8 @@ UI_NPC_SHOP = 0xD               # 13: FUN_00465a80 lists the record's `item:` co
 UI_BANK = 0x1A7                 # 423: Mikomakisho; 2008 opens password dialog 0x201 first
 UI_VILLAGE_TRANSFER = 600       # GaranMaria (world-village-transfer)
 # EN 2009 only: the guild NPC menu (Moiba, hni 181). Its control 5 sells the template's first
-# `item:` id through the ordinary C2S 0x0B (spec_2009 0x474327/0x0B, FUN_00480430 @0x482248).
+# `item:` id through the ordinary C2S 0x0B (spec_2009 0x474327/0x0B, FUN_00480430 @0x482248),
+# whose npc_id is always 0 on the wire (guild_npc_2009 below).
 UI_GUILD_NPC_2009 = 0x4BB
 # shop_storage.md 3.4 constants: the flea market (stage97_01, MapInfo mode 2 = a field map)
 # and the bank tab capacity a new record starts with (premium_cash §3.1; the client allows
@@ -610,6 +611,7 @@ class NpcCatalog:
         self.defs = defs                                   # idx -> NpcTemplate
         self.source = source
         self._by_position = {d.position: d for d in defs.values()}
+        self._first_by_ui = {}                             # ui -> NpcTemplate | None (first_with_ui)
 
     @classmethod
     def load(cls, path, names):
@@ -660,6 +662,15 @@ class NpcCatalog:
         gamedef `npcs.item` / `items.Buy` the old buy handler never even consulted (B4)."""
         d = self.get(idx)
         return list(d.shop_items) if d is not None and d.is_merchant else None
+
+    def first_with_ui(self, ui):
+        """The first template (file order) whose `UI:` is `ui`, or None. Cached per catalog, so
+        a reload() (a new catalog) starts over."""
+        ui = int(ui)
+        if ui not in self._first_by_ui:
+            self._first_by_ui[ui] = next((d for d in sorted(self.defs.values(), key=lambda t: t.position)
+                                          if d.ui == ui), None)
+        return self._first_by_ui[ui]
 
     def __len__(self):
         return len(self.defs)
@@ -859,6 +870,18 @@ def shop_list(npc_id):
     return npcs().shop_list(npc_id)
 
 
+def guild_npc_2009():
+    """The EN 2009 guild NPC: the first hni template whose `UI:` opens the guild menu 0x4BB
+    (UI_GUILD_NPC_2009) - Moiba, idx 181 (guild.md 1.5) - or None when the loaded hni has none
+    (the 2008 build, no client files). Cached with the catalog (reload() drops it).
+
+    Its use: Moiba's billboard sale (send site 0x474327) always arrives with npc_id 0 - the
+    quantity dialog 0x10 is closed (FUN_00497e00 zeroes +0x11C, 0x497EA5) before its OK handler
+    reads the NPC id (0x474315) - so the server names the NPC itself
+    (GameServer._board_sale_npc; p15 live triage 1)."""
+    return npcs().first_with_ui(UI_GUILD_NPC_2009)
+
+
 class Spawn:
     """One server-spawned monster placement from a map file's event-2 tile."""
     __slots__ = ('npc', 'x', 'y', 'value', 'tile')
@@ -1008,6 +1031,54 @@ def item_name(item_id):
 #   - portals.json / data.map_codes: map codes only (no item ids);
 #   - quest_defs.py: retired (KR quests, hex-decoded, KR item ids); nothing imports it.
 # Exe constants are fixed only by the client patch cp-2 (P15).
+#
+# P15 re-audit (arch09-id-shift owner; the loaders P8 C3 did not cover):
+#   - data/ (build_data.py: the KR 4609-row items.json / npcs.json): only data.map_codes is
+#     imported (map codes, no item ids);
+#   - events.json (login_gift, cash_gift), config STARTING_SKILLS / STARTER_WEAPON /
+#     SHOP_EXTRA_ITEMS, bosses / drops (the EN hni Drop column), crafting and cards (the EN
+#     hii / hni): EN ids by construction - nothing in them is KR-derived;
+#   - guild.py BOARD_ITEMS (the 0xBA / 0xBB / sub 185 board item) and the pet food / bell /
+#     ticket the client sends: EXE constants, not data - they follow config CLIENT_ITEM_IDS
+#     (exe_item_id / en_item_from_exe below), never the KR table;
+#   - the test sweep test_pets.IdShiftAudit checks every server constant above 4248 against
+#     the EN 2009 hii row it must be (Type / Kind / Cash).
+
+
+# The 17 hard-coded item-id sites of the 2009 exe (CLIENT_PATCH_SET_RE 8.2), by meaning, as the
+# EN ids the cp-2 patched exe uses; the stock exe compares against the KR ids (EN - 4).
+# config CLIENT_ITEM_IDS says which set the installed exe has: 'en' (cp-2) or 'kr' (stock).
+CLIENT_ITEM_IDS = ('en', 'kr')
+EXE_ID_SITES = {
+    'premium_board': (4283,),        # 0x46DB2B switch base, 0x45DBD2 / 0x45DD4A sprite 0x146
+    'board': (4284,),                # 0x44FCB8, 0x45DBC3 / 0x45DD3B sprite 0x145, 0x47E846 sub 185
+    'pet_bell': (4285,),             # 0x44FD72 (FUN_0044f070 Type-0 use gate)
+    'pet_food': (4286, 4287, 4288, 4289),   # FUN_0046d640 auto-feed / manual range
+    'pet_name_ticket': (4322,),      # 0x46DB2B switch slot 0x27 -> window 0x4CB
+}
+EXE_ID_ITEMS = frozenset(i for ids in EXE_ID_SITES.values() for i in ids)
+
+
+def exe_item_id(en_id, client_item_ids='en'):
+    """The id the installed 2009 exe uses for the EN item `en_id` at its hard-coded sites:
+    `en_id` itself on a cp-2 exe ('en'), KR = EN - 4 on the stock exe ('kr'). Only for the
+    EXE_ID_ITEMS (a board item the server sends, a constant the client compares); every other
+    id is the EN hii's in both, so it is returned as it is."""
+    en_id = int(en_id)
+    if str(client_item_ids) == 'kr' and en_id in EXE_ID_ITEMS:
+        return en_id - KR_SHIFT
+    return en_id
+
+
+def en_item_from_exe(exe_id, client_item_ids='en'):
+    """The EN item an id from one of the exe's hard-coded sites means (exe_item_id's inverse):
+    on the stock exe ('kr') a pet food the auto-feed sends as KR 4282 is EN 4286. None for an
+    id that is no exe-site id of that set (on 'kr', EN 4286 itself is not what the exe sends)."""
+    exe_id = int(exe_id)
+    for en_id in EXE_ID_ITEMS:
+        if exe_item_id(en_id, client_item_ids) == exe_id:
+            return en_id
+    return None
 KR_SHIFT_ABOVE = EN_ITEM_MAX_ID              # 4248: the last id KR and EN 2009 share
 KR_SHIFT = 4
 EN_ONLY_IDS_2009 = range(KR_SHIFT_ABOVE + 1, KR_SHIFT_ABOVE + KR_SHIFT + 1)   # 4249..4252

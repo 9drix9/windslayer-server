@@ -13,6 +13,7 @@
 
   "PUBLIC_IP": "127.0.0.1",
   "WORLD_NAME": "WindSlayer",
+  "_channels_comment": "P12 ch-1/ch-5 (channels.py): one listener per channel in one process; the listener is the channel (0x03 channel_id, 'In channel N.', minimap 'Cecilia(channel-N)'). Entry keys: no (1..10), name, ip (default PUBLIC_IP), port (2009 only, default GAME_PORT), open (false = '(inspection)'), max_users (default MAX_ONLINE; full -> 0x02 result 6). LOAD_SCALE (default 1.0) scales the version list's user counts (Idle < 200 <= Normal < 400 <= Busy). CHANNEL_HOP_SECS (30) / CHANNEL_HOP_VERSION_HINT (true): 2009 channel-change session continuity (continuity.py). The default stays ONE channel; the dev setup with channels 1-3 on 7022-7024 (+ channel 4 closed) is config_channels_dev.json (WS_CONFIG).",
   "CHANNELS": [
     {"no": 1, "name": "Channel 1"}
   ],
@@ -103,6 +104,27 @@
   "COMPLIMENT_DELTA": 1,
   "COMPLIMENT_DAILY_CAP": 5,
   "COMPLIMENT_REPEAT_DAYS": 7,
+
+  "_guild_comment": "P14 stage 3 (guild.py, guild-g1; CLIENT_BUILD 2009 only): GUILDS_FILE holds the guilds next to accounts.json ('' = memory only); members are keyed by the character cid, and the first load that repairs an existing file writes <file>.bak-pre-p12+p14. GUILD_POINTS_PCT: the S2C 0x21 guild-points tail of an earned exp grant, in percent of its pre-multiplier exp (retail sample 41 exp -> 20 GP); the client only prints it, the guild is credited at logout from guild-g5 on. GM !guild seed <name> <master> [member ...] creates one (members see it after a portal), !guild gmtag off lets a GM show his guild instead of 'Game Master'. P14 stage 4 (guild-g2..g5, g4) knobs, all with the config.py defaults when absent: GUILD_POINTS_BASE ('pre' = before the cash EXP item and the event multiplier, or 'post'), GUILD_CHAT_MIN_SECS (0.7, the /g relay throttle), GUILD_LEAVE_MIN_HOURS (0 = off; retail text says 24) and GUILD_DISBAND_MIN_DAYS (0 = off; retail text says 7), GUILD_GRADE_MIN_GRADE (5 = only the master changes grades), GUILD_MASTER_NEEDS_CREATE_RULES (false; true = the new master needs Lv 30 and a 2nd class).",
+  "GUILDS_FILE": "guilds.json",
+  "GUILD_POINTS_PCT": 50,
+
+  "_guild_boards_comment": "P15 guild-g6 (boards.py; CLIENT_BUILD 2009 only): the Guild Plaza boards. GUILD_BOARDS_FILE holds the live boards next to accounts.json ('' = memory only), keyed (channel, map, guild); a board lasts GUILD_BOARD_MINUTES (the Guild Billboard EN 4284, which Moiba sells for 1,000 gold on the cp-2 exe) or GUILD_PREMIUM_BOARD_MINUTES (the Premium Guild Billboard EN 4283, a cash item) [I: the KR item texts say 1 h / 24 h], then S2C 0xB8 removes it on 9702. A master uses the billboard in 9702 -> dialog 0x4B7 -> C2S 0x88 -> S2C 0xBA to the plaza + 0xB3 sub 185; a player entering 9702 gets 0xBB after the 0x8A reply. On the stock exe (CLIENT_ITEM_IDS kr) Moiba's sale and 0x88 are refused: boards are GM-seeded. GM: !guild board [list | place|premium <guild> <text> | ttl <guild> <secs> | expire <guild>|all].",
+  "GUILD_BOARDS_FILE": "guild_boards.json",
+  "GUILD_BOARD_MINUTES": 60.0,
+  "GUILD_PREMIUM_BOARD_MINUTES": 1440.0,
+
+  "_pets_comment": "P15 (pets.py; CLIENT_BUILD 2009 only). CLIENT_ITEM_IDS: the item ids the installed 2009 exe hard-codes at its 17 id sites (Pet Bell gate, pet foods, pet name ticket, guild billboards): \"en\" = the cp-2 patched exe (patch_2009.py default, gate G-CP approved and installed on the live clients), \"kr\" = the stock Build 14 exe (KR ids, 4 lower). It picks the board item of S2C 0xBA / 0xBB / 0xB3 sub 185 (en 4284 / 4283, kr 4280 / 4279) and the pet-food path (en C2S 0x85, kr the C2S 0x48 dialog). SHOP_EXTRA_ITEMS (cp-3): items a merchant sells on top of its hni stock, {\"<hni npc idx>\": [EN item ids]} - the Pet Bell 4285 at every potion grocer by default; a row shows in the client's shop window only once a data patch lists it in the hni. GM: !pet give <id|picky|ulie|chikapuka|guriguri> [wear], !pet wear / off, !pet set <exp|level|gauge|awake|name> <v>, !pet bell [n], !pet food [n] [id], !pet ticket [n], !pet seen. P15 stage 3: the pet name ticket 4322 renames the worn, AWAKE pet (C2S 0x4D -> S2C 0xC0 + 0xB0 to the viewers; refused with S2C 0x73 {0}); MALL_PETS (default true) sells / gifts the pets and pet gear in the Spark Shop (box pets are level 0, bound on the move to the bag, never moved back).",
+  "CLIENT_ITEM_IDS": "en",
+
+  "_pet_tick_comment": "P15 pet-s3 / pet-s4 (pets.py; CLIENT_BUILD 2009 only). Every rate is [I] - the EN client's own hunger / EXP code is host-only and dead, so these are that dead code's rates (systems_2009/pet.md 2.7 / F4). Only the owner's field time counts (in world, not a room / arena map, not the mall, not dead). Awake: every PET_HUNGER_SECS the gauge falls PET_HUNGER_STEP and the EXP rises PET_EXP_STEP (S2C 0xAE; a level -> 0xAF); below 2 % it falls asleep (0xAD 0). Asleep: every PET_SLEEP_REGEN_SECS the gauge rises PET_SLEEP_REGEN_STEP (0xAE). Feeding (C2S 0x85 / the stock exe's 0x48) sets the gauge to at least PET_FOOD_GAUGE and wakes the pet; the Pet Bell wakes it at a gauge >= 10 (the client's own rule). PET_EMOTE_MIN_SECS throttles /Pet emotes (C2S 0x86 -> 0xB2). GM: !pet tick [n] runs n steps now, !pet gear <id> [n|wear] gives pet gear.",
+  "PET_HUNGER_SECS": 60.0,
+  "PET_HUNGER_STEP": 1,
+  "PET_EXP_STEP": 1,
+  "PET_SLEEP_REGEN_SECS": 300.0,
+  "PET_SLEEP_REGEN_STEP": 1,
+  "PET_FOOD_GAUGE": 90,
+  "PET_EMOTE_MIN_SECS": 0.7,
 
   "DEV_MEMORY_COMBAT": true,
   "CREATE_REPLY_0x02": false

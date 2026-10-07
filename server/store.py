@@ -99,6 +99,11 @@ P13 adds (ev-e3 event login gifts, P13 stage 1), through events.ensure:
 character: event_gifts_claimed{event id: UTC time of the grant} (a claimed event never grants
            its gift again). The first load that adds it writes the one-time
            accounts.json.bak-pre-p13.
+P12 adds (bl-1, the 2009 messenger blacklist), through blacklist.ensure + blacklist.resolve_all:
+character: blacklist[{name, uid, cid}] (<= 10, add order; uid = the target's ACCOUNT uid and
+           never 0, cid = its stable id: renames follow it, a deleted character's row is
+           dropped). Written for both builds (one shared file); only a 2009 server reads it.
+           The first load that adds it writes the one-time accounts.json.bak-pre-p12.
 `map`, `x`, `y`, `hp` and `mp` existed but were never written back (world-persistence): the
 server now saves them on every map transfer, on disconnect and on the world-state tick.
 client-2009-login adds, only in a store opened for the 2009 build (Store(client_build='2009'),
@@ -125,6 +130,7 @@ import time
 
 import auth
 import bank_tabs as bankmod
+import blacklist as blmod
 import buffs as buffmod
 import cash as cashmod
 import events as eventmod
@@ -152,6 +158,9 @@ BACKUP_SUFFIXES = BACKUP_SUFFIXES + (BACKUP_SUFFIX_P13,)
 # ROADMAP_2009_ADDENDUM C4 / X14: the stable character id (`cid`).
 BACKUP_SUFFIX_CID = '.bak-pre-cid'
 BACKUP_SUFFIXES = BACKUP_SUFFIXES + (BACKUP_SUFFIX_CID,)
+# P12 bl-1 (blacklist.py): the per-character blacklist.
+BACKUP_SUFFIX_P12 = '.bak-pre-p12'
+BACKUP_SUFFIXES = BACKUP_SUFFIXES + (BACKUP_SUFFIX_P12,)
 # client-2009-login: the 2009 schema step (per-character gender, look_ext) - written only by
 # a store of the 2009 build (Store.backup_paths).
 BACKUP_SUFFIX_2009 = '.bak-pre-client2009'
@@ -377,6 +386,15 @@ def migrate_character(char, gender=0, defaults=None):
         changes.append(f'{name}: {eventmod.CLAIMS_KEY} created')
     elif had != _json_shape(char[eventmod.CLAIMS_KEY]):
         changes.append(f'{name}: {eventmod.CLAIMS_KEY} normalized')
+    # P12 bl-1 (blacklist.py): the 2009 blacklist rows {name, uid, cid} (<= 10). Structural
+    # here; migrate_accounts then resolves every row against the store (blacklist.resolve_all:
+    # uid != 0, the cid, the canonical name). The first load that adds it writes .bak-pre-p12.
+    had = _json_shape(char[blmod.CHAR_FIELD]) if blmod.CHAR_FIELD in char else _MISSING
+    blmod.ensure(char)
+    if had is _MISSING:
+        changes.append(f'{name}: {blmod.CHAR_FIELD} created')
+    elif had != _json_shape(char[blmod.CHAR_FIELD]):
+        changes.append(f'{name}: {blmod.CHAR_FIELD} normalized')
     return changes
 
 
@@ -469,6 +487,10 @@ def migrate_accounts(accounts, hash_passwords=True, defaults=None, client_build=
                 changes.extend(f'{username}/{c}'
                                for c in migrate_character_2009(char, acc.get('gender', 0)))
     changes.extend(assign_cids(accounts))
+    # P12 bl-1: every blacklist row resolved to its character (by cid, else by name: a
+    # hand-edited {"name": "Bob"} gets its uid and cid) or dropped - no stored row has uid 0
+    # (blch A.4: such a row would block everyone). After assign_cids, which it reads.
+    changes.extend(blmod.resolve_all(accounts))
     return changes
 
 
@@ -624,15 +646,16 @@ class Store:
         # The rename hook's STORED half (ROADMAP_2009_ADDENDUM C4): fn(store, username, char, old,
         # new) -> records rewritten, run by rename_character under db_lock before the save, so
         # every stored reference to the character follows the new name in the same write. The
-        # messenger's friend / mentor / mentee references come first; P12 (blacklist entries)
-        # and P14 (guild members, master, applications) append theirs. The LIVE half - telling
+        # messenger's friend / mentor / mentee references come first, then P12's blacklist rows
+        # (blacklist.rename_references, by cid); P14 (guild members, master, applications)
+        # appends its own. The LIVE half - telling
         # the clients - is the world hook world.ON_RENAME, fired by cashuse.CashUse.rename.
         # A rewriter touches STORED DATA ONLY: no group lock (Guild.lock, Party.lock, the
         # messenger's...), no packet, no I/O. It runs under db_lock, and the groups' documented
         # order is Group.lock -> store.lock: a rewriter taking a group lock would invert it and
         # can deadlock against that group's handler. Live state and packets belong in the
         # ON_RENAME subscriber, which fires after db_lock is let go (cashuse.CashUse.rename).
-        self.rename_rewriters = [rewrite_social_references]
+        self.rename_rewriters = [rewrite_social_references, blmod.rename_references]
 
     @classmethod
     def from_config(cls, cfg, path=None):
@@ -1107,6 +1130,7 @@ class Store:
         stallmod.ensure(char)
         cashmod.ensure(char)
         eventmod.ensure(char)
+        blmod.ensure(char)
         # cs-hp-mp-model: born at the client's own maxima (a default Novice is 140/87), not
         # the old flat 100/50 - which spawned every new character hurt. `hp`/`mp` stay the
         # CURRENT values; the maxima are never stored (hpmp.derive computes them). Imported

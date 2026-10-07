@@ -46,12 +46,22 @@ Applies, to a copy of the pristine WindSlayer.exe (every original byte is checke
     ([esp+0x18] next = NULL, [esp+0x20] = param_2), so it handles only that copy. param_2 == 0
     (the main tick) and PvP rooms (room mode 1, where the catch-up is the only tick and has no
     main tick to fall back on) run the original instructions unchanged.
+  - cp-2 KR->EN item-id shift (--no-id-shift to skip; re_tools/docs/systems_2009/pet.md 1 B2,
+    guild.md 1.6, CLIENT_PATCH_SET_RE_2026-10-06.md cp-2). Build 14's exe hard-codes KR item ids,
+    but the EN hii inserts four event items at 4249..4252 and the client indexes items by line
+    order, so every id >= 4249 is 4 lower in the exe than in the EN data. +4 on the id field of
+    17 instructions (ID_SHIFT_SITES): 11 pet (Pet Bell gate 4281 -> 4285; auto-feed bag search
+    and manual range, Pet Food 250/100/50/20 4282..4285 -> 4286..4289; base of the cash-use
+    switch, which moves the premium billboard 4279 -> 4283, the four foods and the rename ticket
+    4318 -> 4322 together) and 6 guild billboard (use 4280 -> 4284; S2C 0xBA / 0xBB sprite pick
+    and 0xB3 sub 185, 4280 / 4279 -> 4284 / 4283). Server consequence: with this patch, board
+    item ids in 0xBA / 0xBB / sub 185 and the pet item ids are the EN ids; without it, the KR ids.
 The launcher still needs the three SSO arguments: WindSlayer_patched.exe -<a> -<b> -<c>
 (play_2009.bat passes them).
 
 usage: python patch_2009.py [address] [--src WindSlayer.exe] [--out WindSlayer_patched.exe]
                             [--no-smooth] [--no-aggro-rules] [--name-rule level|kr]
-                            [--no-combo-hud] [--no-knock-fix] [--p2]
+                            [--no-combo-hud] [--no-knock-fix] [--no-id-shift] [--p2]
   --p2  second client for multiplayer tests: the client's own UDP P2P port 42907 -> 42908
         (4 immediates; only one process can bind 42907), written to WindSlayer_p2.exe
         unless --out is given.
@@ -183,6 +193,82 @@ def apply_knock_fix(data, off, put, pe, combo=None):
     print(f'  {"knock .text VSize":22} 0x{cur:X} -> 0x{new:X}')
 
 
+# cp-2: KR->EN +4 item-id shift (see the docstring). EN id = KR id + 4 for every id >= 4249
+# (_work/pet/align_kr_en.txt; EN hii 4322 rows, id == line order). Each entry is one whole
+# instruction (checked byte for byte); only its id field (offset, size; sign -1 = negative
+# displacement) changes. Verified with capstone 2026-10-06: a raw scan of .text for imm == id or
+# disp == -id, id in 4249..4322, finds exactly these 17 (plus misaligned decodes and the CRT
+# exponent check 0x4C237B 'cmp ax,0x10C5'); no u16 item-id table in .rdata/.data holds 4249..4322.
+# All ranges are in combo_hud_2009.RESERVED.
+ID_SHIFT = 4
+ID_SHIFT_SITES = (
+    # (instruction va, original bytes, field offset, field size, sign, KR id, what)
+    # --- pet (pet.md 1 B2): 11
+    (0x44FD72, '6681FFB910',     3, 2, +1, 0x10B9, 'id+4 pet bell gate'),    # FUN_0044f070 cmp di,0x10B9   Pet Bell
+    (0x46D64B, '68BA100000',     1, 4, +1, 0x10BA, 'id+4 feed find 250'),    # FUN_0046d640 push 0x10BA     bag search
+    (0x46D659, 'BFBA100000',     1, 4, +1, 0x10BA, 'id+4 feed use 250'),     #              mov edi,0x10BA  id fed
+    (0x46D660, '68BB100000',     1, 4, +1, 0x10BB, 'id+4 feed find 100'),
+    (0x46D66E, 'BFBB100000',     1, 4, +1, 0x10BB, 'id+4 feed use 100'),
+    (0x46D675, '68BC100000',     1, 4, +1, 0x10BC, 'id+4 feed find 50'),
+    (0x46D683, 'BFBC100000',     1, 4, +1, 0x10BC, 'id+4 feed use 50'),
+    (0x46D68A, '68BD100000',     1, 4, +1, 0x10BD, 'id+4 feed find 20'),
+    (0x46D698, 'BFBD100000',     1, 4, +1, 0x10BD, 'id+4 feed use 20'),
+    (0x46D69F, '8D8746EFFFFF',   2, 4, -1, 0x10BA, 'id+4 feed range'),       # lea eax,[edi-0x10BA]; cmp ax,3
+    (0x46DB2B, '2DB7100000',     1, 4, +1, 0x10B7, 'id+4 cash-use switch'),  # FUN_0046d6f0 sub eax,0x10B7; cmp eax,27h
+    # --- guild billboards (guild.md 1.6): 6
+    (0x44FCB8, '6681FFB810',     3, 2, +1, 0x10B8, 'id+4 board use'),        # FUN_0044f070 cmp di,0x10B8 -> dialog 0x4B7
+    (0x45DBC3, '663DB810',       2, 2, +1, 0x10B8, 'id+4 0xBA board spr'),   # S2C 0xBA cmp ax,0x10B8 -> sprite 0x145
+    (0x45DBD2, '663DB710',       2, 2, +1, 0x10B7, 'id+4 0xBA prem spr'),    #          cmp ax,0x10B7 -> sprite 0x146
+    (0x45DD3B, '663DB810',       2, 2, +1, 0x10B8, 'id+4 0xBB board spr'),   # S2C 0xBB, same pair
+    (0x45DD4A, '663DB710',       2, 2, +1, 0x10B7, 'id+4 0xBB prem spr'),
+    (0x47E846, '66817C2414B810', 5, 2, +1, 0x10B8, 'id+4 B3 sub185'),        # cmp word [esp+14h],0x10B8 -> C2S 0x15
+)
+
+
+def id_shift_edits():
+    """[(va, orig, new, what)] for ID_SHIFT_SITES: whole instructions, the id field + ID_SHIFT."""
+    out = []
+    for va, ins, fo, fs, sign, kr, what in ID_SHIFT_SITES:
+        orig = bytes.fromhex(ins)
+        fmt = {2: '<h', 4: '<i'}[fs]
+        if fo + fs > len(orig) or struct.unpack_from(fmt, orig, fo)[0] != sign * kr:
+            raise SystemExit(f'id shift table: 0x{va:X} field +{fo}/{fs} is not {sign * kr:#x}')
+        new = bytearray(orig)
+        struct.pack_into(fmt, new, fo, sign * (kr + ID_SHIFT))
+        out.append((va, orig, bytes(new), what))
+    return out
+
+
+def apply_id_shift(data, off, put, combo=None):
+    """cp-2. combo = (entries, cave_end) returned by combo_hud_2009.apply(), or None when it was skipped."""
+    sys.path.insert(0, HERE)
+    import combo_hud_2009
+    edits = id_shift_edits()
+    mine = [(va, len(orig)) for va, orig, _n, _w in edits]
+    missing = [r for r in mine if r not in combo_hud_2009.RESERVED]
+    if missing:
+        raise SystemExit(f'id shift: combo_hud_2009.RESERVED lacks {[(hex(a), n) for a, n in missing]}')
+    # every other patch site: RESERVED (all other patch_2009 edits, incl. the knock hook + cave) plus,
+    # when it was applied, the combo cave and its four hooks
+    others = [r for r in combo_hud_2009.RESERVED if r not in mine]
+    if combo is not None:
+        entries, combo_end = combo
+        others.append((combo_hud_2009.CAVE_VA, combo_end - combo_hud_2009.CAVE_VA))
+        others += [(va, len(orig)) for va, orig, _n, _w in combo_hud_2009.hooks(entries)]
+    for i, (a, al) in enumerate(mine):
+        for b, bl in others + mine[i + 1:]:
+            if a < b + bl and b < a + al:
+                raise SystemExit(f'id shift: 0x{a:X}+{al} overlaps another patch at 0x{b:X}+{bl}')
+    # verify every site before writing anything (put() re-checks each one)
+    for va, orig, _new, what in edits:
+        o = off(va)
+        if bytes(data[o:o + len(orig)]) != orig:
+            raise SystemExit(f'{what}: unexpected bytes at 0x{va:X}: {bytes(data[o:o + len(orig)]).hex()} '
+                             f'(want {orig.hex()}) - not the pristine 2009 exe, or already patched?')
+    for va, orig, new, what in edits:
+        put(va, orig, new, what)
+
+
 def pe_of(data):
     import pefile
     return pefile.PE(data=bytes(data), fast_load=True)
@@ -201,12 +287,14 @@ def main():
     p2 = '--p2' in args
     combo_hud = '--no-combo-hud' not in args
     knock_fix = '--no-knock-fix' not in args
+    id_shift = '--no-id-shift' not in args
     name_rule = opt('--name-rule', 'level')
     if name_rule not in NAME_RULES:
         raise SystemExit(f'--name-rule must be one of {sorted(NAME_RULES)}')
     if p2 and '--out' not in sys.argv:
         out = os.path.join(HERE, 'WindSlayer_p2.exe')
-    args = [a for a in args if a not in ('--no-smooth', '--no-aggro-rules', '--p2', '--no-combo-hud', '--no-knock-fix')]
+    args = [a for a in args if a not in ('--no-smooth', '--no-aggro-rules', '--p2', '--no-combo-hud', '--no-knock-fix',
+                                         '--no-id-shift')]
     if any(a.startswith('--') for a in args):
         raise SystemExit(f'unknown option(s): {[a for a in args if a.startswith("--")]}')
     address = args[0] if args else '127.0.0.1'
@@ -278,6 +366,10 @@ def main():
     if knock_fix:
         # after the smooth block (stale VirtualSize write) and the combo HUD (its cave extent)
         apply_knock_fix(data, off, put, pe, combo)
+
+    if id_shift:
+        # byte-disjoint from every other edit (checked), so the order does not matter
+        apply_id_shift(data, off, put, combo)
 
     if p2:
         # scene+0x248 own port (0x4405C9), CreateSockets UDP bind (0x4407F9), the UDP handler

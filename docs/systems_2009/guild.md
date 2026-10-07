@@ -47,8 +47,8 @@ Scratch and evidence: `re_tools/docs/systems_2009/_work/guild/` (all `.asm` file
 | 0x92 | C2S | GuildMemberGradeChange | `u16 guild_id; u32 uid; str[17] name; u8 grade` (24 B) | [V] 0x485350 | consumed |
 | 0x96..0x9D | C2S | Guild Battle family | section 9 | [V] builders 0x485A90..0x485FF4 | consumed (0x96 would soft-lock, see F14) |
 | 0xBC | C2S | RoomHost_GuildBattleResult | dead code | [V] (spec) | warn only |
-| 0x0B | C2S | NpcShopBuy from Moiba (menu 0x4BB control 5) | `u16 item; u16 qty; u16 npc` | [V] (spec) | refused "Guilds are not available." (windslayer_server.py:4124-4126) |
-| 0x15 | C2S | UseItem sent by the client on sub 185 | `u16 item_id` (always 0x10B8) | [V] 0x47E853..0x47E87A | normal use-item path |
+| 0x0B | C2S | NpcShopBuy from Moiba (menu 0x4BB control 5, send site 0x474327) | `u16 item; u16 qty; u16 npc`; **npc is always 0 on the wire** (1.5, control 5) | [V] asm + live (P15 G1a) | GameServer._buy_guild_board: npc 0 on map 9702 with a board item id means Moiba (`_board_sale_npc`). The cp-2 exe gets EN 4284 for 1,000 gold; the stock exe is refused |
+| 0x15 | C2S | UseItem sent by the client on sub 185 | `u16 item_id` (always 0x10B8; **after cp-2: 0x10BC = 4284**) | [V] 0x47E853..0x47E87A | normal use-item path |
 | 0x33 | C2S | Messenger conversation invite ("Converse" in the guild tab) | `u32 uid; str[17] name` | [V] FUN_0047b130 | handled (`_handle_room_invite`) |
 
 ---
@@ -166,7 +166,7 @@ Control numbers are the 1-based ids of `ui_guild.txt`, and they match the `param
 | 2 | "Guild make" (9082) | M+0x44 < 2 opens creation window 0x4B4, otherwise `0x5291AC "Already in the other guild."` | [V] |
 | 3 | "Break Guild" (9125) | confirm 0x4C2 (`"Do you want to leave this guild?"`, guild name) with **action 3**. On OK: member count > 1 gives `0x528FA0 "To do this,\r\nyou have to kick someone in your guild."` and nothing is sent; otherwise 0x8E action 3 | [V] |
 | 4 | "Increase Capacity" (9126) | master only (else "Guild master can only do this.") runs FUN_00484f40 (section 1.3), then window 0x4BD OK sends 0x90 | [V] |
-| 5 | "Purchase advertisement" (9127) | quantity dialog 0x10 `0x528B90 "How many do you want to buy?(%uGold)"` for template item +0x288, then C2S 0x0B | [V] |
+| 5 | "Purchase advertisement" (9127) | quantity dialog 0x10 `0x528B90 "How many do you want to buy?(%uGold)"` for template item +0x288 (dialog +0x134 = item, +0x11C = the NPC id copied at 0x482331, +0x40 = 5), then C2S 0x0B {item, qty, npc}. **npc is always 0 on the wire**: the OK control (hui window 16 control 2) has Event 1 (close), so FUN_00448730 closes dialog 0x10 before it dispatches the control, and FUN_00497e00 (mode 1) zeroes +0x120 / +0x11C (0x497E9F / 0x497EA5) before FUN_00472f40 reads +0x11C (0x474315). The item survives (+0x134 is not cleared). The server must infer Moiba (map 9702 + a board item id) | [V] asm; live P15 G1a (raw `0B BB 10 01 00 00 00`) |
 | 6 | "Change Guild Master" (9128) | master only, window 0x4BF (name field + "Member list" picker 0x433), OK sends 0x91 (empty name: message, nothing sent) | [V] |
 | 7 | "Edit Guild News" (9129) | master only, window 0x4C1, OK sends 0x8F if the text is non-empty and differs from M+0x88 | [V] |
 
@@ -209,6 +209,7 @@ Then the client **pre-fills M optimistically**: +0x60 own uid, +0x57 = 1, +0x46 
 - **The EN 2009 `windslayer.hii` is shifted by +4 in this range** [V]: 4279 "Sky Bow", 4280 "Rider's Bow" (Type 1 weapons), **4283 "Premium Guild Billboard"** (cash, Type 5), **4284 "Guild Billboard"** (Buy 1000, Type 0). KR gamedef has the boards at 4279/4280.
 - Moiba's EN template sells **4283** (hni `item:` 4283; KR NPC 181 sells 4280) [V].
 - Consequence [I, must be live-tested (T-BOARD-ITEM)]: in Build 14 no EN item reaches the billboard code. 4284 is Type 0 but not 0x10B8, so it takes the generic use-item path and sends C2S 0x15 {4284}. 4283 = 0x10BB lands on the **pet-food** case of FUN_0046d6f0 (0x10BA..0x10BD). **The C2S 0x88 path is probably unreachable with stock EN data.** The S2C side (0xBA/0xBB) still renders if the server uses board_item_id 4279/4280.
+- **After cp-2** (G-CP exe patch, `patch_2009.py` default; CLIENT_PATCH_SET_RE_2026-10-06.md 8.5): all six board constants are +4. Then EN 4284 opens dialog 0x4B7 in 9702 and EN 4283 takes the premium-board case, so C2S 0x88 becomes reachable. The server must then send **4284 / 4283** in 0xBA / 0xBB / sub 185; KR 4280 / 4279 would draw no sprite. Everything above describes the stock exe. The server setting that follows the installed exe is `CLIENT_ITEM_IDS` (`"en"` = cp-2 exe, `"kr"` = stock exe; CLIENT_PATCH_SET_RE_2026-10-06.md 8.5).
 
 ---
 
@@ -260,7 +261,7 @@ Dispatch [V]: SubHandler3 FUN_0047bd60, case 0xB3 at 0x47D506.
 | 35 | 0x47F7E9 | `u8 outcome` | 1 wins+1, 2 losses+1, 3 draws+1; refresh |
 | 36 | - | (none) | no case (default) |
 | 37 | 0x47F918 | `u32 uid` | entity(uid)+0x12 = 1 ("Game Master" tag). Unknown uid: nothing. |
-| 185 | 0x47E805 | `u8 flag; if flag==1: u16 item_id` | flag 1 and item 0x10B8: the client sends **C2S 0x15 {u16 0x10B8}** (UseItem). flag 1 with another item: nothing. flag != 1: `0x528EA8 "Guild master can only do this."` |
+| 185 | 0x47E805 | `u8 flag; if flag==1: u16 item_id` | flag 1 and item 0x10B8: the client sends **C2S 0x15 {u16 0x10B8}** (UseItem). flag 1 with another item: nothing. flag != 1: `0x528EA8 "Guild master can only do this."` After cp-2 the compare is 0x10BC (4284), and the 0x15 echoes the packet's own field, so `{1, 4284}` gives C2S 0x15 {4284}. |
 
 **Sub 3 hazards** [V]:
 - A second sub 3 without an intervening 0x03 duplicates every member, so send sub 3 at most once per map load. The only exception is the "member_count = 0" trick in F1.
@@ -432,10 +433,10 @@ The client always pops its **first** application before sending, so the server m
 ### F13. Guild Plaza boards (0x88 → 0xBA; expiry → 0xB8)
 Blocked in Build 14 by the item-id mismatch (1.6) [I]. The server side for when it becomes reachable (or for GM-seeded boards):
 1. X (master) in 9702 → 0x88 (87 B).
-2. Server checks: X is the master of gid, X is in 9702, X owns a board item (4280 normal or 4279 premium in the exe's numbering, or 4284/4283 in EN data; see open question 1), no other active board of X, distance >= 158 px from other boards (as the client).
+2. Server checks: X is the master of gid, X is in 9702, X owns a board item (4280 normal or 4279 premium in the exe's numbering, or 4284/4283 in EN data; see open question 1; after cp-2 the exe numbering *is* 4284/4283), no other active board of X, distance >= 158 px from other boards (as the client).
 3. Store the board {expires = now + 1 h (normal) or 24 h (premium)} [I from the KR item text "사용기간은 1시간/24시간"].
 4. Broadcast **0xBA** (the same body) to everyone in 9702.
-5. Reply **sub 185 {1, item}**: for 0x10B8 the client then sends C2S 0x15 {0x10B8}, which consumes the item through the normal use path [I flow].
+5. Reply **sub 185 {1, item}**: for 0x10B8 the client then sends C2S 0x15 {0x10B8}, which consumes the item through the normal use path [I flow]. After cp-2 the item is 4284 (0x10BC), echoed as C2S 0x15 {4284}.
 6. On expiry or disband send **0xB8 {gid}** to 9702.
 7. A player entering 9702 gets **0xBB** (all live boards) after the 0x8A reply.
 
@@ -578,11 +579,11 @@ Rules (feedback_experiments.md): one change at a time, baseline first, at least 
 | T-GCHAT | after T-B3-3, type `/g hello` | local yellow echo "TestHero : hello"; capture **0x8D `07 00 10 'TestHero : hello'`** |
 | T-0x21 | after T-B3-3, kill one mob with a server build that sets `client_guild_id` = 7 | "(+N) guild points are gained." with no desync |
 | T-GB-WAIT | after T-B3-3 (with grade 5 and 6 fake online members via sub 3): Guild Battle button | capture **0x96**; the "Waiting for the server to respond." box stays; `sendspec B3 '{"sub":34,"s34_result":0}'` closes it |
-| T-BA/BB | stand in 9702: `sendspec BB` with 2 boards (item 4280 and 4279) | two boards (sprites 0x145/0x146) with white text and a green guild name; clicking one opens 0x4B6 and OK sends **0x89 u16** |
+| T-BA/BB | stand in 9702: `sendspec BB` with 2 boards (item 4280 and 4279; **4284 and 4283 on a cp-2 exe**) | two boards (sprites 0x145/0x146) with white text and a green guild name; clicking one opens 0x4B6 and OK sends **0x89 u16** |
 | T-B8 | `sendspec B8 '{"guild_id":<id>}'` | that guild's boards disappear |
-| T-BOARD-ITEM | GM-grant 4284 "Guild Billboard" and 4280; use each in 9702 | predicted [I]: 4284 → C2S 0x15 {4284} (no dialog); 4280 (Rider's Bow) → equip path. This decides open question 1 |
-| T-B3-185 | `{"sub":185,"s185_flag":1,"s185_item_id":4280}` | capture C2S 0x15 `B8 10` |
-| T-MOIBA | walk to 9702 (portal from 801/1001/1101), click Moiba | menu 0x4BB; "Guild make" (or "Break Guild" when the master); control 5 → quantity dialog for item 4283 (today refused "Guilds are not available.") |
+| T-BOARD-ITEM | GM-grant 4284 "Guild Billboard" and 4280; use each in 9702 | predicted [I]: 4284 → C2S 0x15 {4284} (no dialog); 4280 (Rider's Bow) → equip path. This decides open question 1. On a cp-2 exe: 4284 → dialog 0x4B7 |
+| T-B3-185 | `{"sub":185,"s185_flag":1,"s185_item_id":4280}` (stock exe); `4284` on a cp-2 exe | capture C2S 0x15 `B8 10` (stock) / `BC 10` (cp-2) |
+| T-MOIBA | walk to 9702 (portal from 801/1001/1101), click Moiba | menu 0x4BB; "Guild make" (or "Break Guild" when the master); control 5 → quantity dialog for Moiba's hni row: 4283 "(0Gold)" on the stock hni, 4284 "(1000Gold)" after cp-5. OK sends C2S 0x0B {item, qty, **npc 0**} (the close zeroes +0x11C at 0x497EA5 before the read at 0x474315; 1.5 control 5). No longer refused (P15 guild-g6): on 9702 the server names Moiba itself (`_board_sale_npc`) and sells the Guild Billboard **4284** for 1,000 gold each on the cp-2 exe (0x18 {gold, victy, 4284, qty}; a 0x15 price line only when the dialog named 4283). Off 9702, npc 0 is refused ("That item is not for sale."); on the stock exe (`CLIENT_ITEM_IDS "kr"`) "Guild billboards are not available." |
 
 ### 10.2 Two-client end-to-end (after stages G1..G5)
 Setup:
@@ -619,7 +620,7 @@ Setup:
 | G3 | Membership: 0x89 (both lengths) → sub 2 (+0x10 master push / 0x11), FIFO applications, 0x8B/0x8C → sub 5/13/3(or 19), leave/kick → sub 6/14/18 + 0xB7, login/logout sub 20/21 | G2 | 0x89, 0x8B, 0x8C, 0x8E(1,2), subs 2/4/5/6/13/14/18/19/20/21 | 10.2 steps 2, 3, 10, 11 |
 | G4 | Management: 0x92 → sub 16/17 (caps), 0x91 → sub 11/12 (old master → grade 1), 0x8F → sub 7, 0x90 → sub 9/10 with server-side tier/level/gold checks, rename hook → sub 22 | G3 | 0x8F, 0x90, 0x91, 0x92, subs 7/9/10/11/12/16/17/22 | 10.2 steps 6..9 |
 | G5 | Chat and points: 0x8D → 0xB5 relay to others (name rebuild, 87 B cap, 700 ms), guild points accrual + logout credit, level derivation | G3 | 0x8D, 0xB5, 0x21, sub 21 | 10.2 steps 4..5 |
-| G6 | Guild Plaza: 0xBB after the 0x8A reply in 9702, board store with expiry → 0xB8, 0x88 → 0xBA + sub 185, Moiba purchase via 0x0B (decide the item id: EN 4283/4284 vs exe 4279/4280), GM command to place a board | G2; T-BOARD-ITEM result | 0x88, 0xBA, 0xBB, 0xB8, sub 185, 0x0B | T-BA/BB live; boards survive re-entry; expire on schedule |
+| G6 | Guild Plaza: 0xBB after the 0x8A reply in 9702, board store with expiry → 0xB8, 0x88 → 0xBA + sub 185, Moiba purchase via 0x0B (decide the item id: EN 4283/4284 vs exe 4279/4280; with cp-2 they are the same), board ids from the `CLIENT_ITEM_IDS` setting (CLIENT_PATCH_SET_RE_2026-10-06.md 8.5), GM command to place a board | G2; T-BOARD-ITEM result | 0x88, 0xBA, 0xBB, 0xB8, sub 185, 0x0B | T-BA/BB live; boards survive re-entry; expire on schedule |
 | G7 | Guild Battle: registration/roster/room list/challenge (subs 23..35), room mode 7 via the P9 room model, match results via P10, W/L/D persistence, sub 35, win/draw broadcast (0x15, pre-formatted) | P9, P10, G4 | 0x96..0x9D, subs 23..35, 0x2F(7), 0x36, 0x15 | two guilds of 6 (or a reduced `GB_ROSTER` debug setting) register, challenge, fight, and get W/L updated in both windows |
 
 Suggested order: G0 → G1 → G2 → G3 → G5 → G4 → G6. G7 comes after P10. G1 alone already fixes the retail-visible parts: tags, window and guild points.
@@ -628,7 +629,7 @@ Suggested order: G0 → G1 → G2 → G3 → G5 → G4 → G6. G7 comes after P1
 
 ## 12. Open questions
 
-1. **EN item-id shift.** The exe hardcodes billboards 4279/4280 (and pet items 0x10B9..0x10BD). The EN 2009 hii has them at 4283/4284 (and Moiba sells 4283). Is the billboard feature dead in Build 14 (T-BOARD-ITEM)? If so, the server should seed boards itself (GM/admin) or the item table needs a client-side data patch. This is shared with the pet group (`_work/pet/align_kr_en.txt`).
+1. **EN item-id shift.** The exe hardcodes billboards 4279/4280 (and pet items 0x10B9..0x10BD). The EN 2009 hii has them at 4283/4284 (and Moiba sells 4283). Is the billboard feature dead in Build 14 (T-BOARD-ITEM)? If so, the server should seed boards itself (GM/admin) or the item table needs a client-side data patch. This is shared with the pet group (`_work/pet/align_kr_en.txt`). **Answered by G-CP cp-2** (an exe patch, not a data patch): the six board constants move to 4284/4283 (CLIENT_PATCH_SET_RE_2026-10-06.md 8). It is built but not installed yet, so the server must follow whichever exe is installed.
 2. **Guild point formula and sources.** There is one sample: 41 exp → 20 GP (2010 client). Do quests or PvP give points? Was the credit really deferred to logout (the client text suggests yes), and what happens on a crash?
 3. **Permissions.** Who may change grades, invite, or place boards besides the master? The client gates only Kick/Break/Capacity/Master/Notice/boards on "own name == M+0x64".
 4. **Member `online` byte.** Is it the channel number or a boolean? What does the client do with values > 1 beyond the icon?

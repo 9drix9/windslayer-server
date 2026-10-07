@@ -333,7 +333,14 @@ class Parties:
                 log.info(f'[PARTY] {me!r} invites uid {uid}: not online (0x15)')
                 return 'not online'
             other = name_of(target)
-            if self.server.refuses(target, 'party'):
+            if self.server.blacklist_drops(target, session):
+                # P12 bl-3, BLACKLIST_FILTER 'silent' (blch F-B4): the invitee's client would drop
+                # the 0x4E (FUN_00484190 at 0x45BD0E) - no window 0x71, no pending invite and
+                # nothing back (the inviter's client printed its own request line).
+                log.info(f'[PARTY] {me!r} invites {other!r}: blacklisted - dropped (no invite recorded)')
+                return 'blacklisted'
+            if self.server.refuses(target, 'party', session):
+                # The privacy flag, or BLACKLIST_FILTER 'refuse' (blacklist.py).
                 self._notice(session, REFUSING_TEXT.format(other))
                 log.info(f'[PARTY] {me!r} invites {other!r}: refuses parties (0x15)')
                 return 'refused'

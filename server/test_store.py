@@ -477,7 +477,9 @@ class StoreRecords(TempDir):
             # P8 (premium_cash-wallet-model): no cash items owned.
             'cash_items': [],
             # P13 (ev-e3, events.py): no event login gift claimed yet.
-            'event_gifts_claimed': {}})
+            'event_gifts_claimed': {},
+            # P12 (bl-1, blacklist.py): nobody blacklisted.
+            'blacklist': []})
         saves = st.saves
         st.add_character('admin', char)
         self.assertEqual(st.saves, saves + 1)

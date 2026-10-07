@@ -461,6 +461,7 @@ TEXT_FIELDS = {
     '0x15': ('text_len', 'text', 88),      # 89-byte buffer
     '0x90': ('text_len', 'text', 87),      # 88-byte buffer
     '0x91': ('text_len', 'text', 87),
+    '0xB5': ('text_len', 'text', 87),      # 2009 guild chat line: 88-byte zeroed stack buffer (0x45D07F)
 }
 
 
@@ -700,9 +701,9 @@ DEFAULT_ASSUME_2009 = {
     '0x2E': {'uid != receiver_login_uid': _rows_not_receiver('repeat[player_count]', 'uid')},
     # spec_2009 0x21 ExpDelta: dropped by a client with no local player (scene+0x988, 2008
     # scene+0x970) - sent only after the own 0x07. The trailing u32 guild_points exists only
-    # when exp_delta > 0 AND the receiver's own entity+0x12 guild id is >= 2. There are no
-    # guilds (GameServer._receiver_guild_id is 0), so the default is False; a guild-aware
-    # sender passes {'local_player_guild_id > 1': guild_id >= 2} explicitly.
+    # when exp_delta > 0 AND the receiver's own entity+0x12 guild id is >= 2. The default is
+    # False (no guild); the one 0x21 writer (GameServer._exp_delta_packet, P14 guild-g1) always
+    # passes {'local_player_guild_id > 1': ...} from the receiver's clientview mirror.
     '0x21': {'scene+0x988 == 0': False, 'local_player_guild_id > 1': False},
     # spec_2009 0x7F (mentor exp share): same local-player gate as 0x21, no guild tail.
     '0x7F': {'scene+0x988 == 0': False},
@@ -712,17 +713,21 @@ DEFAULT_ASSUME_2009 = {
     # spec_2009 0x6F: the 2009 text is the negation of the 2008 one ("> 45" -> stop): the bag
     # capacities the server sends in 0x03 are always 1..45 (inventory.MAX_CAPACITY).
     '0x6F': {'char_bag_slots_0x373 > 45 || char_bag_slots_0x374 > 45 || char_bag_slots_0x375 > 45': False},
-    # spec_2009 0x0A: NEW client blacklist gate (FUN_00484190 by sender name). No server-side
-    # blacklist model exists, so the whisper is sent in full; a receiver that blacklisted
-    # the sender reads only the header and drops it (same bytes to it, nothing shown).
+    # spec_2009 0x0A: NEW client blacklist gate (FUN_00484190 by sender name). P12 bl-3 has the
+    # server-side model (blacklist.py): unless BLACKLIST_FILTER is 'client' the server drops a
+    # blacklisted sender's whisper and builds no 0x0A at all; in 'client' mode the full 0x0A
+    # goes out and the receiver that blacklisted the sender reads only the header and drops
+    # it (same bytes to it, nothing shown) - so the full form (False) is right either way.
     '0x0A': {'sender_on_local_blacklist': False},
 }
 BUILD_ASSUME = {'2009': DEFAULT_ASSUME_2009}
 
 # 2009 grammars whose client-state gates are deliberately left without a default: the pet
-# packets need a pet model the server does not have, so it never sends them.
+# packets' gates are per receiver (is it the owner? does it hold the owner's pet_info?), so no
+# default can be right - pets.py states them for every send (ab_fields / ad_fields / af_fields,
+# from the session and its clientview mirror, P15 pet-s1 / pet-s2) and a missing one raises.
 NO_DEFAULT_ASSUME_2009 = {
-    **{key: 'pet packet (S2C 0xAB..0xC0): no pet model, never sent (client-2009-world)'
+    **{key: 'pet packet (S2C 0xAB..0xC0): per-receiver gates, stated by pets.py on every send (P15)'
        for key in ('0xAB', '0xAD', '0xAE', '0xAF', '0xB0', '0xB1', '0xC0')},
     '0x01': NO_DEFAULT_ASSUME['0x01'],
 }
@@ -734,6 +739,21 @@ FORBIDDEN_S2C = {
         # spec_2009 0xC5: X-Trap challenge; the patched client's stubbed X-Trap answers with
         # garbage (C2S 0x9E) and the session is lost.
         0xC5: 'X-Trap challenge: the stubbed client answers garbage and disconnects',
+        # P14 guild-g0 (systems_2009/guild.md opcode table, ADDENDUM 4.2 "Never send"): no
+        # handler anywhere - primary default 0x45DE1A, SubHandler3 default 0x47F973, SubHandler4
+        # default 0x46C57E, SubHandler5 only 0x8A / 0x8B [V]. The spec has no 0xB9 entry either.
+        0xB9: 'no handler in the 2009 client (guild.md: must never be sent)',
+    },
+}
+
+# (C2S request opcode, S2C opcode, first payload byte) -> why a build must never answer that
+# request with that packet. GameServer._send_encrypted refuses it while the request is being
+# dispatched on the calling thread (registry.request_opcode), the admin injector included.
+FORBIDDEN_REPLIES = {
+    '2009': {
+        # P14 guild-g0: S2C 0xB3 sub 19 makes the client send C2S 0x8A (FUN_00484550,
+        # 0x48456D); answering 0x8A with it is an endless request loop (guild.md 2 sub 19, F0).
+        (0x8A, 0xB3, 19): '0xB3 sub 19 as the reply to C2S 0x8A: the client re-sends 0x8A for ever',
     },
 }
 
@@ -747,6 +767,15 @@ STRICT_FIELDS = set()
 def forbidden_reason(opcode, client_build=None):
     """Why S2C `opcode` must never go to a client of this build, or None."""
     return FORBIDDEN_S2C.get(_build_name(client_build), {}).get(int(opcode))
+
+
+def forbidden_reply(request_opcode, opcode, payload, client_build=None):
+    """Why S2C `opcode` + `payload` must never answer C2S `request_opcode` (FORBIDDEN_REPLIES),
+    or None."""
+    if request_opcode is None or not payload:
+        return None
+    return FORBIDDEN_REPLIES.get(_build_name(client_build), {}).get(
+        (int(request_opcode), int(opcode), bytes(payload[:1])[0]))
 
 
 def unknown_fields(key, fields, direction='S2C', *, client_build=None):

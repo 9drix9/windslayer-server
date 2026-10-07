@@ -11,7 +11,8 @@ never allocates a number the client reserves for itself.
 | player uid         | 1 .. 0x000EFFFF (one per ACCOUNT)  | store.py (lc-data-model, lc-uid-online) |
 | monster / NPC uid  | 0x000F0000 .. 0x001FFFFF           | world-shared-monsters (server-wide)     |
 | select-screen uid  | 30,000,000 + slot                  | client only (S2C 0x02 / 0x1C entities)  |
-| map-file NPC tiles | 33,000,000 +                       | client only; never allocate             |
+| map-file NPC tiles | 33,000,000 +                       | client only; never allocate (2009: also |
+|  and 2009 pets     |                                    | every pet sprite, gs+0x3FC, pet.md H6)  |
 | ground item id     | u16 per map, 1 .. 0xFFFF           | item_inventory-ground-loot-pickup       |
 | room number        | 1 .. 128, never 0x81               | pvp-room-model (arena/play/battle)      |
 | messenger room     | u32 counter, never 0               | social_friend-chat-room                 |
@@ -53,7 +54,11 @@ PLAYER = IdSpace('player uid', 1, 0x000EFFFF, 'store (lc-data-model / lc-uid-onl
 MONSTER = IdSpace('monster/NPC uid', 0x000F0000, 0x001FFFFF, 'world-shared-monsters')
 SELECT_SCREEN = IdSpace('select-screen entity uid', 30_000_000, 30_000_004, 'client (0x02/0x1C)',
                         server_allocates=False)
-MAP_NPC = IdSpace('map-file NPC tile uid', 33_000_000, 0xFFFFFFFF, 'client (map files)', server_allocates=False)
+# The 2009 pet sprites take their uid from the same client counter (gs+0x3FC, seeded to 33,000,000
+# by FUN_00445970 on every 0x03 / 0x08 map load; FUN_00447f40 :95/:162): a server uid must stay
+# below it (pet.md 7 H6) - every server space above ends far lower (test_pets.IdSpaces).
+MAP_NPC = IdSpace('map-file NPC tile / 2009 pet sprite uid', 33_000_000, 0xFFFFFFFF, 'client (map files, pets)',
+                  server_allocates=False)
 GROUND_ITEM = IdSpace('ground item id (per map)', 1, 0xFFFF, 'item_inventory-ground-loot-pickup')
 ROOM = IdSpace('room number', 1, 128, 'pvp-room-model')
 MESSENGER_ROOM = IdSpace('messenger chat room', 1, 0xFFFFFFFF, 'social_friend-chat-room')

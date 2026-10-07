@@ -20,7 +20,8 @@
    "key exchange + DecodebyArray"
   ],
   "amendments": [
-   "client-2009-world: + S2C 0x8A CardDeckList and 0x8B CardDeckRegisterResult (2009 SubHandler5 FUN_0045fb80, missed by the switch-table triage; wire identical to 2008)"
+   "client-2009-world: + S2C 0x8A CardDeckList and 0x8B CardDeckRegisterResult (2009 SubHandler5 FUN_0045fb80, missed by the switch-table triage; wire identical to 2008)",
+   "P14 guild-g0 (systems_2009/guild.md 1.1 + 11 G0): S2C 0xB3 sub 3 member record = grade, job1, job2 and sub 13 = ..., level, job2, job1 (names swapped, wire unchanged: record +0x1A = job1 / class, +0x1B = job2 / tier, [V] 0x484484..0x4844AA, class icon 0x491D77); C2S 0x482C4D/0x88 length 87 (the Add list sums to 87, not 83)"
   ]
  },
  "specs": [
@@ -2455,7 +2456,7 @@
     {
      "va": "0x482351",
      "function": "FUN_00480430",
-     "role": "dialog 0x10: +0x134 = item id, +0x11C = NPC id from the menu window, +0x40 = 5"
+     "role": "dialog 0x10: +0x134 = item id, +0x11C = NPC id from the menu window (0x482331; zeroed again by the OK's close before the send, see 0x474320), +0x40 = 5"
     },
     {
      "va": "0x474249",
@@ -2495,7 +2496,7 @@
     {
      "va": "0x474320",
      "function": "FUN_00472f40",
-     "role": "Add(u16 [dlg+0x11C])"
+     "role": "Add(u16 [dlg+0x11C]) - always 0 here: the OK's close (FUN_00448730 case 1 -> FUN_00497e00 mode 1, 0x497EA5) zeroed it before this handler ran"
     },
     {
      "va": "0x474327",
@@ -2523,7 +2524,7 @@
     {
      "name": "npc_id",
      "type": "u16",
-     "meaning": "NPC id copied from the guild NPC menu window (+0x11C).",
+     "meaning": "Always 0 on the wire. FUN_00480430 copies the NPC id into dialog 0x10 +0x11C (0x482331), but the OK control (hui window 16 control 2) has Event 1 (close): FUN_00448730 runs that close BEFORE it dispatches the control, and FUN_00497e00 mode 1 zeroes +0x120 / +0x11C (0x497E9F / 0x497EA5) before FUN_00472f40 reads +0x11C (0x474315). The item (+0x134) survives the close. Live-verified P15 G1a: raw 0B BB 10 01 00 00 00. The server names the NPC itself (Moiba on map 9702 for a board id: GameServer._board_sale_npc).",
      "at_va": "0x474320",
      "dest_or_source": "[dialog 0x10 +0x11C]"
     }
@@ -2531,14 +2532,14 @@
    "semantics": "Buys the guild NPC's item (e.g. the Guild Billboard) through the normal NPC-shop purchase opcode.",
    "trigger": "Guild NPC menu window 0x4BB, control 5 -> dialog 0x10 'How many do you want to buy?(%uGold)' -> OK.",
    "expected_response": "S2C 0x18 (gold update + item grant), as for the NPC shop.",
-   "gates_and_hazards": "Gold/Victy/bag checks in FUN_00471450. Unlike the NPC-shop path there is no per-type quantity cap.",
+   "gates_and_hazards": "Gold/Victy/bag checks in FUN_00471450 (with the NPC discount: param_7 = 1). Unlike the NPC-shop path there is no per-type quantity cap. npc_id is always 0 (see the field): a server that routes this by npc_id refuses every real purchase.",
    "references": "Same wire format as 2008 0x469D9C/0x0B and the carried 0x4745A4/0x0B.",
    "server_status": "partial",
    "confidence": "high",
    "open_questions": [
     "Which item the guild NPC template names at +0x288 (data, not code)."
    ],
-   "verification": "Read 2009 asm 0x474249..0x47432D and decomp FUN_00472f40 lines 1474-1510; opener in FUN_00480430 decomp lines 1311-1330 and asm 0x482223..0x482351.",
+   "verification": "Read 2009 asm 0x474249..0x47432D and decomp FUN_00472f40 lines 1474-1510; opener in FUN_00480430 decomp lines 1311-1330 and asm 0x482223..0x482351. npc_id = 0: P15 live test G1a (2026-10-07) and the close path FUN_0049cf10 -> FUN_00448730 -> FUN_00497e00 (live_harness/p15_live_triage.md 1).",
    "diff_vs_2008": "NEW send site; wire identical to 2008 0x0B.",
    "batch": "C2S-2009-changed-new"
   },
@@ -13617,7 +13618,7 @@
    "trigger": "Guild window 0x4B4 (from the guild NPC menu 0x4BB control 2 when not in a guild): choose emblem, enter name, control 2 -> confirm window 0x4B5 control 2.",
    "expected_response": "S2C 0xB3 sub 1 (u8 result; 1 + u16 guild_id = registered: gold -= 50,000 locally), failures 2/4/5/7/8/9.",
    "gates_and_hazards": "Level 30, 2nd class change, 50,000 gold and an emblem are required client-side.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "high",
    "open_questions": [],
@@ -13710,7 +13711,7 @@
     }
    ],
    "grammar": "u32 master_char_id\nstr[17] master_name\nu16 board_item_id\nu16 guild_id\nstr[17] guild_name\nu16 emblem_symbol\nu16 emblem_bg\nstr[25] ad_text\nf64 pos_x\nf64 pos_y",
-   "length": "83",
+   "length": "87",
    "fields": [
     {
      "name": "master_char_id",
@@ -13787,7 +13788,7 @@
    "trigger": "Use the Guild Billboard item in map 0x25E6 -> dialog 0x4B7 -> control 2.",
    "expected_response": "S2C 0xBA GuildAdBoardAdd broadcast (and consumption of the item).",
    "gates_and_hazards": "Guild master only (FUN_00484d70); curse filter on the text.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "high",
    "open_questions": [],
@@ -13849,7 +13850,7 @@
    "trigger": "Join dialog 0x4B6 opened in mode 2 from window 0x50 control 0xC, then control 2.",
    "expected_response": "S2C 0xB3 sub 2 (1 'You have applied for this guild.', 6 full, 0x11 delayed); the guild master receives the application (sub 2 result 0x10 / sub 4).",
    "gates_and_hazards": "Only without a guild; not for Game Masters.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [
@@ -13913,7 +13914,7 @@
    "trigger": "Click a guild board in map 0x25E6 -> dialog 0x4B6 -> control 2.",
    "expected_response": "S2C 0xB3 sub 2.",
    "gates_and_hazards": "Only without a guild; not for Game Masters. Length (2 vs 4) distinguishes the two variants.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "high",
    "open_questions": [],
@@ -13952,7 +13953,7 @@
    "trigger": "Automatic: end of the S2C 0x03 handler, right after C2S 0x2F (0x45353B) and C2S 0x63 (0x453557).",
    "expected_response": "S2C 0xB3 sub 3 (full guild info) when in a guild, or sub 15 with result != 1 when not (result 1 = 'Failed to get guild info').",
    "gates_and_hazards": "None (only the socket copy must exist).",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "high",
    "open_questions": [],
@@ -13996,7 +13997,7 @@
    "trigger": "Automatic: S2C 0xB3 sub 19 (FUN_0047bd60 @0x47E7E4 calls FUN_00484550).",
    "expected_response": "S2C 0xB3 sub 3 (full guild info) when in a guild, or sub 15 with result != 1 when not (result 1 = 'Failed to get guild info').",
    "gates_and_hazards": "None (only the socket copy must exist).",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "high",
    "open_questions": [],
@@ -14053,7 +14054,7 @@
    "trigger": "Application window 0x4BC, control 5 (master only).",
    "expected_response": "S2C 0xB3 sub 5 (admission result) to the master; sub 13 member joined to the guild.",
    "gates_and_hazards": "FUN_00484730 returns before popping when M+0x130 == 0 (the reject builder FUN_004846d0 pops first). The server must keep its application queue in the order it sent the entries.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [
@@ -14099,7 +14100,7 @@
    "trigger": "Application window 0x4BC control 6; also control 5 when the player is not the guild master.",
    "expected_response": "None traced (the server drops the application).",
    "gates_and_hazards": "The client removes its local copy before sending, so the server's queue order must match the order it sent the applications.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [],
@@ -14300,7 +14301,7 @@
    "trigger": "Guild window 0x4B3 control 8 (or the guild NPC menu 0x4BB control 3) opens confirm window 0x4C2 with the action; its control 2 sends.",
    "expected_response": "Action 1: S2C 0xB3 sub 18 (kick result) + sub 14 (member removed). Action 2: sub 6 (leave). Action 3: sub 8 (delete).",
    "gates_and_hazards": "Mapping of action codes to UI texts inferred from the sources (member record vs own record) and the S2C sub-codes.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [
@@ -14359,7 +14360,7 @@
    "trigger": "Guild NPC menu 0x4BB control 7 (master) -> window 0x4C1 -> control 3.",
    "expected_response": "S2C 0xB3 sub 7 (1 'Notice has been changed.', 0 failure).",
    "gates_and_hazards": "Not sent if the text is empty or unchanged.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "high",
    "open_questions": [],
@@ -14440,7 +14441,7 @@
    "trigger": "Guild NPC menu 0x4BB control 4 (master) -> window 0x4BD -> control 2.",
    "expected_response": "S2C 0xB3 sub 9 (ok + u32 cost: gold -= cost locally) and sub 10 (new max members).",
    "gates_and_hazards": "The server should validate the tier/cost itself; the client sends its table values.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "high",
    "open_questions": [],
@@ -14504,7 +14505,7 @@
    "trigger": "Guild NPC menu 0x4BB control 6 (master) -> window 0x4BF -> control 2.",
    "expected_response": "S2C 0xB3 sub 11 (1 changed, 8 'This member can't be the guild master.') and sub 12 (new master name).",
    "gates_and_hazards": "Empty name -> message box, nothing sent.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [],
@@ -14597,7 +14598,7 @@
    "trigger": "Guild window 0x4B3, grade button of a member row.",
    "expected_response": "S2C 0xB3 sub 16 (grade change result) and sub 17 (member grade) to the guild.",
    "gates_and_hazards": "Client caps: at most 4 grade-4 and 10 grade-3 members.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "high",
    "open_questions": [],
@@ -14816,7 +14817,7 @@
    "trigger": "Guild window 0x4B3 control 0x3E, or the Guild Battle entrance object.",
    "expected_response": "S2C 0xB3 sub 23 (registration result; success sets local entity +0xE9 = 7, +0xEC = value and shows windows 0x4D0/0x4D2). Guild Battle windows: 0x4D0 register/roster, 0x4D1 roster list, 0x4D2 member picker, 0x4D3 room-create confirm, 0x4D4 cancel confirm, 0x4D6 challenge received, 0x4D8 invitation, 0x4D9 room list.",
    "gates_and_hazards": "Needs grade >= 3 (Vanguard or higher), at least 6 online guild members and the second job; FUN_00445c00(0) room gates.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [],
@@ -14880,7 +14881,7 @@
    "trigger": "Guild Battle member picker window 0x4D2, control 0x12.",
    "expected_response": "S2C 0xB3 sub 25 (reason 0xF0 = added to the roster of window 0x4D0/0x4D1; other reasons are refusal texts). Guild Battle windows: 0x4D0 register/roster, 0x4D1 roster list, 0x4D2 member picker, 0x4D3 room-create confirm, 0x4D4 cancel confirm, 0x4D6 challenge received, 0x4D8 invitation, 0x4D9 room list.",
    "gates_and_hazards": "Online and not-yet-listed checks are client-side.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [],
@@ -14961,7 +14962,7 @@
    "trigger": "Invitation window 0x4D8 (opened by S2C 0xB3 sub 24), control 3.",
    "expected_response": "S2C 0xB3 sub 25/26 (roster) or sub 34 errors. Guild Battle windows: 0x4D0 register/roster, 0x4D1 roster list, 0x4D2 member picker, 0x4D3 room-create confirm, 0x4D4 cancel confirm, 0x4D6 challenge received, 0x4D8 invitation, 0x4D9 room list.",
    "gates_and_hazards": "FUN_00445c00 room gates.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [
@@ -15032,7 +15033,7 @@
    "trigger": "Window 0x4D0 control 0x15 (6 members, map, title) -> confirm 0x4D3 control 2.",
    "expected_response": "S2C 0xB3 sub 28/29 (room list) / sub 32 deltas; later S2C 0x2F with room_mode 7. Guild Battle windows: 0x4D0 register/roster, 0x4D1 roster list, 0x4D2 member picker, 0x4D3 room-create confirm, 0x4D4 cancel confirm, 0x4D6 challenge received, 0x4D8 invitation, 0x4D9 room list.",
    "gates_and_hazards": "Roster size 6 and a non-empty title are checked before opening 0x4D3; [0x4D0 +0x134] must be 0.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [],
@@ -15106,7 +15107,7 @@
    "trigger": "Guild Battle room list window 0x4D9, a room row (controls 5..12).",
    "expected_response": "S2C 0xB3 sub 33 to the challenged room (window 0x4D6), sub 34 errors ('Same guild can't play Guild Battle.'). Guild Battle windows: 0x4D0 register/roster, 0x4D1 roster list, 0x4D2 member picker, 0x4D3 room-create confirm, 0x4D4 cancel confirm, 0x4D6 challenge received, 0x4D8 invitation, 0x4D9 room list.",
    "gates_and_hazards": "Not for the own room or the own guild's name.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [],
@@ -15145,7 +15146,7 @@
    "trigger": "Window 0x4D4 control 2.",
    "expected_response": "S2C 0xB3 sub 30/31 kind 2 ('Guild Battle registration has been stopped.'). Guild Battle windows: 0x4D0 register/roster, 0x4D1 roster list, 0x4D2 member picker, 0x4D3 room-create confirm, 0x4D4 cancel confirm, 0x4D6 challenge received, 0x4D8 invitation, 0x4D9 room list.",
    "gates_and_hazards": "None.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [],
@@ -15202,7 +15203,7 @@
    "trigger": "Window 0x4D6 (opened by S2C 0xB3 sub 33) control 3.",
    "expected_response": "S2C 0x2F RoomGameEnter (room_mode 7) for both guilds, or sub 34 errors. Guild Battle windows: 0x4D0 register/roster, 0x4D1 roster list, 0x4D2 member picker, 0x4D3 room-create confirm, 0x4D4 cancel confirm, 0x4D6 challenge received, 0x4D8 invitation, 0x4D9 room list.",
    "gates_and_hazards": "None.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [],
@@ -15241,7 +15242,7 @@
    "trigger": "Window 0x4D9 control 2 or 0xD.",
    "expected_response": "None traced. Guild Battle windows: 0x4D0 register/roster, 0x4D1 roster list, 0x4D2 member picker, 0x4D3 room-create confirm, 0x4D4 cancel confirm, 0x4D6 challenge received, 0x4D8 invitation, 0x4D9 room list.",
    "gates_and_hazards": "None.",
-   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade, 5 = master), M+0xE0 application list.",
+   "references": "Reply sub-codes from the S2C 0xB3 GuildMessage analysis (specs/s2c_new_1.json). M = messenger/guild object [game_state+0x508]; M+0x44 u16 guild id (< 2 = no guild), M+0x46 guild name[17], M+0x60/+0x64 master id/name, M+0x78 member list (0x20-byte records: +0 online, +4 id, +8 name, +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade, 5 = master), M+0xE0 application list.",
    "server_status": "missing",
    "confidence": "medium",
    "open_questions": [],
@@ -35450,7 +35451,7 @@
    "game_system": "guild",
    "socket": "game",
    "length": "1 + sub-code body (variable; e.g. sub 19 = 1, sub 1 with result 1 = 4, sub 3 = 98 + 26*member_count, sub 13 = 27)",
-   "grammar": "u8 sub\nif(sub == 1) {\n  u8 s1_result\n  if(s1_result == 1) {\n    u16 s1_guild_id\n  }\n} else if(sub == 2) {\n  u8 s2_result\n  if(s2_result == 16) {\n    str[130] s2_notice\n  }\n} else if(sub == 3) {\n  u16 guild_id\n  str[17] guild_name\n  u32 guild_points\n  u16 max_members\n  str[61] guild_notice\n  u16 emblem_fg\n  u16 emblem_bg\n  u16 battle_wins\n  u16 battle_losses\n  u16 battle_draws\n  u8 member_count\n  repeat(member_count) {\n    u32 member_id\n    u8 member_grade\n    u8 member_job2\n    u8 member_job1\n    u8 member_level\n    u8 member_online\n    str[17] member_name\n  }\n} else if(sub == 4) {\n  u8 s4_count\n  repeat(s4_count) {\n    str[130] s4_notice\n  }\n} else if(sub == 5) {\n  u8 s5_result\n} else if(sub == 6) {\n  u8 s6_result\n} else if(sub == 7) {\n  u8 s7_result\n} else if(sub == 8) {\n  u8 s8_result\n} else if(sub == 9) {\n  u8 s9_ok\n  if(s9_ok != 0) {\n    u32 s9_cost\n  }\n} else if(sub == 10) {\n  u16 s10_max_members\n} else if(sub == 11) {\n  u8 s11_result\n} else if(sub == 12) {\n  str[17] s12_new_master\n} else if(sub == 13) {\n  u32 s13_member_id\n  str[17] s13_member_name\n  u8 s13_online\n  u8 s13_level\n  u8 s13_job1\n  u8 s13_job2\n  u8 s13_grade\n} else if(sub == 14) {\n  str[17] s14_member_name\n} else if(sub == 15) {\n  u8 s15_result\n} else if(sub == 16) {\n  u8 s16_result\n} else if(sub == 17) {\n  str[17] s17_member_name\n  u8 s17_grade\n} else if(sub == 18) {\n  u8 s18_result\n} else if(sub == 20) {\n  str[17] s20_member_name\n  u8 s20_online\n} else if(sub == 21) {\n  str[17] s21_member_name\n  u32 s21_guild_points\n} else if(sub == 22) {\n  str[17] s22_old_name\n  str[17] s22_new_name\n} else if(sub == 23) {\n  u8 s23_result\n  u16 s23_value\n} else if(sub == 24) {\n  u32 s24_id\n  str[17] s24_guild_name\n  u16 s24_value\n} else if(sub == 25) {\n  u32 s25_id\n  str[17] s25_name\n  u8 s25_reason\n} else if(sub == 26) {\n  i32 s26_ok\n  if(s26_ok != 0) {\n    i32 s26_last_index\n    if(s26_last_index >= 0) {\n      repeat(s26_last_index + 1) {\n        u32 s26_member_id\n        str[17] s26_member_name\n      }\n    }\n  }\n} else if(sub == 27) {\n  i32 s27_value\n} else if(sub == 28 || sub == 29) {\n  u8 s29_count\n  u8 s29_value\n  repeat(s29_count) {\n    u16 s29_room_id\n    str[17] s29_name_a\n    str[17] s29_name_b\n  }\n} else if(sub == 30 || sub == 31) {\n  u8 s30_kind\n  if(s30_kind == 1) {\n    u32 s30_member_id\n  }\n} else if(sub == 32) {\n  u8 s32_kind\n  u8 s32_value\n  u16 s32_room_id\n  if(s32_kind == 1) {\n    str[17] s32_name_b\n    str[17] s32_name_a\n  } else if(s32_kind == 2) {\n    u16 s32_room_id2\n  }\n} else if(sub == 33) {\n  u16 s33_room_id\n  str[17] s33_name\n} else if(sub == 34) {\n  u8 s34_result\n} else if(sub == 35) {\n  u8 s35_result\n} else if(sub == 37) {\n  u32 s37_uid\n} else if(sub == 185) {\n  u8 s185_flag\n  if(s185_flag == 1) {\n    u16 s185_item_id\n  }\n}",
+   "grammar": "u8 sub\nif(sub == 1) {\n  u8 s1_result\n  if(s1_result == 1) {\n    u16 s1_guild_id\n  }\n} else if(sub == 2) {\n  u8 s2_result\n  if(s2_result == 16) {\n    str[130] s2_notice\n  }\n} else if(sub == 3) {\n  u16 guild_id\n  str[17] guild_name\n  u32 guild_points\n  u16 max_members\n  str[61] guild_notice\n  u16 emblem_fg\n  u16 emblem_bg\n  u16 battle_wins\n  u16 battle_losses\n  u16 battle_draws\n  u8 member_count\n  repeat(member_count) {\n    u32 member_id\n    u8 member_grade\n    u8 member_job1\n    u8 member_job2\n    u8 member_level\n    u8 member_online\n    str[17] member_name\n  }\n} else if(sub == 4) {\n  u8 s4_count\n  repeat(s4_count) {\n    str[130] s4_notice\n  }\n} else if(sub == 5) {\n  u8 s5_result\n} else if(sub == 6) {\n  u8 s6_result\n} else if(sub == 7) {\n  u8 s7_result\n} else if(sub == 8) {\n  u8 s8_result\n} else if(sub == 9) {\n  u8 s9_ok\n  if(s9_ok != 0) {\n    u32 s9_cost\n  }\n} else if(sub == 10) {\n  u16 s10_max_members\n} else if(sub == 11) {\n  u8 s11_result\n} else if(sub == 12) {\n  str[17] s12_new_master\n} else if(sub == 13) {\n  u32 s13_member_id\n  str[17] s13_member_name\n  u8 s13_online\n  u8 s13_level\n  u8 s13_job2\n  u8 s13_job1\n  u8 s13_grade\n} else if(sub == 14) {\n  str[17] s14_member_name\n} else if(sub == 15) {\n  u8 s15_result\n} else if(sub == 16) {\n  u8 s16_result\n} else if(sub == 17) {\n  str[17] s17_member_name\n  u8 s17_grade\n} else if(sub == 18) {\n  u8 s18_result\n} else if(sub == 20) {\n  str[17] s20_member_name\n  u8 s20_online\n} else if(sub == 21) {\n  str[17] s21_member_name\n  u32 s21_guild_points\n} else if(sub == 22) {\n  str[17] s22_old_name\n  str[17] s22_new_name\n} else if(sub == 23) {\n  u8 s23_result\n  u16 s23_value\n} else if(sub == 24) {\n  u32 s24_id\n  str[17] s24_guild_name\n  u16 s24_value\n} else if(sub == 25) {\n  u32 s25_id\n  str[17] s25_name\n  u8 s25_reason\n} else if(sub == 26) {\n  i32 s26_ok\n  if(s26_ok != 0) {\n    i32 s26_last_index\n    if(s26_last_index >= 0) {\n      repeat(s26_last_index + 1) {\n        u32 s26_member_id\n        str[17] s26_member_name\n      }\n    }\n  }\n} else if(sub == 27) {\n  i32 s27_value\n} else if(sub == 28 || sub == 29) {\n  u8 s29_count\n  u8 s29_value\n  repeat(s29_count) {\n    u16 s29_room_id\n    str[17] s29_name_a\n    str[17] s29_name_b\n  }\n} else if(sub == 30 || sub == 31) {\n  u8 s30_kind\n  if(s30_kind == 1) {\n    u32 s30_member_id\n  }\n} else if(sub == 32) {\n  u8 s32_kind\n  u8 s32_value\n  u16 s32_room_id\n  if(s32_kind == 1) {\n    str[17] s32_name_b\n    str[17] s32_name_a\n  } else if(s32_kind == 2) {\n    u16 s32_room_id2\n  }\n} else if(sub == 33) {\n  u16 s33_room_id\n  str[17] s33_name\n} else if(sub == 34) {\n  u8 s34_result\n} else if(sub == 35) {\n  u8 s35_result\n} else if(sub == 37) {\n  u32 s37_uid\n} else if(sub == 185) {\n  u8 s185_flag\n  if(s185_flag == 1) {\n    u16 s185_item_id\n  }\n}",
    "fields": [
     {
      "name": "sub",
@@ -35551,16 +35552,16 @@
      "dest_or_source": "record +0x1C; grade 5 -> M+0x60 id / M+0x64 name"
     },
     {
-     "name": "member_job2",
+     "name": "member_job1",
      "type": "u8",
-     "meaning": "sub 3 record: sub-class (class icon = table 0x53E4C0[job1*7 + job2], sprite 0x147)",
+     "meaning": "sub 3 record: class (job1, 0..6). P14 guild-g0 (guild.md 1.1 [V]): the create pre-fill writes record +0x1A = entity+0x118 (job) at 0x484484 and the class icon is table 0x53E4C0[7*job2 + job1] (0x491D77, sprite 0x147), so this byte is job1 - the name was swapped",
      "at_va": "0x0047D90B",
      "dest_or_source": "record +0x1A"
     },
     {
-     "name": "member_job1",
+     "name": "member_job2",
      "type": "u8",
-     "meaning": "sub 3 record: class",
+     "meaning": "sub 3 record: class tier (job2, 0..2; record +0x1B = entity+0x119 in the create pre-fill 0x4844AA). P14 guild-g0: renamed from member_job1",
      "at_va": "0x0047D925",
      "dest_or_source": "record +0x1B"
     },
@@ -35740,7 +35741,7 @@
      "dest_or_source": "item 0x10B8 -> C2S 0x15"
     }
    ],
-   "semantics": "Guild and Guild Battle multiplexer, handled by SubHandler3 on the messenger/guild object M = *(game_state+0x508). M+0x124 = game_state, +0x128 = charinfo, +0x12C = UI root, +0x130 = socket. Guild state in M: +0x44 u16 guild_id (0 none, 1 means Game Master on the nameplate, 0xFFFF load failure; the client treats < 2 as 'not in a guild'), +0x46 name[17], +0x57 u8 level (FUN_00484ef0 from points with the cumulative table 0x5250B8, 1..5), +0x58 u16 max members, +0x5A u16 member count, +0x5C u32 guild points, +0x60/+0x64 master id/name, +0x78 member list (0x20-byte records: +0 online, +4 id, +8 name[17], +0x19 level, +0x1A job2, +0x1B job1, +0x1C grade with 5 = master), +0x88 notice[61], +0xC6/+0xC8 emblem, +0xCA/+0xCC/+0xCE battle wins/losses/draws, +0xE0 notice/application list (str[130] each). The nameplate fields on the local entity (scene+0x988) are +0x12 guild id, +0x16A1 guild name, +0x16B2 emblem (sprite 0x148, drawn on top) and +0x16B4 emblem (sprite 0x149, drawn first). The guild window is 0x4B3 (FUN_004847b0: '(%u/%u)' members, '%uRound %uWin %uLose %uDraw', '%s   Lv.%u'). Guild Battle windows are 0x4D0, 0x4D1, 0x4D2, 0x4D3, 0x4D6, 0x4D8 and 0x4D9. Message boxes use FUN_0049ebc0 and chat lines use FUN_00495e30/FUN_00447bb0 (color 0xFFFFC800). Sub-codes: 1 create result (every failure also clears M through FUN_0047a8c0): 1 = registered (M+0x44 = guild_id, M+0x64 = own name, local +0x12 = guild_id, gold -= 50,000 locally, 'Guild has been registered.', hide 0x4B3). 2 = 'You can't use this guild name...', 4 = 'Wind master can't register as guild.', 5 = 'Already in the other guild.', 7/8/9 = prerequisite failure (the text is built but the box shows the 'Wind master' string, a client bug), other = 'Fail to register the guild...'. 2 apply result: 1 'You have applied for this guild.', 6 'This guild can't recruit any more members.', 0x11 'Guild admission is being delayed.', 0x10 = one str[130] appended to M+0xE0 and HUD window 3 child #7 (+0x18 = 0) flagged. 3 full guild info: all fields into M, member list rebuilt, then chat '[Guild Master]:%s' (the notice) or '[Guild Master]:Hello. Welcome to %s guild.' when the notice is empty, and the local nameplate fields are set. 4 notice list: count x str[130] appended to M+0xE0, same HUD flag. 5 admission: 1 'Guild admission has completed.', 5 'Already in the other guild.', else 'This guild can't recruit any more members.'. 6 leave: 0 'Procedure failed...', 0xC 'You can leave the guild after 1 day.', else left (hide 0x4B3, clear local +0x12/+0x16B2/+0x16B4, chat 'You are out of this guild.'). 7 notice change: 0 'Fail to change the notice.' (clears M+0x88), 1 'Notice has been changed.'. 8 delete: 0xA 'To do this, you have to kick someone in your guild.', 0xB 'You can delete your guild after 7 days...', 1 deleted (clears all local nameplate fields, 'Your guild has been deleted.'). 9 max-member increase: ok != 0 -> gold -= cost locally, 'Max No. of guild has been increased.'; 0 -> 'Fail to increase the No. of guild member...'. 10 max members = u16 (window refresh). 11 master change: 1 'Guild master has been changed.', 8 'This member can't be the guild master.', else 'Fail to change guild master.'. 12 new master by name (FUN_00485200 swaps the master record, hides 0x4B3). 13 member joined (record appended, member count +1). 14 member removed by name (FUN_004852c0, refresh). 15 guild info failure: result 1 -> local +0x12 = 0xFFFF and 'Failed to get guild info. Please, log in again.'; any other -> local +0x12 = 0 (not in a guild). 16 grade change: 1 'The grade of this member has been changed.', 0xD 'You can only set 4 Guardians.', 0xE 'You can set 10 Vanguards.', else 'Procedure failed...'; always resets 0x4B3 controls 0x22..0x31 to state 3. 17 member grade = u8 (found by name). 18 kick: 0 'Procedure failed...', else 'Kicked that guild member.'. 19 no payload: the client immediately sends C2S 0x8A (FUN_00484550) to re-request guild info. 20 member logged in (member +0 = u8, chat '[%s] has logged in.'). 21 member logged out (member +0 = 0, points delta = new - M+0x5C, M+0x5C = new, level recomputed, chat '[%s] has logged out.' and 'Guild point(+%u : [%s]) increased.'). 22 member renamed (old name -> new name; also the master name if grade 5; ignored unless M+0x44 > 1). 23 Guild Battle registration: hides message box 0x16. 3 shows '[Guild Battle] can be played after class change.' AND continues as success. 2 'You can't use play room, battlefield, or arena due to your low manner point.'. 0 'Fail to register the Guild Battle...'. Other non-zero values are success: local entity +0xE9 = 7, +0xEC = s23_value, windows 0x4D0 and 0x4D2 shown with the roster. 24 Guild Battle invitation (needs M+0x44 > 1): shows 0x4D8 with the guild name and stores the id/value. 25 Guild Battle member result: if 0x4D0 is open, s25_reason 0xF0 adds s25_name to the roster; 2/3/4/6/7/8 show '%s can't ...' texts (low manner pts, before class change, Flea Market, cash shop, other Guild Battle, party); other values show '...using other service...'. If 0x4D0 is closed and 0x4D1 is open, the name is added to 0x4D1. 26 roster list: ok == 0 -> 'You can't play Guild Battle due to lack of empty place.'; else shows 0x4D1 and reads s26_last_index + 1 (id, name) pairs. 27: s27_value == 0 -> the same 'lack of empty place' box. 28/29 room list (28 first hides 0x4D0/0x4D2, clears the 0x4D9 list and sets a 0x4D0 value to 1, then falls through to 29): count x 0x24-byte records {u16, str[17] at +2, str[17] at +0x13} into 0x4D9, label '%u (%u %s)' = (list size, s29_value, 'In progress'), then Sleep(500) and 0x4D9 is shown. 30/31 (31 first, if 0x4D9 is open, shows 'One member left. Regroup the team.', clears 0x4D9 and falls through to 30): kind 2 hides all Guild Battle windows with 'Guild Battle registration has been stopped.'; otherwise removes the roster entry whose id == s30_member_id (0 unless kind 1) and updates '(%u/%u)'. 32 room list delta on 0x4D9: kind 1 adds a record (id, name_a at +2, name_b at +0x13; note the wire order is name_b first); other kinds remove records with id == s32_room_id or s32_room_id2. 33 challenge: if 0x4D6 is closed, 0x4D9 is open and FUN_00497b80(0x4D0) != 0, shows 0x4D6 with '[%d] %s'. 34 result 1 'You are either already on the Battle or not registered.', 2 'Same guild can't play Guild Battle.'. 35 battle record +1: 1 wins, 2 losses, 3 draws. 37 entity(uid)+0x12 = 1 (that player's nameplate becomes 'Game Master'). 185 (0xB9) item-use confirmation: flag 1 and item 0x10B8 -> the client sends C2S 0x15 u16 0x10B8 (use Guild Billboard); flag 1 with another item -> nothing; flag != 1 -> 'Guild master can only do this.'. Sub-codes 36, 38..184 and 186..255 read nothing more (return 1).",
+   "semantics": "Guild and Guild Battle multiplexer, handled by SubHandler3 on the messenger/guild object M = *(game_state+0x508). M+0x124 = game_state, +0x128 = charinfo, +0x12C = UI root, +0x130 = socket. Guild state in M: +0x44 u16 guild_id (0 none, 1 means Game Master on the nameplate, 0xFFFF load failure; the client treats < 2 as 'not in a guild'), +0x46 name[17], +0x57 u8 level (FUN_00484ef0 from points with the cumulative table 0x5250B8, 1..5), +0x58 u16 max members, +0x5A u16 member count, +0x5C u32 guild points, +0x60/+0x64 master id/name, +0x78 member list (0x20-byte records: +0 online, +4 id, +8 name[17], +0x19 level, +0x1A job1, +0x1B job2, +0x1C grade with 5 = master), +0x88 notice[61], +0xC6/+0xC8 emblem, +0xCA/+0xCC/+0xCE battle wins/losses/draws, +0xE0 notice/application list (str[130] each). The nameplate fields on the local entity (scene+0x988) are +0x12 guild id, +0x16A1 guild name, +0x16B2 emblem (sprite 0x148, drawn on top) and +0x16B4 emblem (sprite 0x149, drawn first). The guild window is 0x4B3 (FUN_004847b0: '(%u/%u)' members, '%uRound %uWin %uLose %uDraw', '%s   Lv.%u'). Guild Battle windows are 0x4D0, 0x4D1, 0x4D2, 0x4D3, 0x4D6, 0x4D8 and 0x4D9. Message boxes use FUN_0049ebc0 and chat lines use FUN_00495e30/FUN_00447bb0 (color 0xFFFFC800). Sub-codes: 1 create result (every failure also clears M through FUN_0047a8c0): 1 = registered (M+0x44 = guild_id, M+0x64 = own name, local +0x12 = guild_id, gold -= 50,000 locally, 'Guild has been registered.', hide 0x4B3). 2 = 'You can't use this guild name...', 4 = 'Wind master can't register as guild.', 5 = 'Already in the other guild.', 7/8/9 = prerequisite failure (the text is built but the box shows the 'Wind master' string, a client bug), other = 'Fail to register the guild...'. 2 apply result: 1 'You have applied for this guild.', 6 'This guild can't recruit any more members.', 0x11 'Guild admission is being delayed.', 0x10 = one str[130] appended to M+0xE0 and HUD window 3 child #7 (+0x18 = 0) flagged. 3 full guild info: all fields into M, member list rebuilt, then chat '[Guild Master]:%s' (the notice) or '[Guild Master]:Hello. Welcome to %s guild.' when the notice is empty, and the local nameplate fields are set. 4 notice list: count x str[130] appended to M+0xE0, same HUD flag. 5 admission: 1 'Guild admission has completed.', 5 'Already in the other guild.', else 'This guild can't recruit any more members.'. 6 leave: 0 'Procedure failed...', 0xC 'You can leave the guild after 1 day.', else left (hide 0x4B3, clear local +0x12/+0x16B2/+0x16B4, chat 'You are out of this guild.'). 7 notice change: 0 'Fail to change the notice.' (clears M+0x88), 1 'Notice has been changed.'. 8 delete: 0xA 'To do this, you have to kick someone in your guild.', 0xB 'You can delete your guild after 7 days...', 1 deleted (clears all local nameplate fields, 'Your guild has been deleted.'). 9 max-member increase: ok != 0 -> gold -= cost locally, 'Max No. of guild has been increased.'; 0 -> 'Fail to increase the No. of guild member...'. 10 max members = u16 (window refresh). 11 master change: 1 'Guild master has been changed.', 8 'This member can't be the guild master.', else 'Fail to change guild master.'. 12 new master by name (FUN_00485200 swaps the master record, hides 0x4B3). 13 member joined (record appended, member count +1). 14 member removed by name (FUN_004852c0, refresh). 15 guild info failure: result 1 -> local +0x12 = 0xFFFF and 'Failed to get guild info. Please, log in again.'; any other -> local +0x12 = 0 (not in a guild). 16 grade change: 1 'The grade of this member has been changed.', 0xD 'You can only set 4 Guardians.', 0xE 'You can set 10 Vanguards.', else 'Procedure failed...'; always resets 0x4B3 controls 0x22..0x31 to state 3. 17 member grade = u8 (found by name). 18 kick: 0 'Procedure failed...', else 'Kicked that guild member.'. 19 no payload: the client immediately sends C2S 0x8A (FUN_00484550) to re-request guild info. 20 member logged in (member +0 = u8, chat '[%s] has logged in.'). 21 member logged out (member +0 = 0, points delta = new - M+0x5C, M+0x5C = new, level recomputed, chat '[%s] has logged out.' and 'Guild point(+%u : [%s]) increased.'). 22 member renamed (old name -> new name; also the master name if grade 5; ignored unless M+0x44 > 1). 23 Guild Battle registration: hides message box 0x16. 3 shows '[Guild Battle] can be played after class change.' AND continues as success. 2 'You can't use play room, battlefield, or arena due to your low manner point.'. 0 'Fail to register the Guild Battle...'. Other non-zero values are success: local entity +0xE9 = 7, +0xEC = s23_value, windows 0x4D0 and 0x4D2 shown with the roster. 24 Guild Battle invitation (needs M+0x44 > 1): shows 0x4D8 with the guild name and stores the id/value. 25 Guild Battle member result: if 0x4D0 is open, s25_reason 0xF0 adds s25_name to the roster; 2/3/4/6/7/8 show '%s can't ...' texts (low manner pts, before class change, Flea Market, cash shop, other Guild Battle, party); other values show '...using other service...'. If 0x4D0 is closed and 0x4D1 is open, the name is added to 0x4D1. 26 roster list: ok == 0 -> 'You can't play Guild Battle due to lack of empty place.'; else shows 0x4D1 and reads s26_last_index + 1 (id, name) pairs. 27: s27_value == 0 -> the same 'lack of empty place' box. 28/29 room list (28 first hides 0x4D0/0x4D2, clears the 0x4D9 list and sets a 0x4D0 value to 1, then falls through to 29): count x 0x24-byte records {u16, str[17] at +2, str[17] at +0x13} into 0x4D9, label '%u (%u %s)' = (list size, s29_value, 'In progress'), then Sleep(500) and 0x4D9 is shown. 30/31 (31 first, if 0x4D9 is open, shows 'One member left. Regroup the team.', clears 0x4D9 and falls through to 30): kind 2 hides all Guild Battle windows with 'Guild Battle registration has been stopped.'; otherwise removes the roster entry whose id == s30_member_id (0 unless kind 1) and updates '(%u/%u)'. 32 room list delta on 0x4D9: kind 1 adds a record (id, name_a at +2, name_b at +0x13; note the wire order is name_b first); other kinds remove records with id == s32_room_id or s32_room_id2. 33 challenge: if 0x4D6 is closed, 0x4D9 is open and FUN_00497b80(0x4D0) != 0, shows 0x4D6 with '[%d] %s'. 34 result 1 'You are either already on the Battle or not registered.', 2 'Same guild can't play Guild Battle.'. 35 battle record +1: 1 wins, 2 losses, 3 draws. 37 entity(uid)+0x12 = 1 (that player's nameplate becomes 'Game Master'). 185 (0xB9) item-use confirmation: flag 1 and item 0x10B8 -> the client sends C2S 0x15 u16 0x10B8 (use Guild Billboard); flag 1 with another item -> nothing; flag != 1 -> 'Guild master can only do this.'. Sub-codes 36, 38..184 and 186..255 read nothing more (return 1).",
    "trigger": "Replies to the guild C2S family built by FUN_00480430 / FUN_004842xx / FUN_004845xx / FUN_004852xx (opcodes 0x87..0x98). Confirmed pairs: C2S 0x87 (create: str[17] name, ..., u16 M+0xC6, u16 M+0xC8) -> sub 1; C2S 0x8A (opcode only; sent automatically at the end of every S2C 0x03 world-info handler and after sub 19) -> sub 3 when in a guild, sub 15 with result != 1 when not; C2S 0x8F (str[61] notice) -> sub 7. Other sub-codes are server pushes (member login/logout 20/21, join 13, remove 14, notices 4) or Guild Battle flow (23..35).",
    "expected_response": "Only sub 19 (client sends C2S 0x8A) and sub 185 with item 0x10B8 (client sends C2S 0x15 u16 0x10B8). All other sub-codes: none.",
    "gates_and_hazards": "SubHandler3 gate: M+0x124 and M+0x12C non-NULL, otherwise the packet falls through to SubHandler4/5 unhandled. The guild id must be >= 2: 0 = none, 1 turns the nameplate into 'Game Master' (FUN_0043c300), 0xFFFF = load failure. Sub 1 success and sub 9 subtract gold locally (50,000 fixed / s9_cost), so the server must deduct the same. Sub 26 STACK HAZARD: s26_last_index + 1 names are written to [esp+0x68+17*i] with the stack cookie at [esp+0x220], so keep s26_last_index <= 24. At 25 or more the cookie is overwritten and the process is terminated. Sub 28/29 call Sleep(500) inside the network handler, which freezes the client for 0.5 s per packet. Sub 19 makes the client send C2S 0x8A; do not answer 0x8A with sub 19 (endless loop). Sub 3 appends to the member list without clearing it (the reset FUN_0047a8c0 runs from the S2C 0x03 world-info handler via FUN_0047a1a0, and on sub 1 failures and subs 6/8). A second sub 3 without an intervening 0x03 duplicates every member. Sub 13 and sub 3 member records use DIFFERENT field orders. Sub 32 kind 1 sends name_b (stored at +0x13) before name_a (+2). Strings are copied with C string copies: keep names NUL-terminated within 17 bytes and the notice within 61. Sub 23 result 3 shows an error AND proceeds as success (client quirk). Sub 1 results 7/8/9 show the wrong text (client bug).",
@@ -36825,7 +36826,7 @@
     {
      "name": "cash_item_serial",
      "type": "u32",
-     "meaning": "Serial of the pet-rename cash item in the item-mall box (list mall+0x28); one unit is consumed.",
+     "meaning": "Serial of the pet-rename cash item (EN 4322) in the OWNED cash list - the vector at mall+0x08 that S2C 0x6F fills - not the item-mall box (mall+0x28): FUN_0046df70 walks param_1+8 and consumes one unit, the same consumer as the 0x73 name-change ticket (corrected P15 review).",
      "at_va": "0x0046BCF6",
      "dest_or_source": "stack [esp+0x28] -> FUN_0046df70(mall, serial, 1, NULL)"
     },

@@ -398,10 +398,12 @@ class C2WornPet2009(_World, unittest.TestCase):
         self.assertEqual([(r['serial'], r['is_equipped'], r['limit_type']) for r in rows],
                          [(0x2000, 1, 3), (0x1000, 0, 1)])
         self.assertEqual(a.session['pet_bound'], 0x2000)
-        # the observer sees grid slot 15 (and no pet_info: has_pet 0 until P15's mirror)
+        # the observer sees grid slot 15 and - P15 pet-s1 - the awake pet's block (its pet_info)
         seen = [r for p in b.entry if p.opcode in (0x04,) for r in b.s2c(p)['repeat[player_count]']]
         hero = next(r for r in seen if r['uid'] == 1)
-        self.assertEqual((hero['repeat[10]'][0]['cash_equip_item_id'], hero['has_pet']), (PICKY, 0))
+        self.assertEqual((hero['repeat[10]'][0]['cash_equip_item_id'], hero['has_pet'], hero['pet_name']),
+                         (PICKY, 1, 'Picky'))
+        self.assertTrue(W.cview.has_pet_info(b.session, 1))
         self.assertEqual(R.info_equipment(a.session, self.hero, B9)[15][0], PICKY)
         # a map load: the 0x07 and the 0x6F again, the pet first
         pkts = self.portal(a)
@@ -491,8 +493,9 @@ class C1MallPets2009(_World, unittest.TestCase):
 
 
 class C1MallPetsOff2009(_World, unittest.TestCase):
-    def test_pet_sales_are_off_by_default(self):
-        self.assertFalse(cfgmod.defaults()['MALL_PETS'])
+    def test_pet_sales_are_on_since_pet_s7(self):
+        # P15 pet-s7 turned MALL_PETS on by default (pets and pet gear sold; test_petextras)
+        self.assertTrue(cfgmod.defaults()['MALL_PETS'])
         self.assertIn('MALL_PETS', MALL.sale_refusal(CASH.cash_def(PICKY), PICKY))
         self.assertIsNone(MALL.sale_refusal(CASH.cash_def(PICKY), PICKY, pets=True))
 
@@ -658,7 +661,8 @@ class C4RenameHook2009(_World, unittest.TestCase):
         a, b = self.a, self.b
         hooks = self.server.world.hooks
         self.assertIn(worldmod.ON_RENAME, worldmod.HOOK_NAMES)
-        self.assertEqual(len(hooks.registered(worldmod.ON_RENAME)), 2)      # messenger + party
+        # messenger + blacklist + party + guild (P14 g4 sub 22) + pets (P15 pet-s6: owner renames)
+        self.assertEqual(len(hooks.registered(worldmod.ON_RENAME)), 5)
         got = []
         hooks.register(worldmod.ON_RENAME, lambda server, session, **kw: got.append((session['char_name'], kw)))
         self.send(b, 0x2F)                                                 # b's messenger is synced

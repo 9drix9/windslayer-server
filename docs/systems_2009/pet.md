@@ -87,6 +87,11 @@ Pet data also rides in these packets:
   - Auto-feed never fires.
   - The rename dialog 0x4CB can never open.
 - **Fix (Stage 0b): an exe patch that adds 4 to each immediate above.** The pet part is 11 immediates. Pet items (Type 6) and pet gear have no hard-coded ids [V: byte scan of .text for 0x10B7..0x10E2].
+- **After cp-2** (the G-CP exe patch: `patch_2009.py`, default ON, built and not installed yet; CLIENT_PATCH_SET_RE_2026-10-06.md 8):
+  - EN 4285 takes the bell gate.
+  - Auto-feed and bag feeding send **C2S 0x85** {4286..4289}, not C2S 0x48.
+  - EN 4322 opens window 0x4CB, which sends C2S 0x4D.
+  - The consequences listed above then apply only to a server talking to the stock exe. The server's pet ids are already the EN ids (`cash.py`). Only the entry path changes (0x85 / 0x4D instead of 0x48).
 
 **B3. Several pet handlers dereference NULL.** [V] Each one is a client crash, so the server must keep a per-viewer model. See §7.
 
@@ -430,7 +435,7 @@ u32 uid, u8 action   (both always read)
 - `u16 food_id`. The auto path takes the first owned food via FUN_00464c10, which scans the **owned** list for a record with qty != 0.
 - The manual path (bag use) needs pet_info and gauge != 100 (`CMP [EAX+0xC],0x64`).
 - It works while asleep: manual feeding is how you wake the pet.
-- No lock. On the unpatched exe, see B2: auto-feed searches the wrong ids, and bag use goes to C2S 0x48.
+- No lock. On the unpatched exe, see B2: auto-feed searches the wrong ids, and bag use goes to C2S 0x48. After cp-2 both paths send 0x85 with EN 4286..4289.
 
 ### C2S 0x86 PetEmote [V asm 0x447798..0x4478D0]
 - `u8 action` ∈ {0x12, 0x14, 0x15}. No lock; nothing plays until 0xB2.
@@ -440,7 +445,7 @@ u32 uid, u8 action   (both always read)
 - Then the client opens the box **"Waiting for the server to respond."** (0x52CF5C) → **MUST REPLY**.
 
 ### C2S 0x15 with the Pet Bell [V FUN_0044f070 @0x44FD72]
-- Patched exe (bell = 0x10BD): if pet_info exists and awake == 0 and gauge ≥ 10 → C2S 0x15 u16 id. If gauge < 10 → "Pet has to have at least over 10% HP to wake up." If awake → nothing.
+- Patched exe (cp-2, bell = 0x10BD): if pet_info exists and awake == 0 and gauge ≥ 10 → C2S 0x15 u16 id. If gauge < 10 → "Pet has to have at least over 10% HP to wake up." If awake → nothing.
 - Unpatched exe: EN bell 0x10BD is sent with no pet gate.
 - No lock. The consume and use effect happen on S2C 0x25.
 
@@ -493,7 +498,7 @@ No reply on refusal: the client is not locked. A refusal may be logged or told w
 - level_for(exp) = the first L in 1..8 with exp < T[L] (T = 120, 360, 840, 1800, 3720, 7560, 15240, 30600), else 9.
 
 **F5 Feed (C2S 0x85 food_id).**
-1. Find an owned kind-1 record with that item_id (EN 4286..4289, or the KR ids when the exe is unpatched) and qty > 0. Otherwise drop. The client will re-ask on the next low 0xAE.
+1. Find an owned kind-1 record with that item_id (EN 4286..4289 with cp-2; the stock exe's auto-feed asks for KR 4282..4285, which are EN non-food rows) and qty > 0. Otherwise drop. The client will re-ask on the next low 0xAE.
 2. gauge = max(gauge, 90) [I: "recovered up to 90%"]. Decrement qty and persist.
 3. Send **0xB1 {gauge, serial}**. The client consumes its copy by serial, so do not also send 0x72.
 4. If the pet was asleep: awake = 1, send **0xAD {uid, 1}** (local 5 B) to the owner, and the remote 0xAD {uid, 1, level, name} to viewers (add to `pet_info_seen`).
@@ -526,7 +531,7 @@ No reply on refusal: the client is not locked. A refusal may be logged or told w
   - Send **0xC0 {ticket_serial, name}** to the owner.
   - Send **0xB0 {uid, name}** to viewers in `pet_info_seen` whose pet is awake.
 - Refusal: send **S2C 0x73 {result 0}** (1 B). It closes box 0x16 and shows the character-rename failure popup [I: 0x73 is the only known box-0x16 closer with a harmless failure form; its text is about a *name already used*].
-- The rename dialog cannot be reached on the unpatched exe (B2).
+- The rename dialog cannot be reached on the unpatched exe (B2). After cp-2 it can: EN 4322 → 0x4CB → C2S 0x4D.
 
 **F10 Pet gear (C2S 0x0F / 0x11 on Kind 15/16 cash items).**
 - Handled by the item_inventory / P8 equip path, plus:
@@ -597,7 +602,7 @@ Runtime only (not persisted): per-session `pet_info_seen`, pet tick timers.
 - **H6.** Server uids must stay below 33,000,000, the client-local pet uid base [V].
 - **H7.** 0xAB local only works when the kind-3 record is in the owned list and the item is in the equipment tab. Send the 0x6F first [V].
 - **H8.** 0xAE at gauge ≤ 10 while awake makes the client send 0x85 each time food is owned. Answer it, or you get a loop of requests [V].
-- **H9.** An unpatched hii makes pets invisible (B1). An unpatched exe breaks food, bell and rename (B2).
+- **H9.** An unpatched hii makes pets invisible (B1; fixed by G-CP cp-1). An unpatched exe breaks food, bell and rename (B2; fixed by G-CP cp-2). Each fix is a separate install, so the server must not assume either one.
 
 ---
 
@@ -637,7 +642,8 @@ Client A = owner (`WindSlayer.exe` build), client B = viewer (`WindSlayer_p2.exe
 
 **Stage 0: client prerequisites (no server code).**
 - 0a: install the CardNpc-patched hii. The candidate is in `_work/pet/`; the user decides. Test T0 → T1 with injected 0xAB, 0xAD and 0xAF.
-- 0b: exe patch for the id shift (11 pet immediates, plus 6 guild ones). Add it to `patch_2009.py` [I]. Test: using Pet Food 20 sends C2S 0x85 0x10C1 (sniffer); the rename ticket opens 0x4CB.
+- 0b: exe patch for the id shift (11 pet immediates, plus 6 guild ones). Add it to `patch_2009.py` [I]. Test: using Pet Food 20 sends C2S 0x85 0x10C1 (sniffer); the rename ticket opens 0x4CB. **Done as G-CP cp-2** (CLIENT_PATCH_SET_RE_2026-10-06.md 8): default ON, `--no-id-shift` skips it, test exes in `client_patches\`, not installed yet.
+- 0a is also built: G-CP cp-1, `client_patches\patch_data_2009.py`, byte-identical to the `_work/pet` candidate.
 - 0c (optional): hni patch so a grocer sells the Pet Bell, or a GM/loot source.
 
 **Stage 1: model and visibility.**

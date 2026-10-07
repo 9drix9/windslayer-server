@@ -698,15 +698,39 @@ class BankFlow:
 class Shop2008(ShopFlow, Rig):
     build = B8
 
+    def test_npc_id_zero_is_no_merchant(self):
+        """The 2009 guild sale's npc_id 0 (send site 0x474327) means nothing on 2008."""
+        c, _ = self.enter()
+        with self.assertLogs('WS', logging.INFO) as logs:
+            self.buy(c, 4283, 1, npc=0)
+            self.assertEqual(self.refusal(c), '[Warning] That item is not for sale.')
+        self.assertTrue(any('npc 0' in m and 'not a merchant' in m for m in logs.output), logs.output)
+        self.assertEqual(self.gold(), GOLD)
+
 
 @needs_2009
 class Shop2009(ShopFlow, Rig):
     build = B9
 
-    def test_the_guild_npc_path_is_refused(self):
+    def test_the_guild_npc_sells_the_guild_billboard(self):
+        """P15 guild-g6: Moiba's send site 0x474327 asks for its hni row 4283 (the premium cash
+        board) with npc_id 0 - always 0 on the wire (p15 live triage 1); on the Guild Plaza the
+        cp-2 exe ('en', the default) gets the Guild Billboard EN 4284 at its hii Buy (boards.py /
+        GameServer._buy_guild_board) and a line with the real price; the stock exe ('kr') stays
+        refused."""
+        with self.server.store.lock:
+            self.char().update(map=9702, x=2200, y=1300)                      # Moiba's tile
         c, _ = self.enter()
-        c.send_c2s('0x474327/0x0B', {'item_id': 4283, 'qty': 1, 'npc_id': 181})
-        self.assertEqual(self.refusal(c), '[Warning] Guilds are not available.')
+        price = EC.items().get(4284).buy
+        c.send_c2s('0x474327/0x0B', {'item_id': 4283, 'qty': 1, 'npc_id': 0})
+        grant, line = c.expect(0x18, 0x15)
+        rec = c.s2c(grant)
+        self.assertEqual((rec['gold'], rec['item_id'], rec['count']), (GOLD - price, 4284, 1))
+        self.assertEqual(self.warning_text(c, line), f'Guild Billboard x1 bought for {price:,} gold.')
+        self.assertEqual(self.server._inventory(self.server.world.by_char_name('TestHero')).get(4284), 1)
+        self.server.config['CLIENT_ITEM_IDS'] = 'kr'
+        c.send_c2s('0x474327/0x0B', {'item_id': 4283, 'qty': 1, 'npc_id': 0})
+        self.assertEqual(self.refusal(c), '[Warning] Guild billboards are not available.')
 
     def test_the_2009_slot_discount(self):
         with self.server.store.lock:

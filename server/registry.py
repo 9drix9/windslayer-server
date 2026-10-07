@@ -394,6 +394,10 @@ BUILD_NEVER_REPLY = {
         # spec_2009 0x45DDFB/0x9E: the X-Trap answer to S2C 0xC5, which the server never
         # sends (packets.FORBIDDEN_S2C); one arriving anyway is consumed silently.
         0x9E: 'X-Trap response (the server never sends S2C 0xC5)',
+        # P14 guild-g5 (guild.md F11, 0x447728): the client prints its own yellow echo before
+        # sending C2S 0x8D; an S2C 0xB5 back to the sender would show the line twice. The
+        # relay goes to the OTHER members only (guild.Guilds.chat).
+        0x8D: 'guild chat: the client echoes the line itself',
     },
 }
 BUILD_MUST_REPLY = {
@@ -409,8 +413,8 @@ BUILD_MUST_REPLY = {
         #        does not exist in the server.") and hides windows 0x4B9 / 0x4B8 (2009
         #        FUN_0046a2e0 case 0x71, 0x46B32E).
         #   0x4D PetRename (window 0x4CB, cp-2 patched exe only): "Waiting for the server to
-        #        respond." (0x52CF5C); the planned refusal is S2C 0x73 {0} (pet F9, C5), which
-        #        closes box 0x16 first.
+        #        respond." (0x52CF5C); pets.Pets.rename answers S2C 0xC0 (P15 pet-s6) or the
+        #        refusal S2C 0x73 {0} (pet F9, C5), which closes box 0x16 first.
         # C2S 0x81 CashItemSaleReply is no row: it opens no waiting box (0x468D84 Send, return);
         # mall.Mall.sale_reply closes the seller's window 0x4B8 on a Cancel (reply 1) and leaves
         # the buyer's replies 0 / 2 - which need an S2C 0xA9 the server never sends - unanswered.
@@ -420,7 +424,27 @@ BUILD_MUST_REPLY = {
                         '0x71 {is_trade 1, 0x17}',
                         'premium_cash cash item sale (ROADMAP_2009_ADDENDUM C8; mall.sale_offer)'),
         0x4D: MustReply('modal', _reply('0x73', result=0), '0x73 {0}',
-                        'pet rename (ROADMAP_2009_ADDENDUM C5; pets.PetStub.rename, P15 pet-s6)'),
+                        'pet rename (ROADMAP_2009_ADDENDUM C5; pets.Pets.rename, P15 pet-s6)'),
+        # P14 guild-g1 (systems_2009/guild.md F14): both Guild Battle requests open "Waiting for
+        # the server to respond." (window 0x16, x = 3; 0x485D99) and only a 0xB3 sub 23 / 34
+        # hides it (both start with FUN_0049ebc0 hiding box 0x16). guild.Guilds.battle_register /
+        # battle_accept answer every request with these bytes; the rows are the backstop.
+        0x96: MustReply('"Waiting for the server to respond." box 0x16', _reply('0xB3', sub=23, s23_result=0, s23_value=0),
+                        '0xB3 sub 23 {0, 0} (Guild Battle registration failed)',
+                        'guild-g1 fallback (guild.Guilds.battle_register; Guild Battle is guild-g7)'),
+        0x9C: MustReply('"Waiting for the server to respond." box 0x16', _reply('0xB3', sub=34, s34_result=0),
+                        '0xB3 sub 34 {0} (silent close)',
+                        'guild-g1 fallback (guild.Guilds.battle_accept; Guild Battle is guild-g7)'),
+        # P14 stage 4 (guild.md F14): guild.Guilds.create / change_grade answer every request
+        # with exactly one sub 1 / sub 16; these rows are the exception backstop. 0x87 without
+        # a sub 1 leaves the client's optimistic pre-fill (a phantom guild in its window) until
+        # the next map load - sub 1 {3} "Fail to register the guild." resets it (every failure
+        # result runs FUN_0047a8c0). 0x92 without a sub 16 leaves the grade buttons 0x22..0x31
+        # up - only sub 16 hides them (0x47E3F1).
+        0x87: MustReply('the optimistic create pre-fill stays (phantom guild)', _reply('0xB3', sub=1, s1_result=3),
+                        '0xB3 sub 1 {3} (Fail to register the guild)', 'guild-g2 (guild.Guilds.create)'),
+        0x92: MustReply('grade buttons stay up', _reply('0xB3', sub=16, s16_result=0),
+                        '0xB3 sub 16 {0} (Procedure failed)', 'guild-g4 (guild.Guilds.change_grade)'),
     },
 }
 
@@ -483,6 +507,16 @@ def note_send(session, opcode):
     req = getattr(_REQUEST, 'current', None)
     if req is not None and req.session is session:
         req.sent.append(opcode)
+
+
+def request_opcode(session):
+    """The C2S opcode being dispatched on this thread when a packet to `session` is its reply,
+    else None (another session, no request, or a detached() event). packets.FORBIDDEN_REPLIES
+    is checked against it (P14 guild-g0: never 0xB3 sub 19 as the reply to 0x8A)."""
+    req = getattr(_REQUEST, 'current', None)
+    if req is not None and req.session is session:
+        return req.opcode
+    return None
 
 
 @contextlib.contextmanager

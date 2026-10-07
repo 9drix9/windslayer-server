@@ -21,6 +21,15 @@ connection closes; `msgr_name` / `msgr_uid` keep the identity for the offline pu
 character delete cleared char_name. A GM in shadow counts as offline for non-GM friends
 (presence.visible_to, the whisper rule).
 
+The login / logout LINES are once per login, not per connection (P12
+arch09-session-continuity, continuity.py): a 2009 channel hop (a disconnect plus a relogin
+with the same session key) repeats neither. go_online(hop=...) announces only what the hop
+changed (the channel number, S2C 0x60); the offline push is the world hook ON_LOGOUT
+(logged_out), which continuity fires at once on a plain disconnect and holds back while a hop
+may follow - meanwhile the friend rows keep the character online (continuity.ghost).
+go_offline only leaves the room and forgets the pending prompts, at once, as before.
+`msgr_announced` marks a session whose login the watchers were told (or that continues one).
+
 Server state (all under Messenger.lock):
   requests  {target uid: {requester uid: Pending}}   friend requests, FRIEND_REQUEST_TTL
   invites   {invitee uid: {inviter uid: Pending}}    chat room invites, ROOM_INVITE_TTL
@@ -41,6 +50,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
+import blacklist as blmod
 import chat as chatmod
 import packets as P
 import presence
@@ -227,9 +237,25 @@ class Messenger:
             live = self.find(canonical, viewer=session)
             if live is not None:
                 rows.append(self._row_of(live))
+                continue
+            # arch09-session-continuity: a logout held back for a possible channel hop keeps
+            # the row online (no 0x60 offline went out, and none lights it again after a hop).
+            held = self._held(canonical, session)
+            if held is not None:
+                rows.append(social.friend_row(canonical, held.channel, held.uid or acc.get('uid') or 0,
+                                              held.session.get('msgr_status', social.STATUS_ONLINE)))
             else:
                 rows.append(social.friend_row(canonical, 0, acc.get('uid') or 0, social.STATUS_OFFLINE))
         return rows, keep, dropped
+
+    def _held(self, name, viewer):
+        """The continuity.Departure of `name` whose logout is held back (a possible 2009
+        channel hop) and that `viewer` may see, or None."""
+        cont = getattr(self.server, 'continuity', None)
+        dep = cont.ghost(name) if cont is not None else None
+        if dep is None or not dep.session.get('msgr_announced'):
+            return None
+        return dep if presence.visible_to(dep.session, viewer) else None
 
     def renamed(self, session, old, new):
         """premium_cash-rename (P8 stage 3; the world.ON_RENAME hook, ROADMAP_2009_ADDENDUM C4):
@@ -310,8 +336,16 @@ class Messenger:
             target = live if live is not None else self.find(other, viewer=session)
             if target is None:
                 return self._add_refused(sock, session, social.ADD_NOT_ONLINE, other, 'not online')
-            if self.server.refuses(target, 'friend'):
-                return self._add_refused(sock, session, social.ADD_FRIEND_OFF, other, 'refuses friend requests')
+            if self.server.blacklist_drops(target, session, by_uid=True):
+                # P12 bl-3, BLACKLIST_FILTER 'silent' (blch F-B4): the target's client would drop
+                # the 0x0D unread (FUN_00484190 at 0x47C180, by request_id OR name: a listed
+                # character's sibling too - by_uid) - no prompt, no pending request, nothing
+                # back to the requester.
+                log.info(f'[FRIEND] {me!r} -> {other!r}: blacklisted - dropped (no prompt, no pending request)')
+                return
+            if self.server.refuses(target, 'friend', session, by_uid=True):
+                return self._add_refused(sock, session, social.ADD_FRIEND_OFF, other,
+                                         'refuses friend requests (privacy flag or blacklist refuse mode)')
             with self.store.lock:
                 their_full = social.is_full(self.char_of(target))
             if their_full:
@@ -413,17 +447,32 @@ class Messenger:
             told = self._presence(session, True, status)
         log.info(f'[FRIEND] {self.name_of(session)!r} status {status} -> 0x60 to {len(told)} friend(s)')
 
-    def go_online(self, session):
+    def go_online(self, session, hop=None):
         """First world entry of this connection (on_enter_world): watchers get S2C 0x60
         presence 0 ("<X> has logged in. (Friend)"), the mentor 0x7B (this mentee, "(Menti)"),
-        each online mentee 0x7D {uid, 100} ("<X> has logged in.(Mentor)")."""
+        each online mentee 0x7D {uid, 100} ("<X> has logged in.(Mentor)").
+
+        hop (continuity.Hop, arch09-session-continuity): this connection continues the login
+        of a 2009 channel change. The watchers saw no logout, so no login line: only a 0x60
+        with the new channel when the channel number changed (the client has no silent
+        channel update; P18 ch-3 makes it presence 4 for watchers on another channel), and
+        nothing for a hop back to the same channel. A hop whose logout already went out
+        (hop.logout_announced) is announced like a login."""
         char = self.char_of(session)
         if char is None:
             return
+        quiet = hop is not None and not hop.logout_announced
         with self.lock:
             session.update(msgr_online=True, msgr_name=char['name'], msgr_uid=_uid(session),
-                           msgr_status=social.STATUS_ONLINE, msgr_synced=False)
+                           msgr_status=social.STATUS_ONLINE, msgr_synced=False, msgr_announced=True)
             session['memo_ids_on_client'] = set()
+            if quiet:
+                told = self._presence(session, True) if hop.changed_channel else []
+                log.info(f'[FRIEND] {char["name"]!r} continues its login on channel {hop.to_channel} '
+                         f'(channel hop from {hop.from_channel}): '
+                         + (f'0x60 with the new channel to {len(told)} friend(s)' if hop.changed_channel
+                            else 'same channel, nothing to the friends'))
+                return
             told = self._presence(session, True)
             with self.store.lock:
                 mentor, mentees = char.get('mentor'), list(char.get('mentees') or [])
@@ -440,11 +489,11 @@ class Messenger:
                  + (f', 0x7D to {len(pupils)} mentee(s)' if pupils else ''))
 
     def go_offline(self, session, reason='', superseded=False):
-        """The character leaves the world for good (disconnect, kick, delete): its room is
-        left (0x62 to the rest), pending requests and invites go, and - unless a newer
-        session of the account already took over (2009 relogin) - watchers get 0x60 {uid,
-        name, 0, 1}, the mentor 0x7C (mentees are shown online only), each mentee 0x7D
-        {uid, 0x66}. Idempotent."""
+        """The character leaves the world on this connection (disconnect, kick, delete): its
+        room is left (0x62 to the rest) and pending requests and invites go, at once.
+        Idempotent. The offline LINES are logged_out (ON_LOGOUT), which continuity.py fires
+        right after this on a plain disconnect and holds back while a 2009 channel hop (or
+        the relogin that superseded this session) may continue the login."""
         with self.lock:
             if not session.get('msgr_online'):
                 self._forget(session)
@@ -453,7 +502,16 @@ class Messenger:
             self.leave_room(session, reason or 'left the world')
             self._forget(session)
             if superseded:
-                log.info(f'[FRIEND] {self.name_of(session)!r} replaced by a newer session: no offline push')
+                log.info(f'[FRIEND] {self.name_of(session)!r} replaced by a newer session: offline push '
+                         f'left to its continuation')
+
+    def logged_out(self, session, reason=''):
+        """ON_LOGOUT (continuity.py): the login is over for good - watchers get 0x60 {uid,
+        name, 0, 1}, the mentor 0x7C (mentees are shown online only), each mentee 0x7D
+        {uid, 0x66}. Only for a session whose login the watchers were told (msgr_announced),
+        once."""
+        with self.lock:
+            if not session.pop('msgr_announced', False):
                 return
             told = self._presence(session, False)
             with self.store.lock:
@@ -550,8 +608,15 @@ class Messenger:
                 log.info(f'[ROOM] {me!r} invited itself - dropped')
                 return
             other = self.name_of(target)
-            if self.server.refuses(target, 'talk'):
-                return self._room_refused(session, chatmod.ROOM_REJECTING, other, 'refuses chatting')
+            if self.server.blacklist_drops(target, session, by_uid=True):
+                # P12 bl-3 'silent': the invitee's client would drop the 0x10 (FUN_00484190 at
+                # 0x47C5CD, by inviter_id OR name: a listed character's sibling too - by_uid) -
+                # no window, no pending invite, nothing back.
+                log.info(f'[ROOM] {me!r} -> {other!r}: blacklisted - dropped (no invite, no pending state)')
+                return
+            if self.server.refuses(target, 'talk', session, by_uid=True):
+                return self._room_refused(session, chatmod.ROOM_REJECTING, other,
+                                          'refuses chatting (privacy flag or blacklist refuse mode)')
             if self.room_of(target) is not None:
                 return self._room_refused(session, chatmod.ROOM_BUSY, other, 'already in a room')
             now = time.monotonic()
@@ -705,6 +770,17 @@ class Messenger:
             if mentor is session or _uid(mentor) == _uid(session):
                 return
             other = self.name_of(mentor)
+            gate = self.server.blacklist.gate(mentor, session)
+            if gate == blmod.MODE_SILENT:
+                # P12 bl-3 (blch F-B4 / F-B5): one side blacklisted the other - no link, no 0x7B,
+                # nothing back (0x5C opens no waiting box).
+                log.info(f'[MENTOR] {me!r} register {other!r}: blacklisted - dropped (silent)')
+                return
+            if gate == blmod.MODE_REFUSE:
+                self._send(sock, session, '0x7A', {'result': social.MENTOR_NOT_FOUND,
+                                                   'mentor_name': chatmod.name_bytes(other)})
+                log.info(f'[MENTOR] {me!r} register {other!r}: blacklisted the mentee (0x7A 0x66, refuse mode)')
+                return
             with self.store.lock:
                 mchar = self.char_of(mentor)
                 if mchar is None:
@@ -957,14 +1033,16 @@ class Messenger:
 # ------------------------------------------------------------------ hooks ---
 def register(hooks, messenger):
     """The lifecycle hooks (world.py): a map load resets what 0x03 resets, the first entry
-    announces the character, leaving the world / closing announces it gone, a rename renames
-    its rows on the friends' and the mentor's clients (ON_RENAME, the C4 hook)."""
+    announces the character (a channel hop only its new channel), leaving the world / closing
+    leaves its room, the end of the login (ON_LOGOUT, continuity.py) announces it gone, a
+    rename renames its rows on the friends' and the mentor's clients (ON_RENAME, the C4
+    hook)."""
     def before_map_load(server, session, reason=None, **_):
         messenger.before_map_load(session, reason or '')
 
-    def on_enter_world(server, session, **_):
+    def on_enter_world(server, session, hop=None, **_):
         if not session.get('msgr_online'):
-            messenger.go_online(session)
+            messenger.go_online(session, hop=hop)
 
     def on_leave_world(server, session, reason=None, superseded=False, **_):
         messenger.go_offline(session, reason or '', superseded=superseded)
@@ -975,9 +1053,13 @@ def register(hooks, messenger):
     def on_rename(server, session, old=None, new=None, **_):
         messenger.renamed(session, old, new)
 
+    def on_logout(server, session, reason=None, **_):
+        messenger.logged_out(session, reason or '')
+
     hooks.register(worldmod.BEFORE_SERVER_MAP_LOAD, before_map_load)
     hooks.register(worldmod.ON_ENTER_WORLD, on_enter_world)
     hooks.register(worldmod.ON_LEAVE_WORLD, on_leave_world)
     hooks.register(worldmod.ON_DISCONNECT, on_disconnect)
     hooks.register(worldmod.ON_RENAME, on_rename)
-    return before_map_load, on_enter_world, on_leave_world, on_disconnect, on_rename
+    hooks.register(worldmod.ON_LOGOUT, on_logout)
+    return before_map_load, on_enter_world, on_leave_world, on_disconnect, on_rename, on_logout

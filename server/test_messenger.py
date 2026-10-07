@@ -323,9 +323,19 @@ class _Messenger:
             self.rec(name)['friends'] = list(friends)
 
     def sync(self, c):
-        """C2S 0x2F (what the client sends after every S2C 0x03); the decoded replies."""
+        """C2S 0x2F (what the client sends after every S2C 0x03); the decoded messenger
+        replies. The 2009 blacklist 0xBD that closes the 2F stage of the resync bundle (P12
+        bl-1, resync.STAGE_FRIENDS) is checked here - last, exactly once, never on 2008 - and
+        left out, so the messenger assertions stay about the messenger (test_blacklist.py
+        covers its content)."""
         self.send(c, 0x2F)
-        return [(p.opcode, c.s2c(p)) for p in c.recv_until_quiet(0.25)]
+        got = [(p.opcode, c.s2c(p)) for p in c.recv_until_quiet(0.25)]
+        lists = [i for i, (op, _) in enumerate(got) if op == 0xBD]
+        if self.build == B9:
+            self.assertEqual(lists, [len(got) - 1], f'0xBD must close the 0x2F reply: {[op for op, _ in got]}')
+            return got[:-1]
+        self.assertEqual(lists, [], 'the 2008 client has no blacklist')
+        return got
 
     def rows(self, fields):
         return [(_name(r['name']), r['channel'], r['friend_id'], r['status'])
@@ -880,7 +890,9 @@ class Messenger2009(_Messenger, unittest.TestCase):
 
     def test_a_2009_relogin_announces_no_logoff(self):
         """The 2009 client reconnects with its session key (channel change): the old session
-        is superseded, so the watchers get no 0x60 offline - only the new entry's login."""
+        is superseded, so the watchers get no 0x60 offline - and, since P12 session
+        continuity, no login line either: the same character on the same channel is a hop
+        that changed nothing the watchers see (test_channels.py: the other-channel hop)."""
         self.make_friends()
         old = self.b.session
         c = F.FakeClient(self.server)
@@ -891,7 +903,8 @@ class Messenger2009(_Messenger, unittest.TestCase):
         self.assertNotIn(0x60, _ops(pkts))
         c.enter_world('Watcher', port=F.P2P_PORT_BASE + 1)
         got = [self.a.s2c(p) for p in self.a.recv_until_quiet(0.3) if p.opcode == 0x60]
-        self.assertEqual([(g['friend_uid'], g['presence']) for g in got], [(2, 0)])
+        self.assertEqual(got, [])
+        self.assertIsNotNone(c.session.get('channel_hop'))
 
 
 if __name__ == '__main__':

@@ -1,0 +1,12 @@
+{
+  "_comment": "P12 dev channels (ROADMAP_2009_ADDENDUM P12 exit criteria 5-8; channels.py, continuity.py). NOT the shipped default: config.json keeps ONE channel on GAME_PORT. Use it with the WS_CONFIG variable: cmd `set WS_CONFIG=config_channels_dev.json` then `python windslayer_server.py` (paths here resolve next to this file, so accounts.json is the same one). Every key not listed keeps its default; CLIENT_BUILD and EVENTS_FILE mirror the live 2009 server.",
+  "_channels_comment": "Channels 1-3 on 127.0.0.1 ports 7022-7024 (one listener each, one process: the listener is the channel, blch R1), channel 4 on 7025 configured but closed -> 'Channel - 4 (inspection)' with no load label. Open / close at run time: GM `!channel open 4` / `!channel close 3`, or the admin port {\"channel_open\": [3, 0]}. `!channel scale 250` makes one player read 'Normal' (yellow), 450 'Busy' (red). Multi-channel stays dev-only until P18 ch-2: the channels still share ONE world (same monsters, same map peers).",
+  "CLIENT_BUILD": "2009",
+  "EVENTS_FILE": "events.json",
+  "CHANNELS": [
+    {"no": 1, "name": "Channel 1", "port": 7022},
+    {"no": 2, "name": "Channel 2", "port": 7023},
+    {"no": 3, "name": "Channel 3", "port": 7024},
+    {"no": 4, "name": "Channel 4", "port": 7025, "open": false}
+  ]
+}

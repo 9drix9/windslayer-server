@@ -294,6 +294,16 @@ RESERVED = (
     (0x4405CF, 4), (0x4407FA, 4), (0x45F19A, 4), (0x488C42, 4),   # --p2 port immediates
     (0x52DD54, 16), (0x52DFD7, 53),             # version server address slots
     (0x4138C6, 5), (0x4C6F00, 0x3C),            # catch-up knock fix F1: hook + cave (patch_2009 KNOCK_*)
+    # cp-2 KR->EN +4 item-id shift (patch_2009 ID_SHIFT_SITES): whole instructions, only the id field changes
+    (0x44FD72, 5),                              # pet bell gate        cmp di,0x10B9
+    (0x46D64B, 5), (0x46D659, 5), (0x46D660, 5), (0x46D66E, 5),   # auto-feed push/mov 0x10BA, 0x10BB
+    (0x46D675, 5), (0x46D683, 5), (0x46D68A, 5), (0x46D698, 5),   # auto-feed push/mov 0x10BC, 0x10BD
+    (0x46D69F, 6),                              # manual feed range    lea eax,[edi-0x10BA]
+    (0x46DB2B, 5),                              # cash-use switch base sub eax,0x10B7
+    (0x44FCB8, 5),                              # guild billboard use  cmp di,0x10B8
+    (0x45DBC3, 4), (0x45DBD2, 4),               # S2C 0xBA board sprite cmp ax,0x10B8 / 0x10B7
+    (0x45DD3B, 4), (0x45DD4A, 4),               # S2C 0xBB board sprite cmp ax,0x10B8 / 0x10B7
+    (0x47E846, 7),                              # S2C 0xB3 sub 185     cmp word [esp+14h],0x10B8
 )
 
 GAME = 0x54EBD0               # CMyD3DApplication (game_state)

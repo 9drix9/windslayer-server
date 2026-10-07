@@ -422,7 +422,12 @@ class Routes2009(ServerCase):
                               or 'matches no C2S grammar' in line], cm.output)
             self.assertTrue(any('consumed' in line for line in cm.output), cm.output)
             sent += 1
-        self.assertGreater(sent, 20)                # 23 since 0x4D / 0x4E / 0x80 / 0x81 got handlers
+        # 23 after 0x4D / 0x4E / 0x80 / 0x81 got handlers; 10 since P14 stage 4 gave the guild
+        # requests 0x87 / 0x89 (both) / 0x8B..0x92 theirs (test_guild_flows.py); 8 since P15
+        # stage 1 gave 0x82 / 0x83 (pet equip / unequip) theirs (test_pets.py); 6 since P15
+        # stage 2 gave 0x85 / 0x86 (pet feed / emote) theirs (test_petlife.py); 5 since P15
+        # stage 4 gave 0x88 (guild board place, guild-g6) its handler (test_guild_boards.py)
+        self.assertGreaterEqual(sent, 5)
 
     def test_dead_room_host_sites_are_dropped_before_the_handlers(self):
         c, _ = self.enter()
@@ -445,8 +450,10 @@ class Routes2009(ServerCase):
             c.send_c2s(CARDS)
             c.send_c2s(GUILD)
             # 0x99 sub 8: the connection's first 0x63 also prints the channel (P4 stage 4);
-            # 0x0B: the friend list answers 0x2F since P6 stage 2 (social_friend F1)
-            _friends, deck, progress, channel, guild = c.expect(0x0B, 0x8A, 0x59, 0x99, 0xB3)
+            # 0x0B: the friend list answers 0x2F since P6 stage 2 (social_friend F1), and the
+            # blacklist 0xBD follows it after every 0x2F (P12 bl-1, arch09-resync-bundle)
+            _friends, blist, deck, progress, channel, guild = c.expect(0x0B, 0xBD, 0x8A, 0x59, 0x99, 0xB3)
+        self.assertEqual(c.s2c(blist), {'count': 0, 'repeat[count]': []})
         self.assertEqual(c.s2c(deck), {'deck_count': 1, 'repeat[deck_count]': [{'card_item_id': 2030}]})
         self.assertEqual(c.s2c(progress), {'slot': 1, 'progress': 1})
         self.assertEqual(c.s2c(channel), {'sub_type': 8, 'channel_no': 1})
@@ -692,8 +699,8 @@ class WorldFlow2009(ServerCase):
         c.send_c2s(FRIENDS)
         c.send_c2s(CARDS)
         c.send_c2s(GUILD)
-        # 0x0B: the friend list (P6 stage 2, social_friend F1)
-        self.assertEqual(c.s2c(c.expect(0x0B, 0x8A, 0x99, 0xB3)[3]), {'sub': 15, 's15_result': 0})
+        # 0x0B: the friend list (P6 stage 2, social_friend F1), 0xBD the blacklist (P12 bl-1)
+        self.assertEqual(c.s2c(c.expect(0x0B, 0xBD, 0x8A, 0x99, 0xB3)[4]), {'sub': 15, 's15_result': 0})
 
         # portal to 101 (town: no monsters) and back to 102 (the Pupu again)
         back = [(k, v) for k, v in EC.portals().items() if k.startswith('102_') and v[0] == 101]

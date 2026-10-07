@@ -163,7 +163,9 @@ TYPE_PET = 6                                 # 2009 hii Type 6 (4294 / 4299 / 43
 # handler (2008 FUN_0045e8e0) bags a record by its template category (0, 1, 5), so a Type 1
 # cash costume lands in the client's EQUIPMENT tab in a slot the server's bag model thinks is
 # free (later adds and equips drift apart). A 2009 Type 6 pet is granted as a pet record
-# (kind 3, ROADMAP_2009_ADDENDUM C1), which inventory.Inventory counts in that tab.
+# (kind 3, ROADMAP_2009_ADDENDUM C1), and since P15 pet-s5 the 2009 pet gear (Type 1, Kind
+# 15 / 16: inventory.is_pet_gear) as a permanent record - inventory.Inventory counts both in
+# that tab (pet_slots). Every other Type 1 costume stays refused (premium_cash Q14).
 GRANT_TYPES = frozenset({EC.TYPE_CASH})
 
 # ---- pets (2009; module docstring "Pet records", systems_2009/pet.md 2.1 / 2.2) ----
@@ -389,6 +391,21 @@ def bind_pet(rec):
 
 def is_pet_record(rec):
     return isinstance(rec, dict) and _int(rec.get('kind')) == KIND_PET
+
+
+def foreign_to_client(item_id, client_build, catalog=None):
+    """True for an item id the `client_build` client has no hii row for: a store shared with a
+    2009 server (accounts.json, config CLIENT_BUILD) can hold 2009-only items - pet gear 4290..
+    4308 since the Spark Shop sells it (MALL_PETS) - that must never reach a 2008 client's box,
+    owned list or record rows. Judged by the loaded item table when it is that build's (any
+    id it lacks); otherwise only the 2009 pet gear is known to be foreign to a 2008 client."""
+    if str(client_build or '2008') == '2009':
+        return False
+    catalog = catalog if catalog is not None else EC.items()
+    item_id = _int(item_id)
+    if getattr(catalog, 'client_build', None) == str(client_build or '2008'):
+        return item_id != 0 and catalog.get(item_id) is None
+    return invmod.is_pet_gear(item_id, catalog)
 
 
 def equipped_pet(char):
@@ -646,7 +663,8 @@ def owned_list_packets(char, client_build, now=None, records=None):
     (grant() never makes them). 2009: pages of <= PAGE_2009 records (u8 count) - mode 0 for a
     single page, else 1 / 2.. / 3 - with the worn pet record first (pet_first, C2). A pet
     record is never left out of a 2009 list (the whole list always goes); a 2008 list leaves
-    one out (no pets, no limit_type-3 branch in its grammar: store data from a 2009 server)."""
+    one out (no pets, no limit_type-3 branch in its grammar: store data from a 2009 server),
+    and any record of an item the 2008 hii lacks (foreign_to_client: 2009 pet gear)."""
     records = list(owned_records(char, now) if records is None else records)
     build = str(client_build or '2008')
     if build != '2009':
@@ -658,6 +676,13 @@ def owned_list_packets(char, client_build, now=None, records=None):
             log.warning(f'[CASH] {(char or {}).get("name")!r}: {len(pets)} pet record(s) '
                         f'{[hex(r["serial"]) for r in pets]} left out of the 2008 0x6F (the 2008 client has no pets)')
             records = [r for r in records if not is_pet_record(r)]
+        foreign = [r for r in records if foreign_to_client(r.get('item_id'), build)]
+        if foreign:
+            # the same store sharing: 2009-only items (pet gear bought in the 2009 Spark Shop)
+            log.warning(f'[CASH] {(char or {}).get("name")!r}: {len(foreign)} record(s) of item(s) the 2008 '
+                        f'client lacks {[(r.get("item_id"), hex(_int(r.get("serial")))) for r in foreign]} '
+                        f'left out of the 2008 0x6F')
+            records = [r for r in records if not foreign_to_client(r.get('item_id'), build)]
     else:
         records = pet_first(records)
     rows = [{'is_equipped': 1 if r.get('equipped') else 0, **wire_record(r)} for r in records]
@@ -790,7 +815,8 @@ class CashInventory:
         counted item merges into a usable record of the same id and origin up to STACK_MAX
         (one bag slot, one serial), anything else is a new record; a count above STACK_MAX
         becomes several records of <= STACK_MAX (the bag shows only the quantity's low byte).
-        A 2009 pet (Type 6) becomes one bound pet record (_grant_pet, C1).
+        A 2009 pet (Type 6) becomes one bound pet record (_grant_pet, C1), a 2009 pet gear item
+        (Type 1 cash, Kind 15 / 16) one permanent record (_grant_gear, P15 pet-s5).
         Returns the (first) record written.
         Raises CashError when the loaded item table is not a client .hii (has_cash_columns:
         no Cash_T, so every record would be limit_type 0), for an id the client has not got,
@@ -812,6 +838,8 @@ class CashInventory:
             raise CashError(f'{d.name or item_id} ({d.id}) is a slot extension: it raises a tab, it is not kept')
         if d.is_pet:
             return self._grant_pet(char, d, origin, what)
+        if invmod.is_pet_gear(d.id, catalog):
+            return self._grant_gear(char, d, origin, what)
         if d.type not in GRANT_TYPES:
             raise CashError(f'{d.name or item_id} ({d.id}) is a cash costume (Type {d.type}): the client puts it '
                             f'in the equipment tab, which the cash model does not track yet (P8 mall / equip)')
@@ -868,6 +896,30 @@ class CashInventory:
         self.store.mark_dirty(f'cash {what} {char.get("name")}')
         log.info(f'[CASH] {what}: {char.get("name")!r} + pet {d.name or d.id} ({d.id}) -> serial '
                  f'{rec["serial"]:#x} kind 3 {rec["pet"]}')
+        return rec
+
+    def _grant_gear(self, char, d, origin, what):
+        """2009 pet gear onto the character (P15 pet-s5; inventory.is_pet_gear): one permanent
+        record (Cash_T 0 -> kind 0, quantity 1), not worn. The 0x6F files a Type 1 cash record in
+        the client's EQUIPMENT tab (FUN_00464e00 case 1), so that tab needs a free slot
+        (inventory.pet_slots counts the bagged gear records there). Worn through the normal
+        C2S 0x0F -> S2C 0x1D (pets.Pets.equip_gear), which moves the client's record from the
+        owned to the equipped list (FUN_00462b70) - the record's `equipped`."""
+        with self.store.lock:
+            items = ensure(char)
+            carried = len(owned_records(char))
+            if carried + 1 > OWNED_MAX:
+                raise CashError(f'owned list full: at most {OWNED_MAX} cash records (one S2C 0x6F frame); '
+                                f'{char.get("name")} has {carried}')
+            bag = invmod.Inventory(char)
+            if bag.free_slots('equip') < 1:
+                raise CashError(f'{d.name or d.id} ({d.id}) is pet gear: the client puts it in the equipment tab, '
+                                f'which is full ({bag.used_slots("equip")}/{bag.capacity("equip")})')
+            rec = new_record(self.next_serial(), d, origin, equipped=False)
+            items.append(rec)
+        self.store.mark_dirty(f'cash {what} {char.get("name")}')
+        log.info(f'[CASH] {what}: {char.get("name")!r} + pet gear {d.name or d.id} ({d.id}) -> serial '
+                 f'{rec["serial"]:#x} kind {rec["kind"]}')
         return rec
 
     def set_balance(self, acc, cash=None, mileage=None, what='balance'):

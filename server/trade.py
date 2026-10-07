@@ -397,7 +397,14 @@ class Trades:
                 # The client gates both manners itself (trade.md 1.2); a forged request.
                 log.warning(f'[TRADE] {me!r} requests {other!r}: manner <= {MANNER_FLOOR} - dropped')
                 return 'manner'
+            if self.server.blacklist_drops(target, session):
+                # P12 bl-3, BLACKLIST_FILTER 'silent' (blch A.6 / F-B4): the target's client would
+                # drop the 0x45 (FUN_00484190 at 0x478524). No prompt is recorded, so no other
+                # requester is told "busy" (0x47 6) for INVITE_TTL; nothing back to this one.
+                log.info(f'[TRADE] {me!r} requests {other!r}: blacklisted - dropped (no prompt recorded)')
+                return 'blacklisted'
             if self.server.refuses(target, 'exchange', session):
+                # The privacy flag, or BLACKLIST_FILTER 'refuse' (blacklist.py).
                 self._push(session, '0x47', {'result': RESULT_REFUSING})
                 log.info(f'[TRADE] {me!r} requests {other!r}: refuses trades (0x47 4)')
                 return 'refused'

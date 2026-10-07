@@ -192,7 +192,10 @@ def make_server(tmpdir, accounts=None, config=None, portal_cooldown=0.0, client_
 class FakeClient:
     _next_port = [50000]
 
-    def __init__(self, server, addr=None, timeout=5.0):
+    def __init__(self, server, addr=None, timeout=5.0, channel=None):
+        """channel (P12 ch-1): the channel of the listener this connection 'arrived on' -
+        session['channel'], as GameServer._accept_loop passes it; None = no listener (the
+        server's first channel), the rigs' default."""
         self.server = server
         # The server's client build: send_c2s() and s2c() use its spec (client-2009-login).
         self.client_build = getattr(server, 'client_build', None)
@@ -204,7 +207,8 @@ class FakeClient:
         self.sock.settimeout(timeout)
         self._buf = bytearray()
         self.seq = 1
-        self.thread = threading.Thread(target=server._handle_fireway, args=(self._server_sock, addr),
+        args = (self._server_sock, addr) if channel is None else (self._server_sock, addr, int(channel))
+        self.thread = threading.Thread(target=server._handle_fireway, args=args,
                                        name=f'fakeclient-{addr[1]}', daemon=True)
         self.thread.start()
         hello = self.recv(timeout)
